@@ -1,0 +1,16 @@
+node_modules
+dist
+.env.local
+.DS_Store
+
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.DS_Store
+.vercel/
+
+supabase/.temp/
+*.tsbuildinfo
+.claude/settings.local.json
