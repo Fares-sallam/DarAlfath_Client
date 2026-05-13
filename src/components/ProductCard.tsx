@@ -22,6 +22,11 @@ export default function ProductCard({
   const categoryLabel = product.category_name || product.category?.name || product.type;
   const coverUrl = product.cover_url && !imageFailed ? product.cover_url : null;
 
+  const discountPct =
+    product.base_price > 0 && product.base_price > product.min_price
+      ? Math.round((1 - product.min_price / product.base_price) * 100)
+      : 0;
+
   const openBook = () => navigate(`/book/${product.id}`);
 
   return (
@@ -64,6 +69,12 @@ export default function ProductCard({
             <span>دار الفتح</span>
           </div>
         )}
+
+        {discountPct > 0 ? (
+          <span className="book-card__discount-badge" aria-label={`خصم ${discountPct}%`}>
+            {discountPct}%
+          </span>
+        ) : null}
       </div>
 
       <div className="book-card__body">
