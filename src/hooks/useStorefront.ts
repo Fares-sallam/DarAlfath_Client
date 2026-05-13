@@ -31,6 +31,8 @@ type PublicCatalogRow = {
   min_price?: number | string | null;
   max_price?: number | string | null;
   starting_price?: number | string | null;
+  old_price?: number | string | null;
+  discount_percent?: number | string | null;
   variant_count?: number | string | null;
   images?: string[] | string | null;
 };
@@ -85,6 +87,8 @@ function normalizeProduct(row: PublicCatalogRow): ProductItem {
   const startingPrice = toNumber(row.starting_price ?? row.min_price);
   const minPrice = toNumber(row.min_price ?? startingPrice);
   const maxPrice = toNumber(row.max_price ?? startingPrice);
+  const oldPrice = row.old_price != null ? toNumber(row.old_price) : null;
+  const compareAtPrice = oldPrice && oldPrice > minPrice ? oldPrice : null;
   const categorySlug = row.category_slug ?? null;
   const categoryName = row.category_name ?? 'غير مصنف';
 
@@ -104,7 +108,7 @@ function normalizeProduct(row: PublicCatalogRow): ProductItem {
     min_price: minPrice,
     max_price: maxPrice,
     starting_price: startingPrice,
-    compare_at_price: null,
+    compare_at_price: compareAtPrice,
     category_id: categorySlug,
     category_name: categoryName,
     category_slug: categorySlug,

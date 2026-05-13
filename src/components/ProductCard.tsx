@@ -23,8 +23,8 @@ export default function ProductCard({
   const coverUrl = product.cover_url && !imageFailed ? product.cover_url : null;
 
   const discountPct =
-    product.base_price > 0 && product.base_price > product.min_price
-      ? Math.round((1 - product.min_price / product.base_price) * 100)
+    product.compare_at_price && product.compare_at_price > product.min_price
+      ? Math.round((1 - product.min_price / product.compare_at_price) * 100)
       : 0;
 
   const openBook = () => navigate(`/book/${product.id}`);
