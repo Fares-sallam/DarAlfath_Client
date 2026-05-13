@@ -1751,3 +1751,24 @@ html.dark .qty-stepper span,
 html.dark .qty-stepper--soft span {
   color: #F0EDFF;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   VIDEO CARD — بطاقة الفيديو
+   ═══════════════════════════════════════════════════════════════ */
+html.dark .video-card {
+  background: linear-gradient(180deg, #0D1A50, #070F38);
+  border: 1px solid #1E2D6B;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.40);
+}
+
+html.dark .video-card__frame {
+  border-bottom: 1px solid #1E2D6B;
+}
+
+html.dark .video-card__body h3 {
+  color: #F0EDFF;
+}
+
+html.dark .video-card__body p {
+  color: #8A93B8;
+}
