@@ -30,6 +30,7 @@ export default function AccountPage() {
   const {
     user,
     loading,
+    authEvent,
     signIn,
     signUp,
     verifyEmailCode,
@@ -60,6 +61,15 @@ export default function AccountPage() {
       window.history.replaceState({}, '', '/account');
     }
   }, []);
+
+  // Switch to reset mode when Supabase fires PASSWORD_RECOVERY (e.g. user clicked reset link)
+  useEffect(() => {
+    if (authEvent === 'PASSWORD_RECOVERY') {
+      setMode('reset');
+      setNotice('');
+      setError('');
+    }
+  }, [authEvent]);
 
   const updateField = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));

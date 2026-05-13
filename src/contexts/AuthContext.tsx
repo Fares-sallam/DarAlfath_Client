@@ -7,6 +7,14 @@ type AuthResult = {
   message?: string;
 };
 
+export type AuthEvent =
+  | 'SIGNED_IN'
+  | 'SIGNED_OUT'
+  | 'PASSWORD_RECOVERY'
+  | 'TOKEN_REFRESHED'
+  | 'USER_UPDATED'
+  | null;
+
 type SignUpInput = {
   email: string;
   password: string;
@@ -17,6 +25,7 @@ interface AuthContextValue {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  authEvent: AuthEvent;
   signIn: (email: string, password: string) => Promise<AuthResult>;
   signUp: (input: SignUpInput) => Promise<AuthResult>;
   verifyEmailCode: (email: string, token: string) => Promise<AuthResult>;
@@ -71,6 +80,7 @@ const missingSupabaseMessage =
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [authEvent, setAuthEvent] = useState<AuthEvent>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -94,8 +104,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted) return;
       setSession(nextSession);
+      setAuthEvent(event as AuthEvent);
       setLoading(false);
     });
 
@@ -111,6 +123,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user: session?.user ?? null,
     session,
     loading,
+    authEvent,
     signIn: async (email, password) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
@@ -206,7 +219,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signOut();
       return { error: error ? getArabicAuthError(error.message) : null };
     },
-  }), [loading, session]);
+  }), [loading, session, authEvent]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
