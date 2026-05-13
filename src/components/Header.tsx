@@ -1,6 +1,6 @@
-import { FormEvent, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, Globe2, Heart, Moon, Search, ShoppingBag, Sun, UserRound } from 'lucide-react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronLeft, Globe2, Heart, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import { useCountry } from '@/contexts/CountryContext';
 import { useWishlist } from '@/contexts/WishlistContext';
@@ -20,6 +20,7 @@ const navItems = [
 
 export default function Header({ settings }: { settings: StoreSettings }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const { countries, selectedCountry, setSelectedCountryById } = useCountry();
   const { count: wishlistCount } = useWishlist();
   const { count: cartCount } = useCart();
@@ -28,6 +29,16 @@ export default function Header({ settings }: { settings: StoreSettings }) {
   const { data: categories = [] } = useCategories();
   const { data: products = [] } = useProducts();
   const [query, setQuery] = useState('');
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Close mobile menu on route change
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Lock body scroll while drawer is open
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : '';
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileOpen]);
 
   const currentCountryLabel = useMemo(
     () => `${selectedCountry?.name ?? 'مصر'} — ${selectedCountry?.currency_symbol ?? 'ج.م'}`,
@@ -50,6 +61,7 @@ export default function Header({ settings }: { settings: StoreSettings }) {
     const params = new URLSearchParams();
     if (query.trim()) params.set('q', query.trim());
     navigate(`/books?${params.toString()}`);
+    setMobileOpen(false);
   };
 
   return (
@@ -63,7 +75,7 @@ export default function Header({ settings }: { settings: StoreSettings }) {
         </form>
 
         <div className="site-header__actions">
-          <div className="country-switcher">
+          <div className="country-switcher desktop-only">
             <Globe2 size={16} />
             <select value={selectedCountry?.id ?? ''} onChange={(event) => setSelectedCountryById(event.target.value)} aria-label="اختر الدولة">
               {countries.map((country) => <option key={country.id} value={country.id}>{country.name} — {country.currency_symbol}</option>)}
@@ -71,29 +83,39 @@ export default function Header({ settings }: { settings: StoreSettings }) {
             <span className="country-switcher__label">{currentCountryLabel}</span>
           </div>
 
-          <Link to="/wishlist" className="header-chip">
+          <Link to="/wishlist" className="header-chip desktop-only">
             <Heart size={17} /><span>المفضلة</span>{wishlistCount ? <b>{wishlistCount}</b> : null}
           </Link>
 
           <Link to="/cart" className="header-chip">
-            <ShoppingBag size={17} /><span>السلة</span>{cartCount ? <b>{cartCount}</b> : null}
+            <ShoppingBag size={17} /><span className="desktop-only">السلة</span>{cartCount ? <b>{cartCount}</b> : null}
           </Link>
 
-          <Link to="/account" className="header-chip header-chip--filled">
+          <Link to="/account" className="header-chip header-chip--filled desktop-only">
             <UserRound size={17} /><span>{user ? 'حسابي' : 'دخول'}</span>
           </Link>
 
           <button
             onClick={toggleTheme}
-            className="theme-toggle-btn"
+            className="theme-toggle-btn desktop-only"
             aria-label={isDark ? 'تفعيل الوضع المضيء' : 'تفعيل الوضع الداكن'}
             title={isDark ? 'الوضع المضيء' : 'الوضع الداكن'}
           >
             {isDark ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+
+          {/* Hamburger — mobile only */}
+          <button
+            className="hamburger-btn"
+            onClick={() => setMobileOpen(true)}
+            aria-label="فتح القائمة"
+          >
+            <Menu size={22} />
+          </button>
         </div>
       </div>
 
+      {/* Desktop nav */}
       <div className="container site-header__nav">
         {navItems.slice(0, 2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
 
@@ -132,6 +154,92 @@ export default function Header({ settings }: { settings: StoreSettings }) {
         </div>
 
         {navItems.slice(2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
+      </div>
+
+      {/* ── Mobile drawer overlay ── */}
+      <div
+        className={`mobile-nav-overlay${mobileOpen ? ' mobile-nav-overlay--open' : ''}`}
+        onClick={() => setMobileOpen(false)}
+      >
+        <nav
+          className={`mobile-nav-drawer${mobileOpen ? ' mobile-nav-drawer--open' : ''}${isDark ? ' mobile-nav-drawer--dark' : ''}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Drawer header */}
+          <div className="mobile-nav-drawer__top">
+            <Logo disableLink={false} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={toggleTheme}
+                className="mobile-nav-drawer__theme-btn"
+                aria-label={isDark ? 'الوضع المضيء' : 'الوضع الداكن'}
+              >
+                {isDark ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button
+                className="mobile-nav-drawer__close"
+                onClick={() => setMobileOpen(false)}
+                aria-label="إغلاق القائمة"
+              >
+                <X size={22} />
+              </button>
+            </div>
+          </div>
+
+          {/* Search */}
+          <form className="mobile-nav-drawer__search" onSubmit={onSearch}>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ابحث عن كتاب أو مؤلف..."
+            />
+            <button type="submit"><Search size={17} /></button>
+          </form>
+
+          {/* Country switcher */}
+          <div className="mobile-nav-drawer__country">
+            <Globe2 size={15} />
+            <select
+              value={selectedCountry?.id ?? ''}
+              onChange={(e) => setSelectedCountryById(e.target.value)}
+              aria-label="اختر الدولة"
+            >
+              {countries.map((c) => (
+                <option key={c.id} value={c.id}>{c.name} — {c.currency_symbol}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Nav links */}
+          <div className="mobile-nav-drawer__links">
+            {navItems.map((item) => (
+              <NavLink key={item.label} to={item.to} className={({ isActive }) => isActive ? 'active' : ''}>
+                {item.label}
+              </NavLink>
+            ))}
+            <NavLink to="/categories" className={({ isActive }) => isActive ? 'active' : ''}>
+              التصنيفات
+            </NavLink>
+          </div>
+
+          {/* Action chips */}
+          <div className="mobile-nav-drawer__actions">
+            <Link to="/wishlist" className="mobile-nav-chip">
+              <Heart size={18} />
+              <span>المفضلة</span>
+              {wishlistCount ? <b>{wishlistCount}</b> : null}
+            </Link>
+            <Link to="/cart" className="mobile-nav-chip">
+              <ShoppingBag size={18} />
+              <span>السلة</span>
+              {cartCount ? <b>{cartCount}</b> : null}
+            </Link>
+            <Link to="/account" className="mobile-nav-chip mobile-nav-chip--filled">
+              <UserRound size={18} />
+              <span>{user ? 'حسابي' : 'دخول'}</span>
+            </Link>
+          </div>
+        </nav>
       </div>
     </header>
   );
