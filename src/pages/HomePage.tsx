@@ -99,12 +99,6 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="features-grid">
-        <FeatureCard title="كتالوج شامل ومرتب" description="تصفح آلاف الكتب المصنفة حسب الموضوع والسلسلة والمؤلف بكل يسر." icon={<LibraryBig size={18} />} />
-        <FeatureCard title="ورقي أو رقمي — اختر ما يناسبك" description="كل كتاب متاح بأكثر من نسخة؛ ورقية للمتعة، ورقمية للسرعة." icon={<BookOpenText size={18} />} />
-        <FeatureCard title="طرق دفع متعددة" description="ادفع عند الاستلام، أو بتحويل بنكي، أو عبر المحفظة الإلكترونية." icon={<CreditCard size={18} />} />
-        <FeatureCard title="شحن سريع وتتبع مباشر" description="شحن مجاني داخل مصر للطلبات فوق 499 ج.م، مع تتبع حالة كل طلب." icon={<Truck size={18} />} />
-      </section>
 
       <section>
         <SectionHeader
