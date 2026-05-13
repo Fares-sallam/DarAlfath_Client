@@ -1,4 +1,4 @@
-import { ArrowLeft, Gift, ShoppingBag, Trash2 } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Trash2 } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import QuantitySelector from '@/components/QuantitySelector';
 import { useCart } from '@/contexts/CartContext';
@@ -15,17 +15,10 @@ export default function CartPage() {
     shipping,
     total,
     currencySymbol,
-    freeShippingThreshold,
-    remainingForFreeShipping,
     updateQuantity,
     removeFromCart,
     clearCart,
   } = useCart();
-
-  const hasPhysical = items.some((item) => !item.is_digital);
-  const freeShippingProgress = freeShippingThreshold > 0 && hasPhysical
-    ? Math.min(100, (subtotal / freeShippingThreshold) * 100)
-    : 0;
 
   return (
     <div className="page-sections">
@@ -99,20 +92,6 @@ export default function CartPage() {
 
             <aside className="order-summary">
               <h3>ملخص الطلب</h3>
-
-              {hasPhysical && freeShippingThreshold > 0 ? (
-                <div className="free-shipping-bar">
-                  <div className="free-shipping-bar__label">
-                    <Gift size={14} />
-                    {remainingForFreeShipping === 0
-                      ? 'مبروك! حصلت على شحن مجاني'
-                      : `أضف ${formatMoney(remainingForFreeShipping, currencySymbol)} للحصول على شحن مجاني`}
-                  </div>
-                  <div className="free-shipping-bar__track">
-                    <div className="free-shipping-bar__fill" style={{ width: `${freeShippingProgress}%` }} />
-                  </div>
-                </div>
-              ) : null}
 
               <div>
                 <span>عدد العناصر</span>
