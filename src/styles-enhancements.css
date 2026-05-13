@@ -1327,7 +1327,11 @@ html.dark .profile-details__verified   {
   color: #86efac;
 }
 
-/* Auth layout */
+/* Auth layout — align-items: start so each card keeps its natural height
+   (prevents form card from stretching to match taller info panel) */
+.auth-layout {
+  align-items: start !important;
+}
 html.dark .auth-layout { background: #060D2E; }
 html.dark .auth-copy h1  { color: #F0EDFF; }
 html.dark .auth-copy p   { color: #8A93B8; }
