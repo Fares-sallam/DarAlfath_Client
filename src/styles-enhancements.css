@@ -2815,3 +2815,19 @@ html.dark .image-lightbox {
     padding: 14px !important;
   }
 }
+
+/* ── Books grid: 2 columns on mobile ── */
+@media (max-width: 640px) {
+  .books-grid,
+  .books-grid--catalog,
+  .books-grid--related {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .book-card,
+  .series-card {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
