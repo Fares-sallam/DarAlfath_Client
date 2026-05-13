@@ -54,8 +54,6 @@ export default function Header({ settings }: { settings: StoreSettings }) {
 
   return (
     <header className="site-header">
-      <div className="site-header__top"><span>شحن مجاني داخل مصر للطلبات فوق 499 جنيه</span></div>
-
       <div className="container site-header__main">
         <Logo disableLink={false} />
 
