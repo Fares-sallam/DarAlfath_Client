@@ -1725,3 +1725,29 @@ body,
     color 0.25s ease,
     box-shadow 0.30s ease;
 }
+
+/* ── qty-stepper dark mode ── */
+html.dark .qty-stepper,
+html.dark .qty-stepper--soft {
+  background: #131F55;
+  border: 1px solid #1E2D6B;
+}
+
+html.dark .qty-stepper button,
+html.dark .qty-stepper--soft button {
+  background: rgba(255, 255, 255, 0.06);
+  color: #C8D0F0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+html.dark .qty-stepper button:hover,
+html.dark .qty-stepper--soft button:hover {
+  background: rgba(212, 165, 32, 0.14);
+  border-color: rgba(212, 165, 32, 0.35);
+  color: #D4A520;
+}
+
+html.dark .qty-stepper span,
+html.dark .qty-stepper--soft span {
+  color: #F0EDFF;
+}
