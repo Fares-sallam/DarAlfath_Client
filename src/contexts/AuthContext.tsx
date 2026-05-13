@@ -60,10 +60,19 @@ function getArabicAuthError(message?: string) {
     return 'كلمة المرور غير مقبولة. استخدم 6 أحرف على الأقل.';
   }
 
-  if (value.includes('email')) {
+  if (value.includes('signup') && (value.includes('disabled') || value.includes('not allowed'))) {
+    return 'التسجيل معطّل حالياً. تواصل مع إدارة الموقع.';
+  }
+
+  if (value.includes('sending') || value.includes('smtp') || value.includes('send')) {
+    return 'فشل إرسال البريد الإلكتروني. تحقق من إعدادات البريد في لوحة التحكم.';
+  }
+
+  if ((value.includes('invalid') || value.includes('format')) && value.includes('email')) {
     return 'يرجى إدخال بريد إلكتروني صحيح.';
   }
 
+  // Return the original Supabase message so the real cause is visible
   return message || 'حدث خطأ غير متوقع. حاول مرة أخرى.';
 }
 
