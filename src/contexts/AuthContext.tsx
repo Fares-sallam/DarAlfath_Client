@@ -64,7 +64,7 @@ function getArabicAuthError(message?: string) {
     return 'التسجيل معطّل حالياً. تواصل مع إدارة الموقع.';
   }
 
-  if (value.includes('sending') || value.includes('smtp') || value.includes('send')) {
+  if (value.includes('smtp')) {
     return 'فشل إرسال البريد الإلكتروني. تحقق من إعدادات البريد في لوحة التحكم.';
   }
 
