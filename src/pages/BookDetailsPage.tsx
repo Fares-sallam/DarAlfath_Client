@@ -287,25 +287,8 @@ export default function BookDetailsPage() {
           <h3 className="bk-sidebar-related__title">كتب مشابهة</h3>
           {related.length > 0 ? (
             <div className="bk-sidebar-related__list">
-              {related.slice(0, 6).map((item) => (
-                <Link
-                  to={`/book/${item.product_id}`}
-                  key={item.product_id}
-                  className="bk-sidebar-book"
-                >
-                  <div className="bk-sidebar-book__cover">
-                    <img
-                      src={item.cover_url || '/branding/dar-alfath-logo.jpeg'}
-                      alt={item.title}
-                      loading="lazy"
-                    />
-                  </div>
-                  <div className="bk-sidebar-book__info">
-                    <h4>{item.title}</h4>
-                    <p>{item.author}</p>
-                    <b>{formatCatalogPrice(item)}</b>
-                  </div>
-                </Link>
+              {related.slice(0, 4).map((item) => (
+                <ProductCard key={item.product_id} product={item} />
               ))}
             </div>
           ) : (
