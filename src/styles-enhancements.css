@@ -2863,8 +2863,8 @@ html.dark .image-lightbox {
 /* ── Discount badge on book card cover ── */
 .book-card__discount-badge {
   position: absolute;
-  bottom: 10px;
-  inset-inline-start: 10px;
+  top: 10px;
+  inset-inline-end: 10px;
   z-index: 3;
   background: linear-gradient(135deg, #d63a1a, #a82a0e);
   color: #fff;
