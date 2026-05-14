@@ -14,7 +14,7 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import type { ProductVariantItem } from '@/types/store';
 
-type DetailsTab = 'about' | 'specs' | 'similar';
+type DetailsTab = 'about' | 'specs';
 
 export default function BookDetailsPage() {
   const { productId } = useParams();
@@ -33,6 +33,7 @@ export default function BookDetailsPage() {
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<DetailsTab>('about');
+
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
 
@@ -280,19 +281,51 @@ export default function BookDetailsPage() {
           </div>
 
         </div>
+
+        {/* ── Related Sidebar ─── */}
+        <aside className="bk-sidebar-related">
+          <h3 className="bk-sidebar-related__title">كتب مشابهة</h3>
+          {related.length > 0 ? (
+            <div className="bk-sidebar-related__list">
+              {related.slice(0, 6).map((item) => (
+                <Link
+                  to={`/book/${item.product_id}`}
+                  key={item.product_id}
+                  className="bk-sidebar-book"
+                >
+                  <div className="bk-sidebar-book__cover">
+                    <img
+                      src={item.cover_url || '/branding/dar-alfath-logo.jpeg'}
+                      alt={item.title}
+                      loading="lazy"
+                    />
+                  </div>
+                  <div className="bk-sidebar-book__info">
+                    <h4>{item.title}</h4>
+                    <p>{item.author}</p>
+                    <b>{formatCatalogPrice(item)}</b>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="bk-sidebar-related__empty">لا توجد كتب مشابهة حاليًا.</p>
+          )}
+        </aside>
+
       </div>
 
       {/* ── Tabs ─────────────────────────────────────────── */}
       <div className="bk-tabs">
         <div className="bk-tabs__nav">
-          {(['about', 'specs', 'similar'] as DetailsTab[]).map((tab) => (
+          {(['about', 'specs'] as DetailsTab[]).map((tab) => (
             <button
               key={tab}
               type="button"
               className={activeTab === tab ? 'bk-tabs__btn active' : 'bk-tabs__btn'}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === 'about' ? 'نبذة عن الكتاب' : tab === 'specs' ? 'المواصفات' : 'كتب مشابهة'}
+              {tab === 'about' ? 'نبذة عن الكتاب' : 'المواصفات'}
             </button>
           ))}
         </div>
@@ -318,33 +351,8 @@ export default function BookDetailsPage() {
               )}
             </dl>
           )}
-
-          {activeTab === 'similar' && (
-            related.length > 0
-              ? <div className="books-grid books-grid--related">
-                  {related.slice(0, 4).map((item) => (
-                    <ProductCard key={item.product_id} product={item} compact />
-                  ))}
-                </div>
-              : <p className="bk-tabs__empty">لا توجد كتب مشابهة حاليًا.</p>
-          )}
         </div>
       </div>
-
-      {/* ── Related books ────────────────────────────────── */}
-      {related.length > 0 && activeTab !== 'similar' && (
-        <section className="bk-related">
-          <div className="bk-related__head">
-            <h2>قد يعجبك أيضًا</h2>
-            <Link to={`/books?category=${product.category_slug}`}>عرض التصنيف</Link>
-          </div>
-          <div className="books-grid books-grid--related">
-            {related.slice(0, 4).map((item) => (
-              <ProductCard key={item.product_id} product={item} compact />
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* ── Lightbox ─────────────────────────────────────── */}
       {lightboxImage && (
