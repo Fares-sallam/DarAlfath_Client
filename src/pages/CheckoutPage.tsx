@@ -290,7 +290,7 @@ export default function CheckoutPage() {
                         onClick={() => setSelectedPaymentId(method.id)}
                       >
                         <span>{method.method_name}</span>
-                        <small>{selectedPaymentId === method.id ? 'محدد الآن' : method.provider}</small>
+                        <small>{selectedPaymentId === method.id ? 'محدد الآن' : method.provider.startsWith('paymob') ? 'Paymob' : method.provider}</small>
                       </button>
                     ))}
                   </div>
