@@ -137,7 +137,24 @@ export default function CheckoutPage() {
         });
 
         if (error || !data?.paymentUrl) {
-          throw new Error(data?.error || 'تعذر بدء عملية الدفع عبر Paymob.');
+          // استخراج رسالة الخطأ التفصيلية من الـ Edge Function
+          let errorMsg = 'تعذر بدء عملية الدفع عبر Paymob.';
+          if (error) {
+            const ctx = (error as { context?: Response }).context;
+            if (ctx) {
+              try {
+                const details = await ctx.clone().json();
+                if (typeof details?.error === 'string' && details.error.trim()) {
+                  errorMsg = details.error;
+                }
+              } catch { /* ignore */ }
+            } else if (error.message) {
+              errorMsg = error.message;
+            }
+          } else if (data?.error) {
+            errorMsg = data.error;
+          }
+          throw new Error(errorMsg);
         }
 
         clearCart();
