@@ -105,6 +105,8 @@ export default function CheckoutPage() {
         country: selectedCountry,
         items,
         shipping,
+        // Paymob: لا يخصم مخزون الآن — يُخصم بعد تأكيد الدفع عبر Webhook
+        paymentType: isPaymob ? 'online' : 'cod',
       });
 
       // ── Paymob online payment ────────────────────────────────────────────────
@@ -158,6 +160,8 @@ export default function CheckoutPage() {
         }
 
         clearCart();
+        // حفظ رقم الطلب مؤقتاً — تستخدمه صفحة النتيجة لإلغاء الطلب عند الفشل
+        sessionStorage.setItem('paymob_pending_order_id', order.id);
         window.location.href = data.paymentUrl;
         return;
       }

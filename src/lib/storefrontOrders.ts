@@ -73,6 +73,8 @@ export type StorefrontOrderInput = {
   country: CountryItem | null;
   items: CartItem[];
   shipping: number;
+  /** 'online' = Paymob: لا يُخصم المخزون إلا بعد تأكيد الدفع عبر Webhook */
+  paymentType?: 'cod' | 'online';
 };
 
 export function getPaymentMethodLabel(method: PaymentMethod) {
@@ -107,6 +109,7 @@ export async function createStorefrontOrder(input: StorefrontOrderInput) {
     },
     paymentMethod: input.paymentMethod,
     paymentMethodId: input.paymentMethodId,
+    paymentType: input.paymentType ?? 'cod',
     country: input.country
       ? {
         id: input.country.id,

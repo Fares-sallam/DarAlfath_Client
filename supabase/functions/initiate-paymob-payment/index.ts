@@ -4,19 +4,18 @@ const corsHeaders = {
 };
 
 const PAYMOB_API_KEY = Deno.env.get('PAYMOB_API_KEY') ?? '';
-const PAYMOB_BASE = 'https://accept.paymob.com/api';
 
-// Integration IDs and iFrame IDs per payment type
-// Set these in Supabase Edge Function secrets
-const INTEGRATION_IDS: Record<string, string> = {
-  paymob_card: Deno.env.get('PAYMOB_CARD_INTEGRATION_ID') ?? '',
-  paymob_fawry: Deno.env.get('PAYMOB_FAWRY_INTEGRATION_ID') ?? '',
-  paymob_wallet: Deno.env.get('PAYMOB_WALLET_INTEGRATION_ID') ?? '',
+// Integration IDs per payment type (from eg.dashboard.paymob.com → Payment Integrations)
+const INTEGRATION_IDS: Record<string, number> = {
+  paymob_card:   Number(Deno.env.get('PAYMOB_CARD_INTEGRATION_ID')   ?? '0'),
+  paymob_fawry:  Number(Deno.env.get('PAYMOB_FAWRY_INTEGRATION_ID')  ?? '0'),
+  paymob_wallet: Number(Deno.env.get('PAYMOB_WALLET_INTEGRATION_ID') ?? '0'),
 };
 
+// iFrame IDs per payment type (from eg.dashboard.paymob.com → Iframes)
 const IFRAME_IDS: Record<string, string> = {
-  paymob_card: Deno.env.get('PAYMOB_CARD_IFRAME_ID') ?? '',
-  paymob_fawry: Deno.env.get('PAYMOB_FAWRY_IFRAME_ID') ?? '',
+  paymob_card:   Deno.env.get('PAYMOB_CARD_IFRAME_ID')   ?? '',
+  paymob_fawry:  Deno.env.get('PAYMOB_FAWRY_IFRAME_ID')  ?? '',
   paymob_wallet: Deno.env.get('PAYMOB_WALLET_IFRAME_ID') ?? '',
 };
 
@@ -39,8 +38,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // ── Debug: log env vars presence ────────────────────────────────────────
-    console.log('[paymob] PAYMOB_API_KEY set:', !!PAYMOB_API_KEY, '| length:', PAYMOB_API_KEY.length);
+    console.log('[paymob] API_KEY length:', PAYMOB_API_KEY.length);
     console.log('[paymob] INTEGRATION_IDS:', JSON.stringify(INTEGRATION_IDS));
     console.log('[paymob] IFRAME_IDS:', JSON.stringify(IFRAME_IDS));
 
@@ -51,97 +49,91 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { orderId, amountCents, billingData, provider } = body;
 
-    console.log('[paymob] Request body:', JSON.stringify({ orderId, amountCents, provider, billingData }));
+    console.log('[paymob] Request:', JSON.stringify({ orderId, amountCents, provider }));
 
     if (!orderId || !amountCents || !provider) {
-      console.log('[paymob] Missing required fields');
       return jsonError('بيانات الطلب غير مكتملة');
     }
 
     const integrationId = INTEGRATION_IDS[provider];
     const iframeId = IFRAME_IDS[provider];
 
-    console.log('[paymob] Provider:', provider, '| integrationId:', integrationId, '| iframeId:', iframeId);
+    console.log('[paymob] provider:', provider, '| integrationId:', integrationId, '| iframeId:', iframeId);
 
     if (!integrationId || !iframeId) {
       return jsonError(`بيانات Paymob غير مضبوطة لطريقة الدفع: ${provider}`, 500);
     }
 
-    // ── Step 1: Auth ──────────────────────────────────────────────────────────
-    console.log('[paymob] Step 1: Authenticating...');
-    const authRes = await fetch(`${PAYMOB_BASE}/auth/tokens`, {
+    // ── Paymob Intention API (v1) ─────────────────────────────────────────────
+    // يستخدم API Key مباشرةً في الـ Authorization header (بدون Auth step)
+    console.log('[paymob] Calling Paymob Intention API...');
+
+    const intentionPayload = {
+      amount: amountCents,
+      currency: 'EGP',
+      payment_methods: [integrationId],
+      items: [],
+      billing_data: {
+        apartment:       billingData.apartment       || 'N/A',
+        email:           billingData.email           || 'N/A',
+        floor:           billingData.floor           || 'N/A',
+        first_name:      billingData.first_name      || 'N/A',
+        street:          billingData.street          || 'N/A',
+        building:        billingData.building        || 'N/A',
+        phone_number:    billingData.phone_number    || 'N/A',
+        shipping_method: 'NA',
+        postal_code:     'NA',
+        city:            billingData.city            || 'N/A',
+        country:         billingData.country         || 'EG',
+        last_name:       billingData.last_name       || 'N/A',
+        state:           billingData.state           || 'N/A',
+      },
+      customer: {
+        first_name:   billingData.first_name   || 'N/A',
+        last_name:    billingData.last_name    || 'N/A',
+        email:        billingData.email        || 'N/A',
+        phone_number: billingData.phone_number || 'N/A',
+      },
+      special_reference: orderId,
+    };
+
+    console.log('[paymob] Intention payload:', JSON.stringify(intentionPayload));
+
+    const intentionRes = await fetch('https://accept.paymob.com/v1/intention/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ api_key: PAYMOB_API_KEY }),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Token ${PAYMOB_API_KEY}`,
+      },
+      body: JSON.stringify(intentionPayload),
     });
-    const authText = await authRes.text();
-    console.log('[paymob] Auth response status:', authRes.status, '| body:', authText.substring(0, 500));
 
-    let authData: { token?: string };
-    try { authData = JSON.parse(authText); } catch { authData = {}; }
+    const intentionText = await intentionRes.text();
+    console.log('[paymob] Intention response status:', intentionRes.status, '| body:', intentionText.substring(0, 600));
 
-    if (!authData.token) {
-      return jsonError(`فشل في المصادقة مع Paymob (${authRes.status}): ${authText.substring(0, 200)}`);
-    }
-    const authToken: string = authData.token;
-    console.log('[paymob] Auth OK, token length:', authToken.length);
-
-    // ── Step 2: Create Paymob Order ───────────────────────────────────────────
-    console.log('[paymob] Step 2: Creating Paymob order...');
-    const paymobOrderRes = await fetch(`${PAYMOB_BASE}/ecommerce/orders`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        auth_token: authToken,
-        delivery_needed: false,
-        amount_cents: amountCents,
-        currency: 'EGP',
-        merchant_order_id: orderId,
-        items: [],
-      }),
-    });
-    const paymobOrderText = await paymobOrderRes.text();
-    console.log('[paymob] Order response status:', paymobOrderRes.status, '| body:', paymobOrderText.substring(0, 500));
-
-    let paymobOrderData: { id?: number };
-    try { paymobOrderData = JSON.parse(paymobOrderText); } catch { paymobOrderData = {}; }
-
-    if (!paymobOrderData.id) {
-      return jsonError(`فشل في إنشاء الطلب في Paymob (${paymobOrderRes.status}): ${paymobOrderText.substring(0, 200)}`);
-    }
-    const paymobOrderId: number = paymobOrderData.id;
-    console.log('[paymob] Paymob order created, id:', paymobOrderId);
-
-    // ── Step 3: Get Payment Key ───────────────────────────────────────────────
-    console.log('[paymob] Step 3: Getting payment key...');
-    const keyRes = await fetch(`${PAYMOB_BASE}/acceptance/payment_keys`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        auth_token: authToken,
-        amount_cents: amountCents,
-        expiration: 3600,
-        order_id: paymobOrderId,
-        billing_data: billingData,
-        currency: 'EGP',
-        integration_id: Number(integrationId),
-        lock_order_when_paid: false,
-      }),
-    });
-    const keyText = await keyRes.text();
-    console.log('[paymob] Payment key response status:', keyRes.status, '| body:', keyText.substring(0, 500));
-
-    let keyData: { token?: string };
-    try { keyData = JSON.parse(keyText); } catch { keyData = {}; }
-
-    if (!keyData.token) {
-      return jsonError(`فشل في الحصول على مفتاح الدفع من Paymob (${keyRes.status}): ${keyText.substring(0, 200)}`);
+    if (!intentionRes.ok) {
+      return jsonError(`فشل في إنشاء طلب الدفع في Paymob (${intentionRes.status}): ${intentionText.substring(0, 300)}`);
     }
 
-    const paymentToken: string = keyData.token;
-    const paymentUrl = `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${paymentToken}`;
+    let intentionData: { client_secret?: string; id?: string };
+    try {
+      intentionData = JSON.parse(intentionText);
+    } catch {
+      return jsonError(`رد غير صالح من Paymob: ${intentionText.substring(0, 200)}`);
+    }
 
-    console.log('[paymob] Success! Payment URL ready, iframeId:', iframeId);
+    const clientSecret = intentionData?.client_secret;
+    console.log('[paymob] client_secret received:', !!clientSecret, '| length:', clientSecret?.length ?? 0);
+
+    if (!clientSecret) {
+      return jsonError(`لم يصل client_secret من Paymob. الرد: ${intentionText.substring(0, 300)}`);
+    }
+
+    // ── بناء رابط الدفع ──────────────────────────────────────────────────────
+    // نستخدم الـ iFrame مع الـ client_secret كـ payment_token
+    const paymentUrl = `https://accept.paymob.com/api/acceptance/iframes/${iframeId}?payment_token=${clientSecret}`;
+    console.log('[paymob] Success! paymentUrl iframeId:', iframeId);
+
     return jsonOk({ paymentUrl });
   } catch (err) {
     console.error('[paymob] Unexpected error:', err);

@@ -31,7 +31,8 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items } = body;
+    const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items, paymentType } = body;
+    // paymentType: 'cod' | 'online'  — 'online' = Paymob (no immediate stock deduction)
 
     // ── Basic validation ──────────────────────────────────────────────────────
     if (!Array.isArray(items) || items.length === 0) {
@@ -96,34 +97,42 @@ Deno.serve(async (req) => {
       paymentMethodId = matched?.id ?? null;
     }
 
-    // ── Call atomic RPC (creates order + deducts stock in one transaction) ────
-    const { data: rpcData, error: rpcError } = await supabase.rpc(
-      'create_order_with_stock_deduction',
-      {
-        p_user_id: userId,
-        p_country_id: country?.id ?? null,
-        p_payment_method_id: paymentMethodId,
-        p_shipping_cost: Number(shipping) || 0,
-        p_shipping_address: {
-          name: customer.fullName,
-          email: customer.email,
-          phone: customer.phone,
-          governorate: customer.governorate ?? '',
-          city: customer.city,
-          street: customer.address,
-          country: country?.name ?? null,
-          notes: customer.notes ?? '',
-        },
-        p_notes: customer.notes ?? '',
-        p_items: items.map((item: Record<string, unknown>) => ({
-          product_id: item.product_id,
-          variant_id: item.variant_id,
-          quantity: Number(item.quantity) || 1,
-          price_per_item: Number(item.price) || 0,
-          is_digital: Boolean(item.is_digital),
-        })),
+    // ── اختيار الـ RPC المناسب حسب نوع الدفع ────────────────────────────────
+    // online (Paymob): إنشاء الطلب بدون خصم مخزون — يُخصم بعد تأكيد الدفع
+    // cod/bank:        إنشاء الطلب + خصم المخزون فوراً (السلوك الحالي)
+    const isOnlinePayment = paymentType === 'online';
+    const rpcName = isOnlinePayment
+      ? 'create_order_pending_payment'
+      : 'create_order_with_stock_deduction';
+
+    console.log(`[create-order] paymentType=${paymentType} → rpc=${rpcName}`);
+
+    const rpcParams = {
+      p_user_id: userId,
+      p_country_id: country?.id ?? null,
+      p_payment_method_id: paymentMethodId,
+      p_shipping_cost: Number(shipping) || 0,
+      p_shipping_address: {
+        name: customer.fullName,
+        email: customer.email,
+        phone: customer.phone,
+        governorate: customer.governorate ?? '',
+        city: customer.city,
+        street: customer.address,
+        country: country?.name ?? null,
+        notes: customer.notes ?? '',
       },
-    );
+      p_notes: customer.notes ?? '',
+      p_items: items.map((item: Record<string, unknown>) => ({
+        product_id: item.product_id,
+        variant_id: item.variant_id,
+        quantity: Number(item.quantity) || 1,
+        price_per_item: Number(item.price) || 0,
+        is_digital: Boolean(item.is_digital),
+      })),
+    };
+
+    const { data: rpcData, error: rpcError } = await supabase.rpc(rpcName, rpcParams);
 
     if (rpcError) {
       // Surface user-friendly Arabic messages from RAISE EXCEPTION in the RPC
