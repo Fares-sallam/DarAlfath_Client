@@ -14,6 +14,7 @@ import AboutPage from '@/pages/AboutPage';
 import PoliciesPage from '@/pages/PoliciesPage';
 import ContactPage from '@/pages/ContactPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import PaymentResultPage from '@/pages/PaymentResultPage';
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
         <Route path="wishlist" element={<WishlistPage />} />
         <Route path="cart" element={<CartPage />} />
         <Route path="checkout" element={<CheckoutPage />} />
+        <Route path="payment/result" element={<PaymentResultPage />} />
         <Route path="account" element={<AccountPage />} />
         <Route path="account/orders" element={<OrdersPage />} />
         <Route path="account/downloads" element={<DownloadsPage />} />

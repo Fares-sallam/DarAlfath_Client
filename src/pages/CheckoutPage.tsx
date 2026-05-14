@@ -7,6 +7,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCountry } from '@/contexts/CountryContext';
 import { formatMoney, usePaymentMethods } from '@/hooks/useStorefront';
+import { supabase } from '@/lib/supabase';
 import {
   createStorefrontOrder,
   formatStorefrontOrderDate,
@@ -76,6 +77,13 @@ export default function CheckoutPage() {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const selectedMethod = useMemo(
+    () => paymentMethods.find((m) => m.id === selectedPaymentId) ?? null,
+    [paymentMethods, selectedPaymentId]
+  );
+
+  const isPaymob = selectedMethod?.provider?.toLowerCase().startsWith('paymob') ?? false;
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
@@ -92,13 +100,52 @@ export default function CheckoutPage() {
           address: form.address,
           notes: form.notes,
         },
-        paymentMethod: 'cod',
+        paymentMethod: isPaymob ? 'online' as never : 'cod',
         paymentMethodId: selectedPaymentId,
         country: selectedCountry,
         items,
         shipping,
       });
 
+      // ── Paymob online payment ────────────────────────────────────────────────
+      if (isPaymob && selectedMethod) {
+        const nameParts = form.fullName.trim().split(' ');
+        const firstName = nameParts[0] || 'N/A';
+        const lastName = nameParts.slice(1).join(' ') || 'N/A';
+
+        const billingData = {
+          first_name: firstName,
+          last_name: lastName,
+          email: form.email.trim(),
+          phone_number: form.phone.trim(),
+          country: selectedCountry?.code || 'EG',
+          state: form.governorate.trim() || 'N/A',
+          city: form.city.trim() || 'N/A',
+          street: form.address.trim() || 'N/A',
+          building: 'N/A',
+          floor: 'N/A',
+          apartment: 'N/A',
+        };
+
+        const { data, error } = await supabase.functions.invoke('initiate-paymob-payment', {
+          body: {
+            orderId: order.id,
+            amountCents: Math.round(total * 100),
+            billingData,
+            provider: selectedMethod.provider.toLowerCase(),
+          },
+        });
+
+        if (error || !data?.paymentUrl) {
+          throw new Error(data?.error || 'تعذر بدء عملية الدفع عبر Paymob.');
+        }
+
+        clearCart();
+        window.location.href = data.paymentUrl;
+        return;
+      }
+
+      // ── Cash / COD ───────────────────────────────────────────────────────────
       setSubmittedOrder(order);
       setSubmitted(true);
       clearCart();
@@ -290,7 +337,9 @@ export default function CheckoutPage() {
                 onClick={handleSubmit}
                 disabled={!canSubmit || submitting}
               >
-                {submitting ? 'جاري تسجيل الطلب...' : 'تأكيد الطلب'}
+                {submitting
+                  ? (isPaymob ? 'جاري التحويل لبوابة الدفع...' : 'جاري تسجيل الطلب...')
+                  : (isPaymob ? 'الدفع عبر Paymob' : 'تأكيد الطلب')}
               </button>
 
               <Link to="/cart" className="ghost-button ghost-button--full">
