@@ -22,10 +22,9 @@ export default function ProductCard({
   const categoryLabel = product.category_name || product.category?.name || product.type;
   const coverUrl = product.cover_url && !imageFailed ? product.cover_url : null;
 
-  const discountPct =
-    product.compare_at_price && product.compare_at_price > product.min_price
-      ? Math.round((1 - product.min_price / product.compare_at_price) * 100)
-      : 0;
+  const discountPct = product.discount_percent && product.discount_percent > 0
+    ? Math.round(product.discount_percent)
+    : 0;
 
   const openBook = () => navigate(`/book/${product.id}`);
 

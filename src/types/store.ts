@@ -74,6 +74,7 @@ export interface ProductItem {
   max_price: number;
   starting_price: number;
   compare_at_price?: number | null;
+  discount_percent?: number | null;
   category_id?: string | null;
   category_name?: string | null;
   category_slug?: string | null;
