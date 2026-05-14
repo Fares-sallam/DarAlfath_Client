@@ -143,17 +143,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { error: error ? getArabicAuthError(error.message) : null };
     },
-    signUp: async ({ email, fullName }) => {
+    signUp: async ({ email, password, fullName }) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
-      const { error } = await supabase.auth.signInWithOtp({
+      const { error } = await supabase.auth.signUp({
         email: email.trim(),
+        password,
         options: {
-          shouldCreateUser: true,
           emailRedirectTo: getRedirectUrl('/account?verified=1'),
           data: {
             full_name: fullName.trim(),
-            has_password: false,
+            has_password: true,
           },
         },
       });
@@ -164,7 +164,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return {
         error: null,
-        message: `أرسلنا كود تحقق من 6 أرقام إلى ${email.trim()}.`,
+        message: 'تم إنشاء حسابك بنجاح! يمكنك تسجيل الدخول الآن.',
       };
     },
     verifyEmailCode: async (email, token) => {
