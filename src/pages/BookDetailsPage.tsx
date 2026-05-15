@@ -7,6 +7,7 @@ import {
   formatCatalogPrice,
   formatMoney,
   useProductDetails,
+  useProductImageGallery,
   useProductVariants,
   useRelatedProducts,
 } from '@/hooks/useStorefront';
@@ -26,6 +27,9 @@ export default function BookDetailsPage() {
     product?.category_slug,
     product?.product_id
   );
+  const { data: galleryImages = [] } = useProductImageGallery(
+    product?.product_id ?? productId
+  );
 
   const { isInWishlist, toggleWishlist } = useWishlist();
   const { addToCart } = useCart();
@@ -39,10 +43,11 @@ export default function BookDetailsPage() {
 
   const displayedImages = useMemo(() => {
     if (!product) return [];
+    if (galleryImages.length > 0) return galleryImages;
     return product.images?.length
       ? product.images
       : ([product.cover_url].filter(Boolean) as string[]);
-  }, [product]);
+  }, [product, galleryImages]);
 
   const selectedVariant = useMemo<ProductVariantItem | null>(() => {
     return variants.find((item) => item.variant_id === selectedVariantId) ?? null;

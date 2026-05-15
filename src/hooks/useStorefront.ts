@@ -378,6 +378,29 @@ export function useWishlistProducts(ids: string[]) {
   return { ...productsQuery, data: items };
 }
 
+export function useProductImageGallery(productId?: string) {
+  return useQuery({
+    queryKey: ['product-gallery', productId ?? 'missing'],
+    enabled: Boolean(productId),
+    queryFn: async (): Promise<string[]> => {
+      if (!isSupabaseConfigured || !productId) return [];
+      try {
+        const { data, error } = await supabase
+          .from('product_images')
+          .select('url, is_primary, sort_order')
+          .eq('product_id', productId)
+          .order('is_primary', { ascending: false })
+          .order('sort_order', { ascending: true });
+
+        if (error || !data) return [];
+        return (data as { url: string }[]).map((img) => img.url).filter(Boolean);
+      } catch {
+        return [];
+      }
+    },
+  });
+}
+
 export type PaymentMethodItem = {
   id: string;
   provider: string;
