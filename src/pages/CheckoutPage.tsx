@@ -99,9 +99,15 @@ export default function CheckoutPage() {
   const isPaymob = selectedMethod?.provider?.toLowerCase().startsWith('paymob') ?? false;
 
   // ── Adjusted totals (with coupon) ─────────────────────────
+  // For "شحن مجاني" coupon: the saving IS the shipping cost; we zero shipping
+  // and skip subtracting calculatedAmount from subtotal (would be a double deduction).
+  // For other coupon types: subtract calculatedAmount from subtotal as a normal discount.
   const adjustedShipping = appliedCoupon?.freeShipping ? 0 : shipping;
-  const discountAmount = appliedCoupon?.calculatedAmount ?? 0;
-  const adjustedTotal = Math.max(0, subtotal - discountAmount + adjustedShipping);
+  const subtotalDiscount = appliedCoupon && !appliedCoupon.freeShipping
+    ? (appliedCoupon.calculatedAmount ?? 0)
+    : 0;
+  const discountAmount = appliedCoupon?.calculatedAmount ?? 0; // كده الـ UI يقدر يعرض قيمة الخصم سواء كان شحن أو مبلغ
+  const adjustedTotal = Math.max(0, subtotal - subtotalDiscount + adjustedShipping);
 
   const handleApplyCoupon = async () => {
     if (!couponCode.trim()) return;
