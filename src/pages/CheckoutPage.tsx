@@ -252,18 +252,32 @@ export default function CheckoutPage() {
       });
 
       // ── Apply coupon to order (server-side validation + update) ──────────────
-      if (appliedCoupon?.code) {
-        const { data: couponResult, error: couponRpcError } = await supabase.rpc(
-          'apply_coupon_to_order',
-          { p_order_id: order.id, p_coupon_code: appliedCoupon.code },
-        );
-        if (couponRpcError) {
-          console.warn('[checkout] apply_coupon_to_order failed:', couponRpcError.message);
-        } else if (couponResult && !couponResult.success) {
-          console.warn('[checkout] coupon rejected by server:', couponResult.error);
-        } else {
-          console.log('[checkout] coupon applied:', couponResult);
+      console.log('[checkout] BUILD v3 — appliedCoupon=', appliedCoupon, 'order.id=', order?.id);
+      if (appliedCoupon?.code && order?.id) {
+        try {
+          console.log('[checkout] calling apply_coupon_to_order RPC...');
+          const { data: couponResult, error: couponRpcError } = await supabase.rpc(
+            'apply_coupon_to_order',
+            { p_order_id: order.id, p_coupon_code: appliedCoupon.code },
+          );
+          console.log('[checkout] RPC response:', { data: couponResult, error: couponRpcError });
+
+          if (couponRpcError) {
+            console.error('[checkout] RPC error:', couponRpcError);
+          } else if (couponResult && couponResult.success === false) {
+            console.warn('[checkout] coupon rejected by server:', couponResult.error);
+          } else if (couponResult?.success === true) {
+            console.log('[checkout] ✅ coupon applied:', couponResult);
+            // Update local order so the success screen shows the discounted total
+            order.discount_amount = Number(couponResult.discount_amount) || 0;
+            order.shipping_cost = Number(couponResult.shipping_cost) || order.shipping_cost;
+            order.total_price = Number(couponResult.total_price) || order.total_price;
+          }
+        } catch (rpcErr) {
+          console.error('[checkout] RPC exception:', rpcErr);
         }
+      } else {
+        console.log('[checkout] no coupon to apply or order.id missing');
       }
 
       // ── Paymob online payment ────────────────────────────────────────────────
