@@ -606,7 +606,7 @@ export default function CheckoutPage() {
               >
                 {submitting
                   ? (isPaymob ? 'جاري التحويل لبوابة الدفع...' : 'جاري تسجيل الطلب...')
-                  : (isPaymob ? '🟢 ادفع عبر Paymob v6' : 'تأكيد الطلب')}
+                  : (isPaymob ? 'الدفع عبر Paymob' : 'تأكيد الطلب')}
               </button>
 
               <Link to="/cart" className="ghost-button ghost-button--full">
