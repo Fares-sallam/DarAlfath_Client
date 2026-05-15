@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ProductItem, ProductVariantItem } from '@/types/store';
 import { useCountry } from '@/contexts/CountryContext';
+import { useStoreSettings } from '@/hooks/useStorefront';
 
 export interface CartItem {
   key: string;
@@ -35,8 +36,8 @@ interface CartContextValue {
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
 const STORAGE_KEY = 'daralfath_client_cart';
-const SHIPPING_FLAT_RATE = 45;
-const FREE_SHIPPING_THRESHOLD = 499;
+const DEFAULT_SHIPPING_FLAT_RATE = 45;
+const DEFAULT_FREE_SHIPPING_THRESHOLD = 499;
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
@@ -98,6 +99,10 @@ function loadCartFromStorage(): CartItem[] {
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { selectedCountry } = useCountry();
+  const { data: storeSettings } = useStoreSettings();
+
+  const shippingFlatRate = Number(storeSettings?.default_shipping_cost) || DEFAULT_SHIPPING_FLAT_RATE;
+  const freeShippingThresholdValue = Number(storeSettings?.free_shipping_threshold) || DEFAULT_FREE_SHIPPING_THRESHOLD;
 
   // Lazy initializer: reads localStorage synchronously on first render
   // so cart is populated before any effect can overwrite it with []
@@ -183,10 +188,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
     const hasPhysicalItems = items.some((item) => !item.is_digital);
     const isEgypt = !selectedCountry || selectedCountry.code === 'EG';
-    const freeShippingThreshold = isEgypt ? FREE_SHIPPING_THRESHOLD : 0;
-    const qualifiesForFreeShipping = isEgypt && subtotal >= FREE_SHIPPING_THRESHOLD;
-    const shipping = hasPhysicalItems && !qualifiesForFreeShipping ? SHIPPING_FLAT_RATE : 0;
-    const remainingForFreeShipping = isEgypt ? Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal) : 0;
+    const freeShippingThreshold = isEgypt ? freeShippingThresholdValue : 0;
+    const qualifiesForFreeShipping = isEgypt && freeShippingThresholdValue > 0 && subtotal >= freeShippingThresholdValue;
+    const shipping = hasPhysicalItems && !qualifiesForFreeShipping ? shippingFlatRate : 0;
+    const remainingForFreeShipping = isEgypt ? Math.max(0, freeShippingThresholdValue - subtotal) : 0;
     const total = subtotal + shipping;
     const currencySymbol = items[0]?.currency_symbol ?? 'ج.م';
 
@@ -204,7 +209,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeFromCart,
       clearCart,
     };
-  }, [items, selectedCountry]);
+  }, [items, selectedCountry, shippingFlatRate, freeShippingThresholdValue]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

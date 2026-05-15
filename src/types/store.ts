@@ -7,6 +7,8 @@ export interface StoreSettings {
   seo_title?: string | null;
   seo_description?: string | null;
   seo_keywords?: string | null;
+  default_shipping_cost?: number | null;
+  free_shipping_threshold?: number | null;
 }
 
 export interface CountryItem {

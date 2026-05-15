@@ -1620,6 +1620,61 @@ button {
   font-size: 20px;
 }
 
+/* ── Coupon ────────────────────────────────────────────── */
+.coupon-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.coupon-input-row input {
+  flex: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.coupon-input-row .ghost-button {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.coupon-applied {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 15px;
+  background: #eefbf2;
+  color: #1f6a3c;
+  font-weight: 900;
+}
+
+.coupon-applied__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.coupon-applied__code {
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+}
+
+.coupon-applied__desc {
+  font-size: 0.82rem;
+  opacity: 0.8;
+  font-weight: 600;
+}
+
+.order-summary__discount {
+  color: #1f6a3c !important;
+}
+
+.order-summary__discount b {
+  color: #1f6a3c;
+}
+
 /* About */
 .account-grid,
 .story-grid {

@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items, paymentType } = body;
+    const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items, paymentType, couponCode } = body;
     // paymentType: 'cod' | 'online'  — 'online' = Paymob (no immediate stock deduction)
 
     // ── Basic validation ──────────────────────────────────────────────────────
@@ -141,6 +141,84 @@ Deno.serve(async (req) => {
 
     if (!rpcData?.id) {
       return jsonError('لم ترجع قاعدة البيانات رقم الطلب.');
+    }
+
+    // ── Apply coupon (post-creation UPDATE) ──────────────────────────────────
+    if (couponCode) {
+      try {
+        const trimmedCode = String(couponCode).trim().toUpperCase();
+
+        const { data: coupon } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('code', trimmedCode)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (coupon) {
+          const now = new Date();
+          const validFrom = coupon.valid_from ? new Date(coupon.valid_from) : null;
+          const validTo = coupon.valid_to ? new Date(coupon.valid_to) : null;
+
+          const subtotal = (items as { price?: unknown; quantity?: unknown }[])
+            .reduce((sum: number, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 1), 0);
+
+          let isValid = true;
+          if (validFrom && now < validFrom) isValid = false;
+          if (validTo && now > validTo) isValid = false;
+          if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) isValid = false;
+          if (coupon.min_order != null && coupon.min_order > 0 && subtotal < coupon.min_order) isValid = false;
+          if (coupon.country_id && coupon.country_id !== (country?.id ?? null)) isValid = false;
+          if (coupon.user_id && coupon.user_id !== userId) isValid = false;
+          if (coupon.product_id && !(items as { product_id?: string }[]).some((i) => i.product_id === coupon.product_id)) isValid = false;
+
+          if (isValid) {
+            let discountAmount = 0;
+            let newShipping = Number(shipping) || 0;
+
+            switch (coupon.type) {
+              case 'نسبة':
+                discountAmount = Math.round(subtotal * coupon.value / 100 * 100) / 100;
+                break;
+              case 'مبلغ ثابت':
+                discountAmount = Math.min(coupon.value, subtotal);
+                break;
+              case 'شحن مجاني':
+                newShipping = 0;
+                break;
+              case 'خصم منتج': {
+                const match = (items as { product_id?: string; price?: unknown; quantity?: unknown }[])
+                  .find((i) => i.product_id === coupon.product_id);
+                if (match) {
+                  discountAmount = Math.min(coupon.value, (Number(match.price) || 0) * (Number(match.quantity) || 1));
+                }
+                break;
+              }
+            }
+
+            const newTotal = subtotal - discountAmount + newShipping;
+
+            await supabase
+              .from('orders')
+              .update({
+                coupon_id: coupon.id,
+                discount_amount: discountAmount,
+                shipping_cost: newShipping,
+                total_price: newTotal,
+              })
+              .eq('id', rpcData.id);
+
+            await supabase
+              .from('coupons')
+              .update({ used_count: (coupon.used_count || 0) + 1 })
+              .eq('id', coupon.id);
+
+            console.log(`[create-order] Coupon ${trimmedCode} applied: discount=${discountAmount} shipping=${newShipping} total=${newTotal}`);
+          }
+        }
+      } catch (couponErr) {
+        console.warn('[create-order] Coupon application failed (non-fatal):', couponErr);
+      }
     }
 
     // ── Fetch the full order (with joins) to return to the client ─────────────

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, CreditCard, PackageCheck, Truck } from 'lucide-react';
+import { CheckCircle2, CreditCard, PackageCheck, Tag, Truck, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useCart } from '@/contexts/CartContext';
@@ -55,6 +55,20 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
+  // ── Coupon state ──────────────────────────────────────────
+  const [couponCode, setCouponCode] = useState('');
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{
+    couponId: string;
+    code: string;
+    type: string;
+    value: number;
+    calculatedAmount: number;
+    freeShipping: boolean;
+    description: string;
+  } | null>(null);
+
   useEffect(() => {
     if (!user?.email) return;
     setForm((prev) => (prev.email ? prev : { ...prev, email: user.email ?? '' }));
@@ -84,6 +98,71 @@ export default function CheckoutPage() {
 
   const isPaymob = selectedMethod?.provider?.toLowerCase().startsWith('paymob') ?? false;
 
+  // ── Adjusted totals (with coupon) ─────────────────────────
+  const adjustedShipping = appliedCoupon?.freeShipping ? 0 : shipping;
+  const discountAmount = appliedCoupon?.calculatedAmount ?? 0;
+  const adjustedTotal = Math.max(0, subtotal - discountAmount + adjustedShipping);
+
+  const handleApplyCoupon = async () => {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError('');
+
+    try {
+      const { data, error } = await supabase.functions.invoke('validate-coupon', {
+        body: {
+          code: couponCode.trim(),
+          subtotal,
+          shipping,
+          countryId: selectedCountry?.id ?? null,
+          items: items.map((i) => ({
+            product_id: i.product_id,
+            quantity: i.quantity,
+            price: i.price,
+          })),
+        },
+      });
+
+      if (error) {
+        setCouponError('تعذر التحقق من كود الخصم. حاول مرة أخرى.');
+        return;
+      }
+
+      if (!data?.valid) {
+        setCouponError(data?.error || 'كود الخصم غير صالح.');
+        return;
+      }
+
+      setAppliedCoupon({
+        couponId: data.couponId,
+        code: couponCode.trim().toUpperCase(),
+        type: data.discount.type,
+        value: data.discount.value,
+        calculatedAmount: data.discount.calculatedAmount,
+        freeShipping: data.discount.freeShipping,
+        description: data.discount.description,
+      });
+      setCouponError('');
+    } catch {
+      setCouponError('خطأ في الاتصال. حاول مرة أخرى.');
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponError('');
+  };
+
+  // Clear coupon when cart/country changes
+  useEffect(() => {
+    setAppliedCoupon(null);
+    setCouponCode('');
+    setCouponError('');
+  }, [subtotal, items.length, selectedCountry?.id]);
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
@@ -107,6 +186,7 @@ export default function CheckoutPage() {
         shipping,
         // Paymob: لا يخصم مخزون الآن — يُخصم بعد تأكيد الدفع عبر Webhook
         paymentType: isPaymob ? 'online' : 'cod',
+        couponCode: appliedCoupon?.code || undefined,
       });
 
       // ── Paymob online payment ────────────────────────────────────────────────
@@ -132,7 +212,7 @@ export default function CheckoutPage() {
         const { data, error } = await supabase.functions.invoke('initiate-paymob-payment', {
           body: {
             orderId: order.id,
-            amountCents: Math.round(total * 100),
+            amountCents: Math.round(adjustedTotal * 100),
             billingData,
             provider: selectedMethod.provider.toLowerCase(),
           },
@@ -317,6 +397,58 @@ export default function CheckoutPage() {
                   </div>
                 )}
               </div>
+
+              {/* ── كود الخصم ──────────────────────────────────── */}
+              <div className="contact-card">
+                <h3><Tag size={16} /> كود الخصم</h3>
+
+                {appliedCoupon ? (
+                  <div className="coupon-applied">
+                    <div className="coupon-applied__info">
+                      <span className="coupon-applied__code">{appliedCoupon.code}</span>
+                      <span className="coupon-applied__desc">{appliedCoupon.description}</span>
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-button"
+                      onClick={handleRemoveCoupon}
+                      aria-label="إزالة الكوبون"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <div className="coupon-input-row">
+                      <input
+                        value={couponCode}
+                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                        placeholder="أدخل كود الخصم"
+                        disabled={couponLoading}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleApplyCoupon();
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="ghost-button"
+                        onClick={handleApplyCoupon}
+                        disabled={couponLoading || !couponCode.trim()}
+                      >
+                        {couponLoading ? 'جاري التحقق...' : 'تطبيق'}
+                      </button>
+                    </div>
+                    {couponError ? (
+                      <div className="auth-alert auth-alert--error" style={{ marginTop: 8 }}>
+                        {couponError}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
             </div>
 
             {/* ── ملخص الطلب ────────────────────────────────────── */}
@@ -334,13 +466,30 @@ export default function CheckoutPage() {
                 <span>الإجمالي الفرعي</span>
                 <b>{formatMoney(subtotal, currencySymbol)}</b>
               </div>
+
+              {appliedCoupon && discountAmount > 0 ? (
+                <div className="order-summary__discount">
+                  <span>الخصم ({appliedCoupon.description})</span>
+                  <b>- {formatMoney(discountAmount, currencySymbol)}</b>
+                </div>
+              ) : null}
+
               <div>
                 <span>الشحن</span>
-                <b>{formatMoney(shipping, currencySymbol)}</b>
+                <b>
+                  {appliedCoupon?.freeShipping && shipping > 0 ? (
+                    <>
+                      <s style={{ opacity: 0.4, marginLeft: 6 }}>{formatMoney(shipping, currencySymbol)}</s>
+                      {' '}مجاني
+                    </>
+                  ) : (
+                    formatMoney(adjustedShipping, currencySymbol)
+                  )}
+                </b>
               </div>
               <div className="order-summary__total">
                 <span>الإجمالي النهائي</span>
-                <b>{formatMoney(total, currencySymbol)}</b>
+                <b>{formatMoney(adjustedTotal, currencySymbol)}</b>
               </div>
 
               <div className="availability-chip">

@@ -75,6 +75,7 @@ export type StorefrontOrderInput = {
   shipping: number;
   /** 'online' = Paymob: لا يُخصم المخزون إلا بعد تأكيد الدفع عبر Webhook */
   paymentType?: 'cod' | 'online';
+  couponCode?: string;
 };
 
 export function getPaymentMethodLabel(method: PaymentMethod) {
@@ -119,6 +120,7 @@ export async function createStorefrontOrder(input: StorefrontOrderInput) {
       }
       : null,
     shipping: input.shipping,
+    couponCode: input.couponCode?.trim() || null,
     items: input.items.map((item) => ({
       key: item.key,
       product_id: item.product_id,
