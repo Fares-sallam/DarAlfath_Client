@@ -124,7 +124,22 @@ export default function CheckoutPage() {
       });
 
       if (error) {
-        setCouponError('تعذر التحقق من كود الخصم. حاول مرة أخرى.');
+        // محاولة استخراج رسالة الخطأ التفصيلية من الـ Edge Function
+        let detail = '';
+        const ctx = (error as { context?: Response }).context;
+        if (ctx) {
+          try {
+            const body = await ctx.clone().json();
+            if (typeof body?.error === 'string' && body.error.trim()) detail = body.error;
+          } catch { /* ignore */ }
+        }
+        const msg = detail || error.message || '';
+        console.error('[validate-coupon] error:', error);
+        setCouponError(
+          msg.includes('not found') || msg.includes('404')
+            ? 'خدمة التحقق غير منشورة. تواصل مع مدير الموقع.'
+            : msg || 'تعذر التحقق من كود الخصم. حاول مرة أخرى.'
+        );
         return;
       }
 
