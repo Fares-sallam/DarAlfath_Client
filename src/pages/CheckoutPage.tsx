@@ -251,6 +251,21 @@ export default function CheckoutPage() {
         couponCode: appliedCoupon?.code || undefined,
       });
 
+      // ── Apply coupon to order (server-side validation + update) ──────────────
+      if (appliedCoupon?.code) {
+        const { data: couponResult, error: couponRpcError } = await supabase.rpc(
+          'apply_coupon_to_order',
+          { p_order_id: order.id, p_coupon_code: appliedCoupon.code },
+        );
+        if (couponRpcError) {
+          console.warn('[checkout] apply_coupon_to_order failed:', couponRpcError.message);
+        } else if (couponResult && !couponResult.success) {
+          console.warn('[checkout] coupon rejected by server:', couponResult.error);
+        } else {
+          console.log('[checkout] coupon applied:', couponResult);
+        }
+      }
+
       // ── Paymob online payment ────────────────────────────────────────────────
       if (isPaymob && selectedMethod) {
         const nameParts = form.fullName.trim().split(' ');
