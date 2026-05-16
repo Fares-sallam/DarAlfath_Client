@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, CreditCard, PackageCheck, Tag, Truck, X } from 'lucide-react';
+import { CheckCircle2, CreditCard, ExternalLink, Loader2, PackageCheck, Tag, Truck, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useCart } from '@/contexts/CartContext';
@@ -54,6 +54,13 @@ export default function CheckoutPage() {
   const [submittedOrder, setSubmittedOrder] = useState<StorefrontOrder | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+
+  // Paymob polling state ──────────────────────────────────────────
+  const [paymobPolling, setPaymobPolling] = useState(false);
+  const [paymobMerchantOrderId, setPaymobMerchantOrderId] = useState<string | null>(null);
+  const [paymobPaymentUrl, setPaymobPaymentUrl] = useState<string | null>(null);
+  const [paymobStatusMsg, setPaymobStatusMsg] = useState<string>('جارٍ إنتظار تأكيد الدفع...');
+  const pollAbortRef = useRef<{ cancelled: boolean }>({ cancelled: false });
 
   // ── Coupon state ──────────────────────────────────────────
   const [couponCode, setCouponCode] = useState('');
@@ -231,119 +238,196 @@ export default function CheckoutPage() {
     setCouponError('');
   }, [subtotal, items.length, selectedCountry?.id]);
 
+  // ── Polling Paymob until terminal state ──────────────────────────
+  const pollPaymobTransaction = async (merchantOrderId: string) => {
+    const MAX_DURATION_MS = 10 * 60 * 1000; // 10 minutes
+    const INTERVAL_MS = 3000;
+    const startedAt = Date.now();
+    pollAbortRef.current = { cancelled: false };
+
+    while (!pollAbortRef.current.cancelled) {
+      if (Date.now() - startedAt > MAX_DURATION_MS) {
+        // Timeout — cancel pending payment to release stock
+        try {
+          await supabase.functions.invoke('check-paymob-transaction', {
+            body: { merchantOrderId },
+          });
+        } catch { /* ignore */ }
+        setSubmitError('انتهت مهلة انتظار تأكيد الدفع. حاول مرة أخرى.');
+        setPaymobPolling(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.functions.invoke('check-paymob-transaction', {
+          body: { merchantOrderId },
+        });
+
+        if (!error && data) {
+          if (data.status === 'success') {
+            // Payment confirmed — fetch the order details to show success
+            const { data: orderRow } = await supabase
+              .from('orders')
+              .select(`
+                id, total_price, shipping_cost, discount_amount, payment_status,
+                created_at,
+                countries(name, currency_symbol)
+              `)
+              .eq('id', data.orderId)
+              .maybeSingle();
+
+            setSubmittedOrder(orderRow as unknown as StorefrontOrder);
+            setSubmitted(true);
+            setPaymobPolling(false);
+            clearCart();
+            void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
+            void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
+            return;
+          }
+
+          if (data.status === 'failed') {
+            // Payment failed — release stock, keep cart, show error
+            setSubmitError(data.error || 'فشل الدفع. حاول مرة أخرى أو اختر طريقة دفع أخرى.');
+            setPaymobPolling(false);
+            return;
+          }
+
+          if (data.status === 'error' || data.status === 'not_found') {
+            setSubmitError(data.error || 'تعذر التحقق من حالة الدفع.');
+            setPaymobPolling(false);
+            return;
+          }
+
+          // status === 'pending' — keep polling
+          setPaymobStatusMsg('جارٍ إنتظار تأكيد الدفع من Paymob...');
+        }
+      } catch (e) {
+        console.warn('[checkout] poll exception:', e);
+      }
+
+      await new Promise((r) => setTimeout(r, INTERVAL_MS));
+    }
+  };
+
+  const handleCancelPaymobPolling = async () => {
+    pollAbortRef.current.cancelled = true;
+    setPaymobPolling(false);
+    if (paymobMerchantOrderId) {
+      try {
+        // Release stock by cancelling the pending payment
+        await supabase.functions.invoke('check-paymob-transaction', {
+          body: { merchantOrderId: paymobMerchantOrderId },
+        });
+      } catch { /* ignore */ }
+    }
+    setSubmitError('تم إلغاء عملية الدفع. الكتب لا تزال في سلتك.');
+  };
+
   const handleSubmit = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setSubmitError('');
 
     try {
-      const order = await createStorefrontOrder({
-        customer: {
-          fullName: form.fullName,
-          email: form.email,
-          phone: form.phone,
-          governorate: form.governorate,
-          city: form.city,
-          address: form.address,
-          notes: form.notes,
-        },
-        paymentMethod: isPaymob ? 'online' as never : 'cod',
-        paymentMethodId: selectedPaymentId,
-        country: selectedCountry,
-        items,
-        shipping,
-        // Paymob: لا يخصم مخزون الآن — يُخصم بعد تأكيد الدفع عبر Webhook
-        paymentType: isPaymob ? 'online' : 'cod',
-        couponCode: appliedCoupon?.code || undefined,
-      });
-
-      // ── Apply coupon to order (server-side validation + update) ──────────────
-      console.log('[checkout] BUILD v3 — appliedCoupon=', appliedCoupon, 'order.id=', order?.id);
-      if (appliedCoupon?.code && order?.id) {
-        try {
-          console.log('[checkout] calling apply_coupon_to_order RPC...');
-          const { data: couponResult, error: couponRpcError } = await supabase.rpc(
-            'apply_coupon_to_order',
-            { p_order_id: order.id, p_coupon_code: appliedCoupon.code },
-          );
-          console.log('[checkout] RPC response:', { data: couponResult, error: couponRpcError });
-
-          if (couponRpcError) {
-            console.error('[checkout] RPC error:', couponRpcError);
-          } else if (couponResult && couponResult.success === false) {
-            console.warn('[checkout] coupon rejected by server:', couponResult.error);
-          } else if (couponResult?.success === true) {
-            console.log('[checkout] ✅ coupon applied:', couponResult);
-            // Update local order so the success screen shows the discounted total
-            order.discount_amount = Number(couponResult.discount_amount) || 0;
-            order.shipping_cost = Number(couponResult.shipping_cost) || order.shipping_cost;
-            order.total_price = Number(couponResult.total_price) || order.total_price;
-          }
-        } catch (rpcErr) {
-          console.error('[checkout] RPC exception:', rpcErr);
-        }
-      } else {
-        console.log('[checkout] no coupon to apply or order.id missing');
-      }
-
-      // ── Paymob online payment ────────────────────────────────────────────────
+      // ═══════════════════════════════════════════════════════════════
+      //  FORK A — Paymob (online): do NOT create an order yet.
+      //  The Edge Function creates a `pending_payments` record + reserves
+      //  stock. The real `orders` row is only created after the polling
+      //  function confirms a successful transaction.
+      // ═══════════════════════════════════════════════════════════════
       if (isPaymob && selectedMethod) {
-        const nameParts = form.fullName.trim().split(' ');
-        const firstName = nameParts[0] || 'N/A';
-        const lastName = nameParts.slice(1).join(' ') || 'N/A';
-
-        const billingData = {
-          first_name: firstName,
-          last_name: lastName,
-          email: form.email.trim(),
-          phone_number: form.phone.trim(),
-          country: selectedCountry?.code || 'EG',
-          state: form.governorate.trim() || 'N/A',
-          city: form.city.trim() || 'N/A',
-          street: form.address.trim() || 'N/A',
-          building: 'N/A',
-          floor: 'N/A',
-          apartment: 'N/A',
-        };
-
         const { data, error } = await supabase.functions.invoke('initiate-paymob-payment', {
           body: {
-            orderId: order.id,
-            amountCents: Math.round(adjustedTotal * 100),
-            billingData,
-            provider: selectedMethod.provider.toLowerCase(),
+            provider:        selectedMethod.provider.toLowerCase(),
+            paymentMethodId: selectedPaymentId,
+            customer: {
+              fullName:    form.fullName,
+              email:       form.email,
+              phone:       form.phone,
+              governorate: form.governorate,
+              city:        form.city,
+              address:     form.address,
+              notes:       form.notes,
+            },
+            country:    selectedCountry,
+            shipping,
+            items: items.map((i) => ({
+              product_id: i.product_id,
+              variant_id: i.variant_id,
+              quantity:   i.quantity,
+              is_digital: i.is_digital,
+            })),
+            couponCode: appliedCoupon?.code || null,
           },
         });
 
-        if (error || !data?.paymentUrl) {
-          // استخراج رسالة الخطأ التفصيلية من الـ Edge Function
-          let errorMsg = 'تعذر بدء عملية الدفع عبر Paymob.';
-          if (error) {
-            const ctx = (error as { context?: Response }).context;
-            if (ctx) {
-              try {
-                const details = await ctx.clone().json();
-                if (typeof details?.error === 'string' && details.error.trim()) {
-                  errorMsg = details.error;
-                }
-              } catch { /* ignore */ }
-            } else if (error.message) {
-              errorMsg = error.message;
-            }
+        if (error || !data?.paymentUrl || !data?.merchantOrderId) {
+          let errMsg = 'تعذر بدء عملية الدفع عبر Paymob.';
+          const ctx = (error as { context?: Response } | null)?.context;
+          if (ctx) {
+            try {
+              const details = await ctx.clone().json();
+              if (typeof details?.error === 'string' && details.error.trim()) {
+                errMsg = details.error;
+              }
+            } catch { /* ignore */ }
+          } else if (error?.message) {
+            errMsg = error.message;
           } else if (data?.error) {
-            errorMsg = data.error;
+            errMsg = data.error;
           }
-          throw new Error(errorMsg);
+          throw new Error(errMsg);
         }
 
-        clearCart();
-        // حفظ رقم الطلب مؤقتاً — تستخدمه صفحة النتيجة لإلغاء الطلب عند الفشل
-        sessionStorage.setItem('paymob_pending_order_id', order.id);
-        window.location.href = data.paymentUrl;
+        // Open Paymob in a new tab, start polling, show modal in the current tab
+        setPaymobMerchantOrderId(data.merchantOrderId);
+        setPaymobPaymentUrl(data.paymentUrl);
+        setPaymobPolling(true);
+        setSubmitting(false);
+        setPaymobStatusMsg('فتحنا نافذة الدفع في تبويب جديد. أكمل الدفع هناك...');
+
+        // Open Paymob payment page in a new tab
+        window.open(data.paymentUrl, '_blank', 'noopener,noreferrer');
+
+        // Begin polling (runs in background)
+        void pollPaymobTransaction(data.merchantOrderId);
         return;
       }
 
-      // ── Cash / COD ───────────────────────────────────────────────────────────
+      // ═══════════════════════════════════════════════════════════════
+      //  FORK B — COD (cash on delivery): create the order immediately.
+      // ═══════════════════════════════════════════════════════════════
+      const order = await createStorefrontOrder({
+        customer: {
+          fullName:    form.fullName,
+          email:       form.email,
+          phone:       form.phone,
+          governorate: form.governorate,
+          city:        form.city,
+          address:     form.address,
+          notes:       form.notes,
+        },
+        paymentMethod:   'cod',
+        paymentMethodId: selectedPaymentId,
+        country:         selectedCountry,
+        items,
+        shipping,
+        paymentType:     'cod',
+        couponCode:      appliedCoupon?.code || undefined,
+      });
+
+      // Apply coupon server-side (RPC) for COD orders
+      if (appliedCoupon?.code && order?.id) {
+        try {
+          await supabase.rpc('apply_coupon_to_order', {
+            p_order_id:    order.id,
+            p_coupon_code: appliedCoupon.code,
+          });
+        } catch (e) {
+          console.warn('[checkout] coupon apply failed (non-fatal):', e);
+        }
+      }
+
       setSubmittedOrder(order);
       setSubmitted(true);
       clearCart();
@@ -616,6 +700,39 @@ export default function CheckoutPage() {
           </div>
         )}
       </section>
+
+      {/* ── Paymob polling modal ─────────────────────────────────── */}
+      {paymobPolling && (
+        <div className="paymob-modal-backdrop" role="dialog" aria-modal="true">
+          <div className="paymob-modal">
+            <Loader2 size={42} className="paymob-modal__spinner" />
+            <h3>جارٍ تأكيد عملية الدفع</h3>
+            <p>{paymobStatusMsg}</p>
+            {paymobPaymentUrl && (
+              <a
+                href={paymobPaymentUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ghost-button paymob-modal__open"
+              >
+                <ExternalLink size={14} />
+                إعادة فتح نافذة الدفع
+              </a>
+            )}
+            <p className="paymob-modal__hint">
+              لا تغلق هذه الصفحة. سنحدّث الحالة فور تأكيد Paymob للعملية.
+            </p>
+            <button
+              type="button"
+              className="ghost-button paymob-modal__cancel"
+              onClick={handleCancelPaymobPolling}
+            >
+              <X size={14} />
+              إلغاء عملية الدفع
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

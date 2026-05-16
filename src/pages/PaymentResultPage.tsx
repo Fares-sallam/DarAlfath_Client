@@ -1,48 +1,129 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle2, XCircle, PackageCheck } from 'lucide-react';
+import { CheckCircle2, XCircle, PackageCheck, Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/lib/supabase';
 
+/**
+ * After a Paymob redirect, the URL contains success/status params + HMAC.
+ *
+ * IMPORTANT — we do NOT trust those params (a user can edit them in the URL).
+ * Instead, we extract `merchant_order_id` and ask our backend to verify the
+ * REAL transaction status by querying Paymob's API server-to-server.
+ *
+ * The browser params are only used to find which order to check.
+ */
 export default function PaymentResultPage() {
   usePageTitle('نتيجة الدفع');
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const didRun = useRef(false);
 
-  const success = params.get('success') === 'true';
-  const transactionId = params.get('id');
-  const pending = params.get('pending') === 'true';
+  const [state, setState] = useState<'loading' | 'success' | 'failed' | 'pending'>('loading');
+  const [errorMessage, setErrorMessage] = useState('');
+  const [orderId, setOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     if (didRun.current) return;
     didRun.current = true;
 
-    const pendingOrderId = sessionStorage.getItem('paymob_pending_order_id');
-    if (!pendingOrderId) return;
+    // Extract merchant_order_id from URL or sessionStorage fallback
+    const merchantOrderIdFromUrl =
+      params.get('merchant_order_id') ??
+      params.get('order_id') ??
+      null;
 
-    if (success && !pending) {
-      // ── دفع ناجح ─────────────────────────────────────────────────────────────
-      // الـ Webhook يتولى تأكيد الطلب وخصم المخزون من جانب الخادم
-      // نحدّث الكاش من جانب العميل فقط
-      sessionStorage.removeItem('paymob_pending_order_id');
-      void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
-      void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
-    } else if (!pending) {
-      // ── دفع فاشل أو ملغى ──────────────────────────────────────────────────────
-      // إلغاء الطلب المعلق (المخزون لم يُخصم أصلاً فلا حاجة لإعادته)
-      sessionStorage.removeItem('paymob_pending_order_id');
-      supabase
-        .rpc('cancel_pending_payment_order', { p_order_id: pendingOrderId })
-        .then(({ error }) => {
-          if (error) console.warn('[payment-result] cancel failed:', error.message);
-          else console.log('[payment-result] Pending order cancelled:', pendingOrderId);
-        });
+    const fallbackOrderId = sessionStorage.getItem('paymob_pending_order_id');
+    const merchantOrderId = merchantOrderIdFromUrl ?? fallbackOrderId;
+
+    if (!merchantOrderId) {
+      setState('failed');
+      setErrorMessage('لم نتمكن من تحديد الطلب. حاول مرة أخرى.');
+      return;
     }
-  }, [success, pending, queryClient]);
 
-  if (success && !pending) {
+    // Always verify with our backend — never trust URL params
+    void verifyTransaction(merchantOrderId);
+
+    async function verifyTransaction(mOrderId: string) {
+      try {
+        const { data, error } = await supabase.functions.invoke('check-paymob-transaction', {
+          body: { merchantOrderId: mOrderId },
+        });
+
+        if (error) {
+          setState('failed');
+          setErrorMessage('تعذر التحقق من حالة الدفع. تواصل مع الدعم.');
+          return;
+        }
+
+        if (data?.status === 'success') {
+          setState('success');
+          setOrderId(data.orderId);
+          sessionStorage.removeItem('paymob_pending_order_id');
+          void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
+          void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
+          return;
+        }
+
+        if (data?.status === 'failed') {
+          setState('failed');
+          setErrorMessage(data.error || 'فشلت عملية الدفع.');
+          sessionStorage.removeItem('paymob_pending_order_id');
+          return;
+        }
+
+        // Pending — keep polling for up to 1 minute
+        let attempts = 0;
+        const maxAttempts = 20;
+        const interval = setInterval(async () => {
+          attempts++;
+          if (attempts > maxAttempts) {
+            clearInterval(interval);
+            setState('failed');
+            setErrorMessage('انتهت مهلة التأكيد. الطلب لم يتم.');
+            return;
+          }
+          const { data: poll } = await supabase.functions.invoke('check-paymob-transaction', {
+            body: { merchantOrderId: mOrderId },
+          });
+          if (poll?.status === 'success') {
+            clearInterval(interval);
+            setState('success');
+            setOrderId(poll.orderId);
+            sessionStorage.removeItem('paymob_pending_order_id');
+            void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
+            void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
+          } else if (poll?.status === 'failed') {
+            clearInterval(interval);
+            setState('failed');
+            setErrorMessage(poll.error || 'فشلت عملية الدفع.');
+            sessionStorage.removeItem('paymob_pending_order_id');
+          }
+        }, 3000);
+      } catch (e) {
+        setState('failed');
+        setErrorMessage(e instanceof Error ? e.message : 'خطأ غير متوقع.');
+      }
+    }
+  }, [params, queryClient]);
+
+  if (state === 'loading' || state === 'pending') {
+    return (
+      <div className="page-sections">
+        <section className="page-card">
+          <div className="empty-state">
+            <Loader2 size={48} className="paymob-modal__spinner" />
+            <h3>جارٍ التحقق من عملية الدفع</h3>
+            <p>برجاء الانتظار قليلاً... نتأكد من Paymob مباشرةً.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (state === 'success') {
     return (
       <div className="page-sections">
         <section className="page-card">
@@ -50,9 +131,9 @@ export default function PaymentResultPage() {
             <CheckCircle2 size={48} color="var(--accent)" />
             <h3>تمت عملية الدفع بنجاح</h3>
             <p>تم استلام دفعتك وسيتم معالجة طلبك قريبًا.</p>
-            {transactionId && (
+            {orderId && (
               <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>
-                رقم المعاملة: {transactionId}
+                رقم الطلب: {orderId}
               </p>
             )}
             <div className="empty-state__actions">
@@ -76,17 +157,16 @@ export default function PaymentResultPage() {
         <div className="empty-state">
           <XCircle size={48} color="#e53e3e" />
           <h3>لم تكتمل عملية الدفع</h3>
-          <p>
-            {pending
-              ? 'الدفعة قيد المعالجة. سنُخطرك عند اكتمالها.'
-              : 'تعذر إتمام الدفع. يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع مختلفة.'}
+          <p>{errorMessage || 'تعذر إتمام الدفع. يمكنك المحاولة مرة أخرى أو اختيار طريقة دفع مختلفة.'}</p>
+          <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>
+            لا تقلق — كتبك لا تزال في سلتك. ارجع لإتمام الطلب.
           </p>
           <div className="empty-state__actions">
             <Link to="/checkout" className="primary-button">
               إعادة المحاولة
             </Link>
-            <Link to="/" className="ghost-button">
-              العودة للرئيسية
+            <Link to="/cart" className="ghost-button">
+              عرض السلة
             </Link>
           </div>
         </div>
