@@ -94,6 +94,20 @@ export default function CheckoutPage() {
     );
   }, [items.length, selectedPaymentId, form]);
 
+  // Diagnostic: list the missing fields so the user knows exactly what's wrong
+  const missingFields = useMemo(() => {
+    const missing: string[] = [];
+    if (items.length === 0) missing.push('السلة فارغة');
+    if (!selectedPaymentId) missing.push('طريقة الدفع');
+    if (!form.fullName.trim()) missing.push('الاسم الكامل');
+    if (!form.email.trim()) missing.push('البريد الإلكتروني');
+    if (!form.phone.trim()) missing.push('رقم الهاتف');
+    if (!form.governorate.trim()) missing.push('المحافظة');
+    if (!form.city.trim()) missing.push('المدينة');
+    if (!form.address.trim()) missing.push('العنوان');
+    return missing;
+  }, [items.length, selectedPaymentId, form]);
+
   const updateField = <K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -680,6 +694,12 @@ export default function CheckoutPage() {
 
               {submitError ? (
                 <div className="auth-alert auth-alert--error">{submitError}</div>
+              ) : null}
+
+              {!canSubmit && missingFields.length > 0 ? (
+                <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.85rem' }}>
+                  أكمل البيانات التالية أولاً: {missingFields.join('، ')}
+                </div>
               ) : null}
 
               <button
