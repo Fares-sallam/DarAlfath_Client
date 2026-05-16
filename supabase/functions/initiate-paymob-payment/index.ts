@@ -119,11 +119,16 @@ Deno.serve(async (req) => {
       userId = userData?.user?.id ?? null;
     }
 
-    // ── Re-fetch real prices from DB (don't trust client) ───────────
+    // ── Re-fetch real prices from DB (don't trust client-supplied price) ───
+    // The product_variants table in this project only has: id, product_id,
+    // variant_name, variant_type, sku, price, base_price, sale_price, cost_price.
+    // `is_digital` is NOT a column — it's derived from variant_type elsewhere.
+    // So we read price columns from DB, and trust the client's is_digital flag
+    // (the client got it from the public view which exposes it correctly).
     const variantIds = items.map((i) => i.variant_id).filter(Boolean);
     const { data: variantRows, error: vErr } = await supabase
       .from('product_variants')
-      .select('id, product_id, price, sale_price, is_digital')
+      .select('id, product_id, price, sale_price, variant_type')
       .in('id', variantIds);
 
     if (vErr) {
@@ -147,14 +152,21 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(realPrice) || realPrice <= 0) {
         return jsonError('سعر منتج غير صالح');
       }
+      // Derive is_digital from variant_type (the project convention) OR fall
+      // back to the client-supplied flag.
+      const isDigital =
+        v.variant_type === 'رقمي' ||
+        v.variant_type === 'digital' ||
+        Boolean(it.is_digital);
       const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
       subtotal += realPrice * qty;
+      // Use the field name expected by the existing create_order_with_stock_deduction RPC
       normalizedItems.push({
-        product_id: v.product_id,
-        variant_id: v.id,
-        quantity:   qty,
-        price:      realPrice,
-        is_digital: Boolean(v.is_digital),
+        product_id:     v.product_id,
+        variant_id:     v.id,
+        quantity:       qty,
+        price_per_item: realPrice,
+        is_digital:     isDigital,
       });
     }
 

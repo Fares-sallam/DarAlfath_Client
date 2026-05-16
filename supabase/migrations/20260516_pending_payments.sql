@@ -168,8 +168,11 @@ BEGIN
     );
   END IF;
 
-  -- Compute subtotal from frozen items
-  SELECT COALESCE(SUM((it->>'price')::NUMERIC * (it->>'quantity')::INT), 0)
+  -- Compute subtotal from frozen items (price_per_item matches the existing RPC contract)
+  SELECT COALESCE(SUM(
+    COALESCE((it->>'price_per_item')::NUMERIC, (it->>'price')::NUMERIC, 0)
+    * (it->>'quantity')::INT
+  ), 0)
   INTO v_subtotal
   FROM jsonb_array_elements(v_pending.items) it;
 
