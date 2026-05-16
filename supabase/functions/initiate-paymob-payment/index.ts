@@ -123,11 +123,15 @@ Deno.serve(async (req) => {
     const variantIds = items.map((i) => i.variant_id).filter(Boolean);
     const { data: variantRows, error: vErr } = await supabase
       .from('product_variants')
-      .select('id, product_id, price, sale_price, is_digital, stock')
+      .select('id, product_id, price, sale_price, is_digital')
       .in('id', variantIds);
 
-    if (vErr || !variantRows) {
-      return jsonError('فشل التحقق من المنتجات');
+    if (vErr) {
+      console.error('[paymob] variant fetch error:', vErr);
+      return jsonError(`فشل التحقق من المنتجات: ${vErr.message}`);
+    }
+    if (!variantRows || variantRows.length === 0) {
+      return jsonError('لم نجد أي منتجات بهذه المعرّفات');
     }
 
     const variantMap = new Map(variantRows.map((v) => [v.id, v]));
