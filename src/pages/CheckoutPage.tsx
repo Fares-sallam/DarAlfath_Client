@@ -698,7 +698,7 @@ export default function CheckoutPage() {
 
               {!canSubmit && missingFields.length > 0 ? (
                 <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.85rem' }}>
-                  [v7] أكمل البيانات التالية أولاً: {missingFields.join('، ')}
+                  أكمل البيانات التالية أولاً: {missingFields.join('، ')}
                 </div>
               ) : null}
 
