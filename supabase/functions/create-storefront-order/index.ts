@@ -243,7 +243,24 @@ Deno.serve(async (req) => {
 
     if (fetchError || !orderRow) {
       // Order was created successfully — return minimal info even if join fails
+      // Try to send email even in this degraded path
+      try {
+        await supabase.functions.invoke('send-order-email', {
+          body: { orderId: rpcData.id },
+        });
+      } catch (e) {
+        console.warn('[create-order] email dispatch failed (degraded path):', e);
+      }
       return jsonOk({ order: rpcData });
+    }
+
+    // Fire-and-forget order confirmation email — never block the order on email failures
+    try {
+      await supabase.functions.invoke('send-order-email', {
+        body: { orderId: rpcData.id },
+      });
+    } catch (e) {
+      console.warn('[create-order] email dispatch failed:', e);
     }
 
     return jsonOk({ order: orderRow });

@@ -170,6 +170,15 @@ Deno.serve(async (req) => {
         return jsonOk({ status: 'pending', error: result?.error ?? 'تعذر إتمام الطلب' });
       }
 
+      // Fire-and-forget email notification (non-blocking; failures are logged)
+      try {
+        await supabase.functions.invoke('send-order-email', {
+          body: { orderId: result.order_id },
+        });
+      } catch (e) {
+        console.warn('[check-paymob] email dispatch failed:', e);
+      }
+
       return jsonOk({
         status:  'success',
         orderId: result.order_id,
