@@ -1,8 +1,10 @@
 -- ═══════════════════════════════════════════════════════════════════
--- Pending Payments System
---   - Holds cart + customer data in escrow during Paymob flow
---   - Real `orders` rows are only created after payment is confirmed
---   - Stock is reserved (not deducted) so it survives failures cleanly
+-- Pending Payments System (simplified)
+--   - Holds cart + customer data in escrow during Paymob flow.
+--   - Real `orders` rows are only created after payment is confirmed.
+--   - Stock tracking is delegated to the existing schema (e.g. the
+--     product_variants_public view or whichever mechanism the project
+--     already uses). We do NOT touch stock columns here.
 -- ═══════════════════════════════════════════════════════════════════
 
 -- ── 1. Table ──────────────────────────────────────────────────────
@@ -35,14 +37,13 @@ CREATE INDEX IF NOT EXISTS idx_pending_payments_status_expires_at
   ON pending_payments (status, expires_at)
   WHERE status = 'pending';
 
--- RLS: only the service role has access — frontend goes through Edge Functions
 ALTER TABLE pending_payments ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "service_role_full_pending_payments" ON pending_payments;
 CREATE POLICY "service_role_full_pending_payments" ON pending_payments
   FOR ALL TO service_role USING (true) WITH CHECK (true);
 
--- ── 2. Reserve stock + insert pending_payment ─────────────────────
+-- ── 2. Save a pending payment (no stock side-effects) ─────────────
 CREATE OR REPLACE FUNCTION create_pending_payment(
   p_merchant_order_id  TEXT,
   p_user_id            UUID,
@@ -60,39 +61,8 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_pending_id   UUID;
-  v_item         JSONB;
-  v_variant_id   UUID;
-  v_quantity     INT;
-  v_is_digital   BOOLEAN;
-  v_stock        INT;
+  v_pending_id UUID;
 BEGIN
-  -- Validate + reserve stock for each physical item (atomic FOR UPDATE)
-  FOR v_item IN SELECT * FROM jsonb_array_elements(p_items) LOOP
-    v_variant_id := (v_item->>'variant_id')::UUID;
-    v_quantity   := (v_item->>'quantity')::INT;
-    v_is_digital := COALESCE((v_item->>'is_digital')::BOOLEAN, false);
-
-    IF NOT v_is_digital AND v_variant_id IS NOT NULL THEN
-      SELECT stock INTO v_stock
-      FROM product_variants
-      WHERE id = v_variant_id
-      FOR UPDATE;
-
-      IF v_stock IS NOT NULL AND v_stock < v_quantity THEN
-        RAISE EXCEPTION 'المخزون غير كافٍ — المتوفر: %, المطلوب: %', COALESCE(v_stock, 0), v_quantity;
-      END IF;
-
-      -- Reserve: move quantity from stock → reserved_stock
-      UPDATE product_variants
-      SET stock          = stock - v_quantity,
-          reserved_stock = COALESCE(reserved_stock, 0) + v_quantity
-      WHERE id = v_variant_id
-        AND stock IS NOT NULL;
-    END IF;
-  END LOOP;
-
-  -- Save the pending payment intent
   INSERT INTO pending_payments (
     merchant_order_id, user_id, country_id, payment_method_id,
     amount_cents, shipping_cost, shipping_address, notes, items, coupon_code
@@ -109,46 +79,7 @@ GRANT EXECUTE ON FUNCTION create_pending_payment(
   TEXT, UUID, UUID, UUID, BIGINT, NUMERIC, JSONB, TEXT, JSONB, TEXT
 ) TO service_role;
 
--- ── 3. Release reserved stock (used by cancel + expire) ────────────
-CREATE OR REPLACE FUNCTION release_pending_reservation(p_merchant_order_id TEXT)
-RETURNS VOID
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_items      JSONB;
-  v_item       JSONB;
-  v_variant_id UUID;
-  v_quantity   INT;
-  v_is_digital BOOLEAN;
-BEGIN
-  SELECT items INTO v_items
-  FROM pending_payments
-  WHERE merchant_order_id = p_merchant_order_id
-  FOR UPDATE;
-
-  IF NOT FOUND THEN RETURN; END IF;
-
-  FOR v_item IN SELECT * FROM jsonb_array_elements(v_items) LOOP
-    v_variant_id := (v_item->>'variant_id')::UUID;
-    v_quantity   := (v_item->>'quantity')::INT;
-    v_is_digital := COALESCE((v_item->>'is_digital')::BOOLEAN, false);
-
-    IF NOT v_is_digital AND v_variant_id IS NOT NULL THEN
-      UPDATE product_variants
-      SET stock          = stock + v_quantity,
-          reserved_stock = GREATEST(COALESCE(reserved_stock, 0) - v_quantity, 0)
-      WHERE id = v_variant_id
-        AND stock IS NOT NULL;
-    END IF;
-  END LOOP;
-END;
-$$;
-
-GRANT EXECUTE ON FUNCTION release_pending_reservation(TEXT) TO service_role;
-
--- ── 4. Cancel a pending payment (release stock) ───────────────────
+-- ── 3. Cancel a pending payment (no stock release needed) ─────────
 CREATE OR REPLACE FUNCTION cancel_pending_payment(
   p_merchant_order_id TEXT,
   p_reason            TEXT DEFAULT NULL
@@ -177,9 +108,6 @@ BEGIN
     RETURN jsonb_build_object('success', true, 'already', true);
   END IF;
 
-  -- Release stock
-  PERFORM release_pending_reservation(p_merchant_order_id);
-
   UPDATE pending_payments
   SET status         = 'cancelled',
       failure_reason = p_reason,
@@ -192,7 +120,9 @@ $$;
 
 GRANT EXECUTE ON FUNCTION cancel_pending_payment(TEXT, TEXT) TO service_role;
 
--- ── 5. Complete pending payment → create real order ────────────────
+-- ── 4. Complete pending payment → create real order ────────────────
+--    Delegates stock deduction to the existing `create_order_with_stock_deduction`
+--    RPC so we don't reinvent (or break) the project's stock logic.
 CREATE OR REPLACE FUNCTION complete_pending_payment(
   p_merchant_order_id     TEXT,
   p_paymob_order_id       TEXT,
@@ -204,16 +134,14 @@ SET search_path = public
 AS $$
 DECLARE
   v_pending          pending_payments%ROWTYPE;
-  v_item             JSONB;
-  v_variant_id       UUID;
-  v_quantity         INT;
-  v_is_digital       BOOLEAN;
+  v_rpc_result       JSONB;
   v_order_id         TEXT;
+  v_coupon_id        UUID;
+  v_discount         NUMERIC := 0;
+  v_shipping         NUMERIC;
   v_subtotal         NUMERIC := 0;
   v_total            NUMERIC;
-  v_coupon           coupons%ROWTYPE;
-  v_discount_amount  NUMERIC := 0;
-  v_shipping_cost    NUMERIC;
+  v_coupon           RECORD;
 BEGIN
   -- Idempotency: if already completed, return the existing order
   SELECT * INTO v_pending
@@ -240,12 +168,12 @@ BEGIN
     );
   END IF;
 
-  -- Compute subtotal from frozen items (price was captured at intent time)
+  -- Compute subtotal from frozen items
   SELECT COALESCE(SUM((it->>'price')::NUMERIC * (it->>'quantity')::INT), 0)
   INTO v_subtotal
   FROM jsonb_array_elements(v_pending.items) it;
 
-  v_shipping_cost := v_pending.shipping_cost;
+  v_shipping := v_pending.shipping_cost;
 
   -- Apply coupon if any
   IF v_pending.coupon_code IS NOT NULL AND v_pending.coupon_code <> '' THEN
@@ -255,71 +183,50 @@ BEGIN
       AND is_active = true;
 
     IF FOUND THEN
+      v_coupon_id := v_coupon.id;
       IF v_coupon.type = 'نسبة' THEN
-        v_discount_amount := ROUND(v_subtotal * v_coupon.value / 100, 2);
+        v_discount := ROUND(v_subtotal * v_coupon.value / 100, 2);
       ELSIF v_coupon.type = 'مبلغ ثابت' THEN
-        v_discount_amount := LEAST(v_coupon.value, v_subtotal);
+        v_discount := LEAST(v_coupon.value, v_subtotal);
       ELSIF v_coupon.type = 'شحن مجاني' THEN
-        v_shipping_cost := 0;
+        v_shipping := 0;
       END IF;
     END IF;
   END IF;
 
-  v_total := GREATEST(v_subtotal - v_discount_amount + v_shipping_cost, 0);
+  v_total := GREATEST(v_subtotal - v_discount + v_shipping, 0);
 
-  -- Convert reservations → real deductions:
-  -- The reservation already moved stock → reserved_stock. We now just remove the reservation
-  -- (the stock has already been deducted). For physical items, reserved_stock -= quantity.
-  FOR v_item IN SELECT * FROM jsonb_array_elements(v_pending.items) LOOP
-    v_variant_id := (v_item->>'variant_id')::UUID;
-    v_quantity   := (v_item->>'quantity')::INT;
-    v_is_digital := COALESCE((v_item->>'is_digital')::BOOLEAN, false);
+  -- Delegate order creation (with stock deduction) to the existing RPC
+  SELECT create_order_with_stock_deduction(
+    p_user_id            := v_pending.user_id,
+    p_country_id         := v_pending.country_id,
+    p_payment_method_id  := v_pending.payment_method_id,
+    p_shipping_cost      := v_shipping,
+    p_shipping_address   := v_pending.shipping_address,
+    p_notes              := v_pending.notes,
+    p_items              := v_pending.items
+  ) INTO v_rpc_result;
 
-    IF NOT v_is_digital AND v_variant_id IS NOT NULL THEN
-      UPDATE product_variants
-      SET reserved_stock = GREATEST(COALESCE(reserved_stock, 0) - v_quantity, 0)
-      WHERE id = v_variant_id;
-    END IF;
-  END LOOP;
+  v_order_id := v_rpc_result->>'id';
 
-  -- Use the merchant_order_id as the order's id (consistent reference)
-  v_order_id := v_pending.merchant_order_id;
-
-  INSERT INTO orders (
-    id, user_id, country_id, payment_method_id,
-    status, payment_status, total_price, shipping_cost, discount_amount,
-    shipping_address, notes,
-    coupon_id,
-    created_at, updated_at
-  ) VALUES (
-    v_order_id, v_pending.user_id, v_pending.country_id, v_pending.payment_method_id,
-    'pending',                -- new order, awaiting fulfillment
-    'paid',                   -- payment is confirmed at this point
-    v_total, v_shipping_cost, v_discount_amount,
-    v_pending.shipping_address, v_pending.notes,
-    v_coupon.id,
-    NOW(), NOW()
-  );
-
-  -- Insert order_items
-  FOR v_item IN SELECT * FROM jsonb_array_elements(v_pending.items) LOOP
-    INSERT INTO order_items (
-      order_id, product_id, variant_id, quantity,
-      price_per_item, discount_per_item, is_digital
-    ) VALUES (
-      v_order_id,
-      (v_item->>'product_id')::UUID,
-      (v_item->>'variant_id')::UUID,
-      (v_item->>'quantity')::INT,
-      (v_item->>'price')::NUMERIC,
-      0,
-      COALESCE((v_item->>'is_digital')::BOOLEAN, false)
+  IF v_order_id IS NULL THEN
+    RETURN jsonb_build_object(
+      'success', false,
+      'error',   COALESCE(v_rpc_result->>'error', 'فشل إنشاء الطلب')
     );
-  END LOOP;
+  END IF;
 
-  -- Bump coupon usage if any
-  IF v_coupon.id IS NOT NULL THEN
-    UPDATE coupons SET used_count = used_count + 1 WHERE id = v_coupon.id;
+  -- Update the freshly-created order with coupon + final totals + paid status
+  UPDATE orders
+  SET coupon_id       = v_coupon_id,
+      discount_amount = v_discount,
+      total_price     = v_total,
+      payment_status  = 'paid'
+  WHERE id = v_order_id;
+
+  -- Bump coupon usage
+  IF v_coupon_id IS NOT NULL THEN
+    UPDATE coupons SET used_count = used_count + 1 WHERE id = v_coupon_id;
   END IF;
 
   -- Mark pending as completed
@@ -341,7 +248,7 @@ $$;
 
 GRANT EXECUTE ON FUNCTION complete_pending_payment(TEXT, TEXT, TEXT) TO service_role;
 
--- ── 6. Expire stale pending payments (call from cron OR on-demand) ─
+-- ── 5. Expire stale pending payments ───────────────────────────────
 CREATE OR REPLACE FUNCTION expire_stale_pending_payments()
 RETURNS INT
 LANGUAGE plpgsql
@@ -350,22 +257,14 @@ SET search_path = public
 AS $$
 DECLARE
   v_count INT := 0;
-  v_row   RECORD;
 BEGIN
-  FOR v_row IN
-    SELECT merchant_order_id
-    FROM pending_payments
-    WHERE status = 'pending' AND expires_at < NOW()
-    FOR UPDATE SKIP LOCKED
-  LOOP
-    PERFORM release_pending_reservation(v_row.merchant_order_id);
-    UPDATE pending_payments
-    SET status         = 'expired',
-        failure_reason = 'انتهت مدة الصلاحية',
-        completed_at   = NOW()
-    WHERE merchant_order_id = v_row.merchant_order_id;
-    v_count := v_count + 1;
-  END LOOP;
+  UPDATE pending_payments
+  SET status         = 'expired',
+      failure_reason = 'انتهت مدة الصلاحية',
+      completed_at   = NOW()
+  WHERE status = 'pending' AND expires_at < NOW();
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
   RETURN v_count;
 END;
 $$;
