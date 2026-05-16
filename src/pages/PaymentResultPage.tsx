@@ -48,7 +48,7 @@ export default function PaymentResultPage() {
 
     async function verifyTransaction(mOrderId: string) {
       try {
-        const { data, error } = await supabase.functions.invoke('check-paymob-transaction', {
+        const { data, error } = await supabase.functions.invoke('smart-function', {
           body: { merchantOrderId: mOrderId },
         });
 
@@ -85,7 +85,7 @@ export default function PaymentResultPage() {
             setErrorMessage('انتهت مهلة التأكيد. الطلب لم يتم.');
             return;
           }
-          const { data: poll } = await supabase.functions.invoke('check-paymob-transaction', {
+          const { data: poll } = await supabase.functions.invoke('smart-function', {
             body: { merchantOrderId: mOrderId },
           });
           if (poll?.status === 'success') {

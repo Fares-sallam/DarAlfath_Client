@@ -263,7 +263,7 @@ export default function CheckoutPage() {
       if (Date.now() - startedAt > MAX_DURATION_MS) {
         // Timeout — cancel pending payment to release stock
         try {
-          await supabase.functions.invoke('check-paymob-transaction', {
+          await supabase.functions.invoke('smart-function', {
             body: { merchantOrderId },
           });
         } catch { /* ignore */ }
@@ -273,7 +273,7 @@ export default function CheckoutPage() {
       }
 
       try {
-        const { data, error } = await supabase.functions.invoke('check-paymob-transaction', {
+        const { data, error } = await supabase.functions.invoke('smart-function', {
           body: { merchantOrderId },
         });
 
@@ -329,7 +329,7 @@ export default function CheckoutPage() {
     if (paymobMerchantOrderId) {
       try {
         // Release stock by cancelling the pending payment
-        await supabase.functions.invoke('check-paymob-transaction', {
+        await supabase.functions.invoke('smart-function', {
           body: { merchantOrderId: paymobMerchantOrderId },
         });
       } catch { /* ignore */ }
