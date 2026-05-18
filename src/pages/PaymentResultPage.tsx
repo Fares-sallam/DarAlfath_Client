@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle, PackageCheck, Loader2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/lib/supabase';
+import { useCart } from '@/contexts/CartContext';
 
 /**
  * After a Paymob redirect, the URL contains success/status params + HMAC.
@@ -18,6 +19,7 @@ export default function PaymentResultPage() {
   usePageTitle('نتيجة الدفع');
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
+  const { clearCart } = useCart();
   const didRun = useRef(false);
 
   const [state, setState] = useState<'loading' | 'success' | 'failed' | 'pending'>('loading');
@@ -62,6 +64,7 @@ export default function PaymentResultPage() {
           setState('success');
           setOrderId(data.orderId);
           sessionStorage.removeItem('paymob_pending_order_id');
+          clearCart();
           void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
           void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
           return;
@@ -93,6 +96,7 @@ export default function PaymentResultPage() {
             setState('success');
             setOrderId(poll.orderId);
             sessionStorage.removeItem('paymob_pending_order_id');
+            clearCart();
             void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
             void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
           } else if (poll?.status === 'failed') {
@@ -107,7 +111,7 @@ export default function PaymentResultPage() {
         setErrorMessage(e instanceof Error ? e.message : 'خطأ غير متوقع.');
       }
     }
-  }, [params, queryClient]);
+  }, [params, queryClient, clearCart]);
 
   if (state === 'loading' || state === 'pending') {
     return (
@@ -162,7 +166,7 @@ export default function PaymentResultPage() {
             لا تقلق — كتبك لا تزال في سلتك. ارجع لإتمام الطلب.
           </p>
           <div className="empty-state__actions">
-            <Link to="/checkout" className="primary-button">
+            <Link to="/cart" className="primary-button">
               إعادة المحاولة
             </Link>
             <Link to="/cart" className="ghost-button">

@@ -177,7 +177,6 @@ export async function createStorefrontOrder(input: StorefrontOrderInput) {
 export async function fetchCustomerOrders(userId?: string, email?: string) {
   if (!userId && !email) return [];
 
-  // Base query — no download_url to avoid errors if the column doesn't exist yet
   const baseSelect = `
     id,
     user_id,
@@ -203,6 +202,7 @@ export async function fetchCustomerOrders(userId?: string, email?: string) {
       price_per_item,
       discount_per_item,
       is_digital,
+      download_url,
       products(id, title, author, cover_url, type),
       product_variants(id, variant_name)
     )

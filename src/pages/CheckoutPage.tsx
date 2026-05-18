@@ -14,11 +14,49 @@ import {
   type StorefrontOrder,
 } from '@/lib/storefrontOrders';
 
+// ── بيانات المحافظات والمدن المصرية ───────────────────────────────────────
+const EGYPT_REGIONS: Record<string, string[]> = {
+  'القاهرة':       ['القاهرة', 'مدينة نصر', 'هليوبوليس', 'المعادي', 'الزيتون', 'شبرا', 'عين شمس', 'المطرية', 'التجمع الخامس', 'مدينة بدر', 'المقطم', 'السلام', 'الخليفة'],
+  'الجيزة':        ['الجيزة', 'الهرم', 'الدقي', 'المهندسين', 'العجوزة', 'الشيخ زايد', '6 أكتوبر', 'الوراق', 'إمبابة', 'منشأة القناطر', 'البدرشين', 'الصف', 'أطفيح'],
+  'الإسكندرية':   ['الإسكندرية', 'سيدي جابر', 'العجمي', 'المنتزه', 'سموحة', 'محرم بك', 'الرمل', 'العامرية', 'برج العرب', 'أبو قير'],
+  'الدقهلية':     ['المنصورة', 'طلخا', 'ميت غمر', 'دكرنس', 'أجا', 'بلقاس', 'منية النصر', 'نبروه', 'السنبلاوين', 'شربين', 'المنزلة', 'تمي الأمديد'],
+  'الشرقية':      ['الزقازيق', 'العاشر من رمضان', 'بلبيس', 'ديرب نجم', 'الإبراهيمية', 'منيا القمح', 'أبو حماد', 'القنايات', 'فاقوس', 'أبو كبير', 'هيهيا', 'مشتول السوق'],
+  'القليوبية':    ['بنها', 'قليوب', 'شبرا الخيمة', 'القناطر الخيرية', 'الخانكة', 'كفر شكر', 'طوخ', 'الخصوص'],
+  'الغربية':      ['طنطا', 'المحلة الكبرى', 'كفر الزيات', 'زفتى', 'السنطة', 'بسيون', 'سمنود'],
+  'المنوفية':     ['شبين الكوم', 'مينوف', 'أشمون', 'الباجور', 'قويسنا', 'بركة السبع', 'السادات', 'تلا'],
+  'كفر الشيخ':   ['كفر الشيخ', 'دسوق', 'فوه', 'قلين', 'بيلا', 'الحامول', 'مطوبس', 'سيدي سالم', 'برج البرلس'],
+  'البحيرة':      ['دمنهور', 'كفر الدوار', 'رشيد', 'الدلنجات', 'إيتاي البارود', 'أبو حمص', 'حوش عيسى', 'شبراخيت', 'المحمودية', 'وادي النطرون'],
+  'الإسماعيلية': ['الإسماعيلية', 'القنطرة', 'فايد', 'القصاصين', 'التل الكبير', 'أبو صوير'],
+  'السويس':       ['السويس', 'عتاقة', 'الجناين', 'فيصل'],
+  'بورسعيد':     ['بورسعيد', 'بورفؤاد', 'الزهور', 'المناخ', 'الشرق', 'الضواهي'],
+  'الأقصر':       ['الأقصر', 'الأرمنت', 'إسنا', 'القرنة', 'البياضية'],
+  'أسوان':        ['أسوان', 'كوم أمبو', 'إدفو', 'نصر النوبة', 'أبو سمبل', 'دراو'],
+  'الفيوم':       ['الفيوم', 'سنورس', 'إطسا', 'يوسف الصديق', 'طامية', 'أبشواي'],
+  'بني سويف':    ['بني سويف', 'ناصر', 'الواسطى', 'إهناسيا', 'ببا', 'الفشن', 'سمسطا'],
+  'المنيا':        ['المنيا', 'ملوي', 'سمالوط', 'مغاغة', 'أبو قرقاص', 'بني مزار', 'العدوة', 'مطاي'],
+  'أسيوط':        ['أسيوط', 'ديروط', 'منفلوط', 'القوصية', 'أبنوب', 'أبو تيج', 'الغنايم', 'ساحل سليم'],
+  'سوهاج':        ['سوهاج', 'أخميم', 'طهطا', 'جرجا', 'دار السلام', 'المراغة', 'المنشأة', 'ساقلته', 'البلينا'],
+  'قنا':          ['قنا', 'نجع حمادي', 'الأقصر (قنا)', 'الوقف', 'قوص', 'أبو تشت', 'فرشوط', 'نقادة'],
+  'الوادي الجديد': ['الخارجة', 'الداخلة', 'الفرافرة', 'بهارية'],
+  'مطروح':        ['مرسى مطروح', 'سيوة', 'الحمام', 'الضبعة', 'العلمين', 'النجيلة'],
+  'شمال سيناء':  ['العريش', 'الشيخ زويد', 'رفح', 'بئر العبد', 'نخل'],
+  'جنوب سيناء':  ['شرم الشيخ', 'دهب', 'نويبع', 'طابا', 'أبو رديس', 'الطور', 'سانت كاترين'],
+  'البحر الأحمر': ['الغردقة', 'سفاجا', 'القصير', 'مرسى علم', 'شلاتين'],
+  'دمياط':        ['دمياط', 'رأس البر', 'الزرقا', 'فارسكور', 'كفر سعد', 'ميت أبو غالب'],
+};
+
+const GOVERNORATES = Object.keys(EGYPT_REGIONS);
+
+// التحقق من الاسم الثلاثي
+function isTripleName(name: string) {
+  return name.trim().split(/\s+/).filter(Boolean).length >= 3;
+}
+
 type CheckoutForm = {
   fullName: string;
   email: string;
   phone: string;
-  governorate: string;   // محافظة — مطلوبة للوحة التحكم
+  governorate: string;
   city: string;
   address: string;
   notes: string;
@@ -85,7 +123,7 @@ export default function CheckoutPage() {
     return Boolean(
       items.length > 0 &&
       selectedPaymentId &&
-      form.fullName.trim() &&
+      isTripleName(form.fullName) &&
       form.email.trim() &&
       form.phone.trim() &&
       form.governorate.trim() &&
@@ -109,8 +147,16 @@ export default function CheckoutPage() {
   }, [items.length, selectedPaymentId, form]);
 
   const updateField = <K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
+    setForm((prev) => ({
+      ...prev,
+      [key]: value,
+      // إعادة تعيين المدينة عند تغيير المحافظة
+      ...(key === 'governorate' ? { city: '' } : {}),
+    }));
   };
+
+  // مدن المحافظة المختارة
+  const availableCities = EGYPT_REGIONS[form.governorate] ?? [];
 
   const selectedMethod = useMemo(
     () => paymentMethods.find((m) => m.id === selectedPaymentId) ?? null,
@@ -520,12 +566,19 @@ export default function CheckoutPage() {
               <div className="contact-card">
                 <h3>بيانات العميل</h3>
 
-                <input
-                  value={form.fullName}
-                  onChange={(e) => updateField('fullName', e.target.value)}
-                  placeholder="الاسم الكامل *"
-                  autoComplete="name"
-                />
+                <div>
+                  <input
+                    value={form.fullName}
+                    onChange={(e) => updateField('fullName', e.target.value)}
+                    placeholder="الاسم الثلاثي كاملاً *"
+                    autoComplete="name"
+                  />
+                  {form.fullName.trim() && !isTripleName(form.fullName) && (
+                    <small style={{ color: 'var(--error, #e53e3e)', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
+                      يرجى إدخال الاسم ثلاثياً (الاسم الأول والأب والعائلة)
+                    </small>
+                  )}
+                </div>
                 <input
                   type="email"
                   value={form.email}
@@ -545,18 +598,28 @@ export default function CheckoutPage() {
               <div className="contact-card">
                 <h3>عنوان الشحن</h3>
 
-                <input
+                <select
                   value={form.governorate}
                   onChange={(e) => updateField('governorate', e.target.value)}
-                  placeholder="المحافظة *"
-                  autoComplete="address-level1"
-                />
-                <input
+                >
+                  <option value="">-- اختر المحافظة * --</option>
+                  {GOVERNORATES.map((gov) => (
+                    <option key={gov} value={gov}>{gov}</option>
+                  ))}
+                </select>
+
+                <select
                   value={form.city}
                   onChange={(e) => updateField('city', e.target.value)}
-                  placeholder="المدينة / الحي *"
-                  autoComplete="address-level2"
-                />
+                  disabled={!form.governorate}
+                >
+                  <option value="">
+                    {form.governorate ? '-- اختر المدينة * --' : '-- اختر المحافظة أولاً --'}
+                  </option>
+                  {availableCities.map((city) => (
+                    <option key={city} value={city}>{city}</option>
+                  ))}
+                </select>
                 <input
                   value={form.address}
                   onChange={(e) => updateField('address', e.target.value)}
