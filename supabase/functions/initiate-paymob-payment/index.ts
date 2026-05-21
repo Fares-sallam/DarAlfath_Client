@@ -397,6 +397,7 @@ Deno.serve(async (req) => {
         order_id:       paymobOrderId,
         currency:       'EGP',
         integration_id: INTEGRATION_IDS[provider],
+        lock_order_when_paid: true,   // prevent double-charging on same order
         billing_data: {
           apartment:       'NA',
           email:           customer.email ?? 'NA',
