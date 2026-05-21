@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// HMAC Secret من Paymob — اختياري للتحقق من أصل الطلب
+// HMAC Secret من Paymob — إجباري للتحقق من أصل الطلب
 const PAYMOB_HMAC_SECRET = Deno.env.get('PAYMOB_HMAC_SECRET') ?? '';
 
 function jsonOk(data: unknown) {
@@ -17,7 +17,10 @@ function jsonOk(data: unknown) {
 
 // التحقق من HMAC إذا كان السر مضبوطاً
 async function verifyHmac(body: Record<string, unknown>, receivedHmac: string): Promise<boolean> {
-  if (!PAYMOB_HMAC_SECRET) return true; // تخطَّ التحقق إذا لم يُضبط السر
+  if (!PAYMOB_HMAC_SECRET) {
+    console.error('[paymob-webhook] PAYMOB_HMAC_SECRET غير مضبوط — يتم رفض الطلب');
+    return false;
+  }
 
   const obj = (body.obj ?? {}) as Record<string, unknown>;
   const order = (obj.order ?? {}) as Record<string, unknown>;
@@ -82,17 +85,22 @@ Deno.serve(async (req) => {
     // body.hmac (for HMAC verification)
     const obj = (body.obj ?? {}) as Record<string, unknown>;
 
-    // HMAC verification (if secret is set)
+    // HMAC verification — إجباري دائماً
     const receivedHmac = String(body.hmac ?? '');
-    if (receivedHmac && PAYMOB_HMAC_SECRET) {
-      const valid = await verifyHmac(body, receivedHmac);
-      if (!valid) {
-        console.warn('[paymob-webhook] Invalid HMAC signature');
-        return new Response(JSON.stringify({ error: 'Invalid signature' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
+    if (!receivedHmac) {
+      console.warn('[paymob-webhook] No HMAC received — rejecting');
+      return new Response(JSON.stringify({ error: 'Missing HMAC' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const hmacValid = await verifyHmac(body, receivedHmac);
+    if (!hmacValid) {
+      console.warn('[paymob-webhook] Invalid HMAC signature');
+      return new Response(JSON.stringify({ error: 'Invalid signature' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     const transactionId = String(obj.id ?? '');
@@ -121,20 +129,46 @@ Deno.serve(async (req) => {
 
       if (error) {
         console.error('[paymob-webhook] confirm_online_payment error:', error.message);
-      } else {
-        console.log('[paymob-webhook] Order confirmed:', JSON.stringify(data));
+        // Return 500 so Paymob retries — the payment was real but our processing failed
+        return new Response(JSON.stringify({ error: 'Internal processing failed' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
+      console.log('[paymob-webhook] Order confirmed:', JSON.stringify(data));
     } else if (!pending) {
       // ── دفع فاشل (ليس pending): إلغاء الطلب ─────────────────────────────────
+      // Fetch coupon_code BEFORE cancellation changes the row
+      const { data: pendingRow } = await supabase
+        .from('pending_payments')
+        .select('coupon_code')
+        .eq('merchant_order_id', merchantOrderId)
+        .maybeSingle();
+
       const { data, error } = await supabase.rpc('cancel_pending_payment_order', {
         p_order_id: merchantOrderId,
       });
 
       if (error) {
         console.error('[paymob-webhook] cancel_pending_payment_order error:', error.message);
-      } else {
-        console.log('[paymob-webhook] Order cancelled:', JSON.stringify(data));
+        // Return 500 so Paymob retries — we failed to process the cancellation
+        return new Response(JSON.stringify({ error: 'Internal processing failed' }), {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
       }
+
+      // Release coupon if one was claimed with this pending payment
+      if (pendingRow?.coupon_code) {
+        try {
+          await supabase.rpc('release_coupon', { p_coupon_code: pendingRow.coupon_code });
+          console.log(`[paymob-webhook] Coupon ${pendingRow.coupon_code} released`);
+        } catch (e) {
+          console.warn('[paymob-webhook] release_coupon failed:', e);
+        }
+      }
+
+      console.log('[paymob-webhook] Order cancelled:', JSON.stringify(data));
     } else {
       console.log('[paymob-webhook] Payment still pending, waiting...');
     }

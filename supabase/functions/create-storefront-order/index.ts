@@ -97,6 +97,86 @@ Deno.serve(async (req) => {
       paymentMethodId = matched?.id ?? null;
     }
 
+    // ── إعادة جلب الأسعار الحقيقية من قاعدة البيانات (لا نثق بسعر العميل) ──
+    // التحقق أن كل عنصر يحتوي على variant_id
+    const itemsWithoutVariant = (items as { variant_id?: string }[]).filter(
+      (i) => !i.variant_id
+    );
+    if (itemsWithoutVariant.length > 0) {
+      return jsonError('كل المنتجات يجب أن تحتوي على variant_id.');
+    }
+
+    const variantIds = (items as { variant_id: string }[])
+      .map((i) => i.variant_id);
+
+    const { data: variantRows, error: vErr } = await supabase
+      .from('product_variants')
+      .select('id, product_id, price, sale_price, variant_type')
+      .in('id', variantIds);
+
+    if (vErr || !variantRows || variantRows.length === 0) {
+      console.error('[create-order] variant fetch error:', vErr);
+      return jsonError('فشل التحقق من أسعار المنتجات.');
+    }
+
+    const variantMap = new Map(variantRows.map((v: Record<string, unknown>) => [v.id, v]));
+
+    // التحقق من أن جميع المنتجات موجودة في قاعدة البيانات
+    const missingVariants = variantIds.filter((vid) => !variantMap.has(vid));
+    if (missingVariants.length > 0) {
+      return jsonError(`منتجات غير موجودة: ${missingVariants.join(', ')}`);
+    }
+
+    const verifiedItems: Array<{
+      product_id: unknown; variant_id: unknown;
+      quantity: number; price_per_item: number; is_digital: boolean;
+    }> = [];
+
+    for (const item of items as Record<string, unknown>[]) {
+      const v = variantMap.get(item.variant_id as string) as Record<string, unknown>;
+      const realPrice = Number(v.sale_price ?? v.price);
+      if (!Number.isFinite(realPrice) || realPrice <= 0) {
+        return jsonError('سعر منتج غير صالح');
+      }
+      const isDigital =
+        v.variant_type === 'رقمي' ||
+        v.variant_type === 'digital';
+      // Digital items are always quantity 1 (no reason to buy multiple copies)
+      const qty = isDigital ? 1 : Math.max(1, Math.floor(Number(item.quantity) || 1));
+      verifiedItems.push({
+        product_id:     v.product_id ?? item.product_id,
+        variant_id:     item.variant_id,
+        quantity:       qty,
+        price_per_item: realPrice,
+        is_digital:     isDigital,
+      });
+    }
+
+    // ── حساب الشحن server-side (لا نثق بقيمة العميل) ─────────────────────
+    const hasPhysicalItems = verifiedItems.some((i) => !i.is_digital);
+    const verifiedSubtotal = verifiedItems.reduce(
+      (sum, i) => sum + i.price_per_item * i.quantity, 0
+    );
+
+    let serverShipping = 0;
+    if (hasPhysicalItems) {
+      const { data: settings } = await supabase
+        .from('store_settings')
+        .select('default_shipping_cost, free_shipping_threshold')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const flatRate = Number(settings?.default_shipping_cost) || 45;
+      const freeThreshold = Number(settings?.free_shipping_threshold) || 0;
+
+      // Free shipping threshold only applies to Egypt (matches frontend logic)
+      const isEgypt = !country?.code || (country.code ?? '').toUpperCase() === 'EG';
+      const qualifiesFreeShipping = isEgypt && freeThreshold > 0 && verifiedSubtotal >= freeThreshold;
+
+      serverShipping = qualifiesFreeShipping ? 0 : flatRate;
+    }
+
     // ── اختيار الـ RPC المناسب حسب نوع الدفع ────────────────────────────────
     // online (Paymob): إنشاء الطلب بدون خصم مخزون — يُخصم بعد تأكيد الدفع
     // cod/bank:        إنشاء الطلب + خصم المخزون فوراً (السلوك الحالي)
@@ -105,13 +185,13 @@ Deno.serve(async (req) => {
       ? 'create_order_pending_payment'
       : 'create_order_with_stock_deduction';
 
-    console.log(`[create-order] paymentType=${paymentType} → rpc=${rpcName}`);
+    console.log(`[create-order] paymentType=${paymentType} → rpc=${rpcName} serverShipping=${serverShipping}`);
 
     const rpcParams = {
       p_user_id: userId,
       p_country_id: country?.id ?? null,
       p_payment_method_id: paymentMethodId,
-      p_shipping_cost: Number(shipping) || 0,
+      p_shipping_cost: serverShipping,
       p_shipping_address: {
         name: customer.fullName,
         email: customer.email,
@@ -123,13 +203,7 @@ Deno.serve(async (req) => {
         notes: customer.notes ?? '',
       },
       p_notes: customer.notes ?? '',
-      p_items: items.map((item: Record<string, unknown>) => ({
-        product_id: item.product_id,
-        variant_id: item.variant_id,
-        quantity: Number(item.quantity) || 1,
-        price_per_item: Number(item.price) || 0,
-        is_digital: Boolean(item.is_digital),
-      })),
+      p_items: verifiedItems,
     };
 
     const { data: rpcData, error: rpcError } = await supabase.rpc(rpcName, rpcParams);
@@ -160,8 +234,8 @@ Deno.serve(async (req) => {
           const validFrom = coupon.valid_from ? new Date(coupon.valid_from) : null;
           const validTo = coupon.valid_to ? new Date(coupon.valid_to) : null;
 
-          const subtotal = (items as { price?: unknown; quantity?: unknown }[])
-            .reduce((sum: number, i) => sum + (Number(i.price) || 0) * (Number(i.quantity) || 1), 0);
+          const subtotal = verifiedItems
+            .reduce((sum: number, i) => sum + i.price_per_item * i.quantity, 0);
 
           let isValid = true;
           if (validFrom && now < validFrom) isValid = false;
@@ -170,11 +244,11 @@ Deno.serve(async (req) => {
           if (coupon.min_order != null && coupon.min_order > 0 && subtotal < coupon.min_order) isValid = false;
           if (coupon.country_id && coupon.country_id !== (country?.id ?? null)) isValid = false;
           if (coupon.user_id && coupon.user_id !== userId) isValid = false;
-          if (coupon.product_id && !(items as { product_id?: string }[]).some((i) => i.product_id === coupon.product_id)) isValid = false;
+          if (coupon.product_id && !verifiedItems.some((i) => i.product_id === coupon.product_id)) isValid = false;
 
           if (isValid) {
             let discountAmount = 0;
-            let newShipping = Number(shipping) || 0;
+            let newShipping = serverShipping;
 
             switch (coupon.type) {
               case 'نسبة':
@@ -187,33 +261,38 @@ Deno.serve(async (req) => {
                 newShipping = 0;
                 break;
               case 'خصم منتج': {
-                const match = (items as { product_id?: string; price?: unknown; quantity?: unknown }[])
-                  .find((i) => i.product_id === coupon.product_id);
+                const match = verifiedItems.find((i) => i.product_id === coupon.product_id);
                 if (match) {
-                  discountAmount = Math.min(coupon.value, (Number(match.price) || 0) * (Number(match.quantity) || 1));
+                  discountAmount = Math.min(coupon.value, match.price_per_item * match.quantity);
                 }
                 break;
               }
             }
 
-            const newTotal = subtotal - discountAmount + newShipping;
+            // ── Atomic: claim coupon via DB-side `used_count + 1` ──
+            // Prevents lost updates from concurrent orders.
+            // Returns false if coupon is exhausted (used_count >= max_uses).
+            const { data: couponClaimed } = await supabase.rpc('claim_coupon', {
+              p_coupon_id: coupon.id,
+            });
 
-            await supabase
-              .from('orders')
-              .update({
-                coupon_id: coupon.id,
-                discount_amount: discountAmount,
-                shipping_cost: newShipping,
-                total_price: newTotal,
-              })
-              .eq('id', rpcData.id);
+            if (couponClaimed) {
+              const newTotal = subtotal - discountAmount + newShipping;
 
-            await supabase
-              .from('coupons')
-              .update({ used_count: (coupon.used_count || 0) + 1 })
-              .eq('id', coupon.id);
+              await supabase
+                .from('orders')
+                .update({
+                  coupon_id: coupon.id,
+                  discount_amount: discountAmount,
+                  shipping_cost: newShipping,
+                  total_price: newTotal,
+                })
+                .eq('id', rpcData.id);
 
-            console.log(`[create-order] Coupon ${trimmedCode} applied: discount=${discountAmount} shipping=${newShipping} total=${newTotal}`);
+              console.log(`[create-order] Coupon ${trimmedCode} applied: discount=${discountAmount} shipping=${newShipping} total=${newTotal}`);
+            } else {
+              console.log(`[create-order] Coupon ${trimmedCode} exhausted (max_uses=${coupon.max_uses}) — discount NOT applied`);
+            }
           }
         }
       } catch (couponErr) {

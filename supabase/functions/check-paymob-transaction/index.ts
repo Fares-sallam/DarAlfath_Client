@@ -57,7 +57,10 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const { merchantOrderId } = (await req.json()) as { merchantOrderId: string };
+    const { merchantOrderId, cancel } = (await req.json()) as {
+      merchantOrderId: string;
+      cancel?: boolean;
+    };
 
     if (!merchantOrderId) {
       return jsonOk({ status: 'error', error: 'merchantOrderId مطلوب' });
@@ -66,7 +69,7 @@ Deno.serve(async (req) => {
     // ── Idempotency: if already completed, just return order id ────────
     const { data: existing } = await supabase
       .from('pending_payments')
-      .select('status, resulting_order_id, paymob_order_id, failure_reason')
+      .select('status, resulting_order_id, paymob_order_id, failure_reason, coupon_code')
       .eq('merchant_order_id', merchantOrderId)
       .maybeSingle();
 
@@ -142,8 +145,29 @@ Deno.serve(async (req) => {
       id:            txn?.id,
     }));
 
+    // Helper: release coupon if it was claimed with this pending payment
+    async function releaseCouponIfNeeded() {
+      if (existing.coupon_code) {
+        try {
+          await supabase.rpc('release_coupon', { p_coupon_code: existing.coupon_code });
+          console.log(`[check-paymob] Coupon ${existing.coupon_code} released`);
+        } catch (e) {
+          console.warn('[check-paymob] release_coupon failed:', e);
+        }
+      }
+    }
+
     // No transaction yet → customer hasn't completed payment
     if (!txn || txn.id == null) {
+      // cancel=true + no transaction → safe to cancel (nothing was charged)
+      if (cancel) {
+        await supabase.rpc('cancel_pending_payment', {
+          p_merchant_order_id: merchantOrderId,
+          p_reason: 'ألغاه العميل (لا توجد معاملة)',
+        });
+        await releaseCouponIfNeeded();
+        return jsonOk({ status: 'failed', error: 'تم إلغاء الدفع.', cancelled: true });
+      }
       return jsonOk({ status: 'pending' });
     }
 
@@ -191,12 +215,22 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason:            txn.data?.message ?? 'فشل الدفع',
       });
+      await releaseCouponIfNeeded();
       return jsonOk({
         status: 'failed',
         error:  txn.data?.message ?? 'فشل الدفع',
       });
     }
 
+    // Still pending on Paymob side (e.g. Fawry — customer may pay later)
+    if (cancel) {
+      // DON'T cancel the pending_payment — a webhook may still complete it.
+      // Just tell the client to stop polling. The reservation will be resolved
+      // by the Paymob webhook (success → complete, fail → cancel) or by the
+      // pending_payments expiry mechanism.
+      console.log(`[check-paymob] cancel requested but txn is pending — NOT cancelling stock reservation for ${merchantOrderId}`);
+      return jsonOk({ status: 'failed', error: 'تم إلغاء المتابعة. لو دفعت بالفعل سيتم تأكيد طلبك تلقائياً.', cancelled: true });
+    }
     return jsonOk({ status: 'pending' });
   } catch (err) {
     console.error('[check-paymob] Unexpected:', err);

@@ -30,13 +30,10 @@ export default function PaymentResultPage() {
     if (didRun.current) return;
     didRun.current = true;
 
-    // Extract merchant_order_id from URL or sessionStorage fallback
-    const merchantOrderIdFromUrl =
-      params.get('merchant_order_id') ??
-      params.get('order_id') ??
-      null;
-
-    const fallbackOrderId = sessionStorage.getItem('paymob_pending_order_id');
+    // Extract merchant_order_id: URL param first, then localStorage fallback.
+    // We intentionally skip `order_id` — that's Paymob's internal id, not ours.
+    const merchantOrderIdFromUrl = params.get('merchant_order_id') ?? null;
+    const fallbackOrderId = localStorage.getItem('paymob_pending_order_id');
     const merchantOrderId = merchantOrderIdFromUrl ?? fallbackOrderId;
 
     if (!merchantOrderId) {
@@ -50,7 +47,7 @@ export default function PaymentResultPage() {
 
     async function verifyTransaction(mOrderId: string) {
       try {
-        const { data, error } = await supabase.functions.invoke('smart-function', {
+        const { data, error } = await supabase.functions.invoke('check-paymob-transaction', {
           body: { merchantOrderId: mOrderId },
         });
 
@@ -63,7 +60,7 @@ export default function PaymentResultPage() {
         if (data?.status === 'success') {
           setState('success');
           setOrderId(data.orderId);
-          sessionStorage.removeItem('paymob_pending_order_id');
+          localStorage.removeItem('paymob_pending_order_id');
           clearCart();
           void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
           void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
@@ -73,7 +70,7 @@ export default function PaymentResultPage() {
         if (data?.status === 'failed') {
           setState('failed');
           setErrorMessage(data.error || 'فشلت عملية الدفع.');
-          sessionStorage.removeItem('paymob_pending_order_id');
+          localStorage.removeItem('paymob_pending_order_id');
           return;
         }
 
@@ -88,14 +85,14 @@ export default function PaymentResultPage() {
             setErrorMessage('انتهت مهلة التأكيد. الطلب لم يتم.');
             return;
           }
-          const { data: poll } = await supabase.functions.invoke('smart-function', {
+          const { data: poll } = await supabase.functions.invoke('check-paymob-transaction', {
             body: { merchantOrderId: mOrderId },
           });
           if (poll?.status === 'success') {
             clearInterval(interval);
             setState('success');
             setOrderId(poll.orderId);
-            sessionStorage.removeItem('paymob_pending_order_id');
+            localStorage.removeItem('paymob_pending_order_id');
             clearCart();
             void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
             void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
@@ -103,7 +100,7 @@ export default function PaymentResultPage() {
             clearInterval(interval);
             setState('failed');
             setErrorMessage(poll.error || 'فشلت عملية الدفع.');
-            sessionStorage.removeItem('paymob_pending_order_id');
+            localStorage.removeItem('paymob_pending_order_id');
           }
         }, 3000);
       } catch (e) {

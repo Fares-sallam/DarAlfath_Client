@@ -307,10 +307,10 @@ export default function CheckoutPage() {
 
     while (!pollAbortRef.current.cancelled) {
       if (Date.now() - startedAt > MAX_DURATION_MS) {
-        // Timeout — cancel pending payment to release stock
+        // Timeout — explicitly cancel pending payment to release reserved stock
         try {
-          await supabase.functions.invoke('smart-function', {
-            body: { merchantOrderId },
+          await supabase.functions.invoke('check-paymob-transaction', {
+            body: { merchantOrderId, cancel: true },
           });
         } catch { /* ignore */ }
         setSubmitError('انتهت مهلة انتظار تأكيد الدفع. حاول مرة أخرى.');
@@ -319,7 +319,7 @@ export default function CheckoutPage() {
       }
 
       try {
-        const { data, error } = await supabase.functions.invoke('smart-function', {
+        const { data, error } = await supabase.functions.invoke('check-paymob-transaction', {
           body: { merchantOrderId },
         });
 
@@ -339,6 +339,7 @@ export default function CheckoutPage() {
             setSubmittedOrder(orderRow as unknown as StorefrontOrder);
             setSubmitted(true);
             setPaymobPolling(false);
+            localStorage.removeItem('paymob_pending_order_id');
             clearCart();
             void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
             void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
@@ -347,6 +348,7 @@ export default function CheckoutPage() {
 
           if (data.status === 'failed') {
             // Payment failed — release stock, keep cart, show error
+            localStorage.removeItem('paymob_pending_order_id');
             setSubmitError(data.error || 'فشل الدفع. حاول مرة أخرى أو اختر طريقة دفع أخرى.');
             setPaymobPolling(false);
             return;
@@ -374,9 +376,9 @@ export default function CheckoutPage() {
     setPaymobPolling(false);
     if (paymobMerchantOrderId) {
       try {
-        // Release stock by cancelling the pending payment
-        await supabase.functions.invoke('smart-function', {
-          body: { merchantOrderId: paymobMerchantOrderId },
+        // Explicitly cancel pending payment to release reserved stock
+        await supabase.functions.invoke('check-paymob-transaction', {
+          body: { merchantOrderId: paymobMerchantOrderId, cancel: true },
         });
       } catch { /* ignore */ }
     }
@@ -441,6 +443,7 @@ export default function CheckoutPage() {
 
         // Open Paymob in a new tab, start polling, show modal in the current tab
         setPaymobMerchantOrderId(data.merchantOrderId);
+        localStorage.setItem('paymob_pending_order_id', data.merchantOrderId);
         setPaymobPaymentUrl(data.paymentUrl);
         setPaymobPolling(true);
         setSubmitting(false);
@@ -476,17 +479,8 @@ export default function CheckoutPage() {
         couponCode:      appliedCoupon?.code || undefined,
       });
 
-      // Apply coupon server-side (RPC) for COD orders
-      if (appliedCoupon?.code && order?.id) {
-        try {
-          await supabase.rpc('apply_coupon_to_order', {
-            p_order_id:    order.id,
-            p_coupon_code: appliedCoupon.code,
-          });
-        } catch (e) {
-          console.warn('[checkout] coupon apply failed (non-fatal):', e);
-        }
-      }
+      // الكوبون يُطبّق داخل create-storefront-order (سيرفر)
+      // لا حاجة لاستدعاء apply_coupon_to_order مرة أخرى هنا
 
       setSubmittedOrder(order);
       setSubmitted(true);

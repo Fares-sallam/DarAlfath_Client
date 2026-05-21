@@ -62,6 +62,9 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Track coupon claim at handler scope so the catch block can release it
+  let _claimedCouponCode: string | null = null;
+
   try {
     if (!PAYMOB_API_KEY) {
       return jsonError('PAYMOB_API_KEY غير مضبوط', 500);
@@ -110,6 +113,12 @@ Deno.serve(async (req) => {
       return jsonError('بيانات العميل غير مكتملة');
     }
 
+    // Paymob works with EGP only — reject non-Egyptian countries
+    const countryCode = (country?.code ?? '').toUpperCase();
+    if (countryCode && countryCode !== 'EG') {
+      return jsonError('الدفع الإلكتروني عبر Paymob متاح لمصر فقط حاليًا.');
+    }
+
     // ── Auth user (optional, for guest checkout) ────────────────────
     let userId: string | null = null;
     const authHeader = req.headers.get('Authorization');
@@ -152,13 +161,12 @@ Deno.serve(async (req) => {
       if (!Number.isFinite(realPrice) || realPrice <= 0) {
         return jsonError('سعر منتج غير صالح');
       }
-      // Derive is_digital from variant_type (the project convention) OR fall
-      // back to the client-supplied flag.
+      // Derive is_digital from variant_type only (never trust client flag)
       const isDigital =
         v.variant_type === 'رقمي' ||
-        v.variant_type === 'digital' ||
-        Boolean(it.is_digital);
-      const qty = Math.max(1, Math.floor(Number(it.quantity) || 1));
+        v.variant_type === 'digital';
+      // Digital items are always quantity 1 (no reason to buy multiple copies)
+      const qty = isDigital ? 1 : Math.max(1, Math.floor(Number(it.quantity) || 1));
       subtotal += realPrice * qty;
       // Use the field name expected by the existing create_order_with_stock_deduction RPC
       normalizedItems.push({
@@ -170,8 +178,113 @@ Deno.serve(async (req) => {
       });
     }
 
-    const shippingNum = Math.max(0, Number(shipping) || 0);
-    const totalCents = Math.round((subtotal + shippingNum) * 100);
+    // ── حساب الشحن server-side (لا نثق بقيمة العميل) ─────────────
+    const hasPhysicalItems = normalizedItems.some((i) => !i.is_digital);
+    let serverShipping = 0;
+    if (hasPhysicalItems) {
+      const { data: settings } = await supabase
+        .from('store_settings')
+        .select('default_shipping_cost, free_shipping_threshold')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const flatRate = Number(settings?.default_shipping_cost) || 45;
+      const freeThreshold = Number(settings?.free_shipping_threshold) || 0;
+
+      // Free shipping threshold only applies to Egypt (matches frontend logic)
+      const isEgypt = !countryCode || countryCode === 'EG';
+      const qualifiesFreeShipping = isEgypt && freeThreshold > 0 && subtotal >= freeThreshold;
+
+      serverShipping = qualifiesFreeShipping ? 0 : flatRate;
+    }
+
+    // ── تطبيق الكوبون على المبلغ قبل إرساله لـ Paymob ─────────────
+    let discountAmount = 0;
+    let finalShipping = serverShipping;
+
+    if (couponCode) {
+      try {
+        const trimmedCode = String(couponCode).trim().toUpperCase();
+        const { data: coupon } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('code', trimmedCode)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (coupon) {
+          const now = new Date();
+          const validFrom = coupon.valid_from ? new Date(coupon.valid_from) : null;
+          const validTo   = coupon.valid_to   ? new Date(coupon.valid_to)   : null;
+
+          let isValid = true;
+          if (validFrom && now < validFrom) isValid = false;
+          if (validTo && now > validTo) isValid = false;
+          if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) isValid = false;
+          if (coupon.min_order != null && coupon.min_order > 0 && subtotal < coupon.min_order) isValid = false;
+          if (coupon.country_id && coupon.country_id !== (country?.id ?? null)) isValid = false;
+          if (coupon.user_id && coupon.user_id !== userId) isValid = false;
+          if (coupon.product_id && !normalizedItems.some((i) => i.product_id === coupon.product_id)) isValid = false;
+
+          if (isValid) {
+            switch (coupon.type) {
+              case 'نسبة':
+                discountAmount = Math.round(subtotal * coupon.value / 100 * 100) / 100;
+                break;
+              case 'مبلغ ثابت':
+                discountAmount = Math.min(coupon.value, subtotal);
+                break;
+              case 'شحن مجاني':
+                finalShipping = 0;
+                break;
+              case 'خصم منتج': {
+                const match = normalizedItems.find((i) => i.product_id === coupon.product_id);
+                if (match) {
+                  discountAmount = Math.min(
+                    coupon.value,
+                    Number(match.price_per_item) * Number(match.quantity),
+                  );
+                }
+                break;
+              }
+            }
+            // Claim the coupon atomically (DB-side used_count + 1).
+            // If exhausted, discard the discount so the customer pays full price.
+            const { data: claimed } = await supabase.rpc('claim_coupon', {
+              p_coupon_id: coupon.id,
+            });
+            if (!claimed) {
+              console.log(`[paymob] Coupon ${trimmedCode} exhausted — discount reverted`);
+              discountAmount = 0;
+              finalShipping = serverShipping;
+            } else {
+              _claimedCouponCode = trimmedCode;   // track for catch-block cleanup
+              console.log(`[paymob] Coupon ${trimmedCode} claimed: discount=${discountAmount} shipping=${finalShipping}`);
+            }
+          }
+        }
+      } catch (couponErr) {
+        console.warn('[paymob] Coupon check failed (non-fatal):', couponErr);
+      }
+    }
+
+    const totalCents = Math.round((subtotal - discountAmount + finalShipping) * 100);
+
+    // Track if coupon was claimed so we can release it on failure
+    const couponWasClaimed = discountAmount > 0 || finalShipping !== serverShipping;
+
+    // Helper: release the coupon if we claimed it but payment setup fails
+    async function releaseCouponIfNeeded() {
+      if (couponWasClaimed && couponCode) {
+        try {
+          await supabase.rpc('release_coupon', { p_coupon_code: String(couponCode).trim() });
+          console.log(`[paymob] Coupon ${couponCode} released after failure`);
+        } catch (e) {
+          console.warn('[paymob] release_coupon failed:', e);
+        }
+      }
+    }
 
     // ── Generate merchant order id ──────────────────────────────────
     const merchantOrderId = generateMerchantOrderId();
@@ -183,7 +296,7 @@ Deno.serve(async (req) => {
       p_country_id:        country?.id ?? null,
       p_payment_method_id: paymentMethodId,
       p_amount_cents:      totalCents,
-      p_shipping_cost:     shippingNum,
+      p_shipping_cost:     finalShipping,
       p_shipping_address: {
         name:        customer.fullName,
         email:       customer.email,
@@ -201,6 +314,7 @@ Deno.serve(async (req) => {
 
     if (rpcError) {
       console.error('[paymob] create_pending_payment error:', rpcError);
+      await releaseCouponIfNeeded();
       return jsonError(rpcError.message || 'تعذر حجز المنتجات');
     }
 
@@ -217,6 +331,7 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason: 'Paymob auth failed',
       });
+      await releaseCouponIfNeeded();
       return jsonError(`فشل التوثيق مع Paymob: ${t.substring(0, 200)}`);
     }
     const { token: authToken } = await authRes.json();
@@ -225,6 +340,7 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason: 'No auth token',
       });
+      await releaseCouponIfNeeded();
       return jsonError('Paymob لم يرسل auth_token');
     }
 
@@ -247,6 +363,7 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason: 'Paymob register failed',
       });
+      await releaseCouponIfNeeded();
       return jsonError(`فشل تسجيل الطلب في Paymob: ${t.substring(0, 200)}`);
     }
     const { id: paymobOrderId } = await regRes.json();
@@ -255,6 +372,7 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason: 'No paymob order id',
       });
+      await releaseCouponIfNeeded();
       return jsonError('Paymob لم يرسل order_id');
     }
 
@@ -302,6 +420,7 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason: 'Paymob payment_key failed',
       });
+      await releaseCouponIfNeeded();
       return jsonError(`فشل توليد payment_key: ${t.substring(0, 200)}`);
     }
     const { token: paymentToken } = await pkRes.json();
@@ -310,6 +429,7 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason: 'No payment token',
       });
+      await releaseCouponIfNeeded();
       return jsonError('Paymob لم يرسل payment_token');
     }
 
@@ -324,6 +444,19 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error('[paymob] Unexpected error:', err);
+    // Release coupon if it was claimed before the error occurred
+    if (_claimedCouponCode) {
+      try {
+        const sb = createClient(
+          Deno.env.get('SUPABASE_URL')!,
+          Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        );
+        await sb.rpc('release_coupon', { p_coupon_code: _claimedCouponCode });
+        console.log(`[paymob] Coupon ${_claimedCouponCode} released after unexpected error`);
+      } catch (e) {
+        console.warn('[paymob] release_coupon in catch failed:', e);
+      }
+    }
     return jsonError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع', 500);
   }
 });
