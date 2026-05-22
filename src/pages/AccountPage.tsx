@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, ChevronLeft, CheckCircle2, Download, Heart, LogOut, PackageCheck, ShieldCheck, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +13,9 @@ const initialForm = {
   confirmPassword: '',
   verificationCode: '',
 };
+
+/** Seconds to wait before allowing another OTP resend */
+const RESEND_COOLDOWN = 60;
 
 function getInitialAuthMode(): AuthMode {
   if (typeof window === 'undefined') return 'login';
@@ -47,6 +50,30 @@ export default function AccountPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // ── Resend cooldown timer ──────────────────────────
+  const startCooldown = useCallback(() => {
+    setResendCooldown(RESEND_COOLDOWN);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(cooldownRef.current!);
+          cooldownRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (cooldownRef.current) clearInterval(cooldownRef.current);
+    };
+  }, []);
 
   const displayName = useMemo(() => {
     const metadataName = user?.user_metadata?.full_name;
@@ -146,9 +173,13 @@ export default function AccountPage() {
         return;
       }
 
+      // BUG FIX: Don't use switchMode — it clears the notice.
+      // Set mode directly and only clear the error.
+      setError('');
       setNotice(result.message || 'تم إرسال كود التحقق.');
-      switchMode('forgot-verify');
+      setMode('forgot-verify');
       setForm((prev) => ({ ...initialForm, email: prev.email }));
+      startCooldown();
       return;
     }
 
@@ -163,17 +194,23 @@ export default function AccountPage() {
         return;
       }
 
+      // Set mode to 'reset' BEFORE the async call to prevent profile page
+      // flash caused by verifyOtp signing the user in via onAuthStateChange.
+      setMode('reset');
+
       setSubmitting(true);
       const result = await verifyResetOtp(form.email, form.verificationCode);
       setSubmitting(false);
 
       if (result.error) {
+        // Verification failed — go back to forgot-verify mode
+        setMode('forgot-verify');
         setError(result.error);
         return;
       }
 
+      setError('');
       setNotice(result.message || 'تم التحقق بنجاح.');
-      switchMode('reset');
       setForm((prev) => ({ ...initialForm, email: prev.email }));
       return;
     }
@@ -270,6 +307,8 @@ export default function AccountPage() {
       return;
     }
 
+    if (resendCooldown > 0) return;
+
     setSubmitting(true);
     const result = await resendConfirmation(form.email);
     setSubmitting(false);
@@ -280,6 +319,7 @@ export default function AccountPage() {
     }
 
     setNotice(result.message || 'تم إرسال رسالة التحقق مرة أخرى.');
+    startCooldown();
   };
 
   const handleResendResetOtp = async () => {
@@ -291,6 +331,8 @@ export default function AccountPage() {
       return;
     }
 
+    if (resendCooldown > 0) return;
+
     setSubmitting(true);
     const result = await sendResetOtp(form.email);
     setSubmitting(false);
@@ -301,6 +343,7 @@ export default function AccountPage() {
     }
 
     setNotice(result.message || 'تم إرسال كود تحقق جديد.');
+    startCooldown();
   };
 
   if (loading) {
@@ -311,7 +354,9 @@ export default function AccountPage() {
     );
   }
 
-  if (user && mode !== 'reset') {
+  // Exclude forgot-verify to prevent profile flash during OTP verification
+  // (verifyOtp signs the user in, but we still need to show the reset form)
+  if (user && mode !== 'reset' && mode !== 'forgot-verify') {
     const initials = displayName
       .split(' ')
       .map((w: string) => w[0])
@@ -354,6 +399,7 @@ export default function AccountPage() {
         </section>
 
         {error ? <div className="auth-alert auth-alert--error">{error}</div> : null}
+        {notice ? <div className="auth-alert auth-alert--success">{notice}</div> : null}
 
         {/* ── Quick Navigation ────────────────────────────── */}
         <div className="profile-nav">
@@ -612,18 +658,30 @@ export default function AccountPage() {
           {mode === 'verify' ? (
             <p className="auth-footnote">
               لم يصلك الكود؟{' '}
-              <button type="button" onClick={handleResendConfirmation} disabled={submitting}>
-                إعادة إرسال التحقق
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={submitting || resendCooldown > 0}
+              >
+                {resendCooldown > 0 ? `إعادة الإرسال (${resendCooldown}ث)` : 'إعادة إرسال التحقق'}
               </button>
+              <br />
+              <small className="auth-otp-expiry">صلاحية الكود 5 دقائق</small>
             </p>
           ) : null}
 
           {mode === 'forgot-verify' ? (
             <p className="auth-footnote">
               لم يصلك الكود؟{' '}
-              <button type="button" onClick={handleResendResetOtp} disabled={submitting}>
-                إعادة إرسال كود التحقق
+              <button
+                type="button"
+                onClick={handleResendResetOtp}
+                disabled={submitting || resendCooldown > 0}
+              >
+                {resendCooldown > 0 ? `إعادة الإرسال (${resendCooldown}ث)` : 'إعادة إرسال كود التحقق'}
               </button>
+              <br />
+              <small className="auth-otp-expiry">صلاحية الكود 5 دقائق</small>
             </p>
           ) : null}
 

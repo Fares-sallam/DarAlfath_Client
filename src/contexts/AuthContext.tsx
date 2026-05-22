@@ -193,7 +193,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
-          shouldCreateUser: true,
+          // false prevents ghost account creation via resend spam
+          shouldCreateUser: false,
           emailRedirectTo: getRedirectUrl('/account?verified=1'),
         },
       });
