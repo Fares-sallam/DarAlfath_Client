@@ -1,6 +1,6 @@
 import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
 import QuantitySelector from '@/components/QuantitySelector';
 import {
@@ -17,6 +17,53 @@ import type { ProductVariantItem } from '@/types/store';
 
 type DetailsTab = 'about' | 'specs';
 
+/* ────────────────────────────────────────────────────────────
+   3D Book tilt — tracks mouse position over the gallery area
+   and applies a CSS perspective rotation for a tactile feel.
+   ──────────────────────────────────────────────────────────── */
+function useBookTilt(ref: React.RefObject<HTMLElement | null>) {
+  const [style, setStyle] = useState<React.CSSProperties>({});
+  const rafId = useRef(0);
+
+  const onMove = useCallback((e: MouseEvent) => {
+    const el = ref.current;
+    if (!el) return;
+    cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;  // 0…1
+      const y = (e.clientY - rect.top) / rect.height;
+      const rotateY = (x - 0.5) * -14;   // max ±7°
+      const rotateX = (y - 0.5) * 10;    // max ±5°
+      setStyle({
+        transform: `perspective(900px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02,1.02,1.02)`,
+      });
+    });
+  }, [ref]);
+
+  const onLeave = useCallback(() => {
+    cancelAnimationFrame(rafId.current);
+    setStyle({ transform: 'perspective(900px) rotateX(0deg) rotateY(0deg) scale3d(1,1,1)' });
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.addEventListener('mousemove', onMove);
+    el.addEventListener('mouseleave', onLeave);
+    return () => {
+      el.removeEventListener('mousemove', onMove);
+      el.removeEventListener('mouseleave', onLeave);
+      cancelAnimationFrame(rafId.current);
+    };
+  }, [ref, onMove, onLeave]);
+
+  return style;
+}
+
+/* ────────────────────────────────────────────────────────────
+   Page component
+   ──────────────────────────────────────────────────────────── */
 export default function BookDetailsPage() {
   const { productId } = useParams();
   const { data: product, isLoading } = useProductDetails(productId);
@@ -37,9 +84,12 @@ export default function BookDetailsPage() {
   const [selectedVariantId, setSelectedVariantId] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<DetailsTab>('about');
-
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [addedToCart, setAddedToCart] = useState(false);
+
+  const bookRef = useRef<HTMLDivElement>(null);
+  const tiltStyle = useBookTilt(bookRef);
 
   const displayedImages = useMemo(() => {
     if (!product) return [];
@@ -58,9 +108,7 @@ export default function BookDetailsPage() {
     setLightboxImage(null);
   }, [displayedImages, product?.product_id]);
 
-  useEffect(() => {
-    setQuantity(1);
-  }, [selectedVariantId]);
+  useEffect(() => { setQuantity(1); }, [selectedVariantId]);
 
   useEffect(() => {
     if (!lightboxImage) return undefined;
@@ -75,7 +123,14 @@ export default function BookDetailsPage() {
     setQuantity(Math.max(1, Math.min(Math.floor(value || 1), max)));
   };
 
-  if (isLoading) return <div className="bk-loading" />;
+  const handleAddToCart = () => {
+    if (!selectedVariant) return;
+    addToCart(product!, selectedVariant, selectedVariant.is_digital ? 1 : quantity);
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 1800);
+  };
+
+  if (isLoading) return <div className="bk3-loading"><div className="bk3-loading__book" /><div className="bk3-loading__lines"><span /><span /><span /></div></div>;
 
   if (!product) {
     return (
@@ -87,55 +142,77 @@ export default function BookDetailsPage() {
     );
   }
 
-  const wished       = isInWishlist(product.id);
+  const wished = isInWishlist(product.id);
   const categoryLabel = product.category_name || product.category?.name || 'غير محدد';
-  const canAddToCart  = Boolean(selectedVariant?.is_available);
-  const mainImage     = selectedImage || product.cover_url || null;
+  const canAddToCart = Boolean(selectedVariant?.is_available);
+  const mainImage = selectedImage || product.cover_url || null;
   const descriptionText = product.description ||
     'هذا الإصدار مصمم بعناية ليمنح القارئ تجربة قراءة مريحة، مع عرض واضح ونسخ متعددة تناسب الاستخدامات المختلفة.';
 
   return (
-    <div className="page-sections">
+    <div className="bk3-page">
 
-      {/* ── Breadcrumb ─────────────────────────────────── */}
-      <nav className="bk-breadcrumb">
+      {/* ── Breadcrumb ─── */}
+      <nav className="bk3-crumbs" style={{ '--i': 0 } as React.CSSProperties}>
         <Link to="/">الرئيسية</Link>
-        <span>/</span>
+        <span className="bk3-crumbs__sep" />
         <Link to="/books">الكتب</Link>
         {product.category_slug && (
-          <><span>/</span>
-          <Link to={`/books?category=${product.category_slug}`}>{categoryLabel}</Link></>
+          <>
+            <span className="bk3-crumbs__sep" />
+            <Link to={`/books?category=${product.category_slug}`}>{categoryLabel}</Link>
+          </>
         )}
-        <span>/</span>
+        <span className="bk3-crumbs__sep" />
         <strong>{product.title}</strong>
       </nav>
 
-      {/* ── Main Layout ─────────────────────────────────── */}
-      <div className="bk-layout">
+      {/* ── Hero section: 3D Book + Info ─── */}
+      <section className="bk3-hero">
 
-        {/* ── Gallery ─── */}
-        <aside className="bk-gallery">
-          <button
-            type="button"
-            className="bk-gallery__main"
-            onClick={() => mainImage && setLightboxImage(mainImage)}
-            disabled={!mainImage}
-          >
-            {mainImage
-              ? <img src={mainImage} alt={product.title} />
-              : <div className="bk-gallery__placeholder">
-                  <img src="/branding/dar-alfath-logo.jpeg" alt="دار الفتح" />
-                </div>
-            }
-          </button>
+        {/* 3D Book */}
+        <div className="bk3-book-wrap" style={{ '--i': 1 } as React.CSSProperties}>
+          <div className="bk3-book-scene" ref={bookRef}>
+            {/* Ambient glow */}
+            <div className="bk3-glow" />
 
+            <button
+              type="button"
+              className="bk3-book"
+              style={tiltStyle}
+              onClick={() => mainImage && setLightboxImage(mainImage)}
+              disabled={!mainImage}
+            >
+              {/* Spine */}
+              <div className="bk3-book__spine" />
+              {/* Cover */}
+              <div className="bk3-book__cover">
+                {mainImage ? (
+                  <img src={mainImage} alt={product.title} />
+                ) : (
+                  <div className="bk3-book__placeholder">
+                    <img src="/branding/dar-alfath-logo.jpeg" alt="دار الفتح" />
+                  </div>
+                )}
+              </div>
+              {/* Pages edge */}
+              <div className="bk3-book__pages" />
+            </button>
+
+            {/* Floating particles */}
+            <div className="bk3-particles" aria-hidden="true">
+              <span /><span /><span /><span /><span /><span />
+            </div>
+          </div>
+
+          {/* Thumbnails */}
           {displayedImages.length > 1 && (
-            <div className="bk-gallery__thumbs">
+            <div className="bk3-thumbs">
               {displayedImages.slice(0, 5).map((img) => (
                 <button
                   key={img}
                   type="button"
-                  className={img === mainImage ? 'bk-gallery__thumb active' : 'bk-gallery__thumb'}
+                  className={`bk3-thumb ${img === mainImage ? 'bk3-thumb--on' : ''}`}
                   onClick={() => setSelectedImage(img)}
                 >
                   <img src={img} alt={product.title} />
@@ -143,174 +220,154 @@ export default function BookDetailsPage() {
               ))}
             </div>
           )}
-        </aside>
+        </div>
 
-        {/* ── Info Panel ─── */}
-        <div className="bk-panel">
+        {/* Info panel */}
+        <div className="bk3-info">
 
           {/* Category + wishlist */}
-          <div className="bk-panel__eyebrow">
-            <Link to={`/books?category=${product.category_slug}`} className="bk-category-tag">
-              <Tag size={12} />
+          <div className="bk3-info__top" style={{ '--i': 2 } as React.CSSProperties}>
+            <Link to={`/books?category=${product.category_slug}`} className="bk3-cat">
+              <Tag size={11} />
               {categoryLabel}
             </Link>
             <button
               type="button"
-              className={wished ? 'bk-wish bk-wish--active' : 'bk-wish'}
+              className={`bk3-heart ${wished ? 'bk3-heart--on' : ''}`}
               onClick={() => toggleWishlist(product.id)}
+              aria-label={wished ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}
             >
-              <Heart size={15} fill={wished ? 'currentColor' : 'none'} />
-              {wished ? 'محفوظ' : 'المفضلة'}
+              <Heart size={16} fill={wished ? 'currentColor' : 'none'} />
             </button>
           </div>
 
-          {/* Title & author */}
-          <h1 className="bk-panel__title">{product.title}</h1>
-          <p className="bk-panel__author">
+          {/* Title */}
+          <h1 className="bk3-title" style={{ '--i': 3 } as React.CSSProperties}>
+            {product.title}
+          </h1>
+
+          {/* Author */}
+          <p className="bk3-author" style={{ '--i': 4 } as React.CSSProperties}>
             <BookOpenText size={14} />
             {product.author}
           </p>
 
           {/* Rating */}
-          <div className="bk-panel__rating">
-            {[1,2,3,4,5].map(i => (
-              <Star key={i} size={14} fill="currentColor" />
-            ))}
-            <span>{product.rating ?? '4.8'}</span>
-            <span className="bk-panel__rating-sep">·</span>
-            <span>تقييم القرّاء</span>
+          <div className="bk3-rating" style={{ '--i': 5 } as React.CSSProperties}>
+            <div className="bk3-stars">
+              {[1,2,3,4,5].map(i => (
+                <Star key={i} size={13} fill="currentColor" />
+              ))}
+            </div>
+            <span className="bk3-rating__val">{product.rating ?? '4.8'}</span>
+            <span className="bk3-rating__lbl">تقييم القرّاء</span>
           </div>
 
           {/* Price */}
-          <div className="bk-panel__price">
+          <div className="bk3-price" style={{ '--i': 6 } as React.CSSProperties}>
             <strong>
               {selectedVariant
                 ? formatMoney(selectedVariant.display_price, selectedVariant.currency_symbol)
                 : formatCatalogPrice(product)}
             </strong>
-            {selectedVariant?.compare_at_price
-              ? <del>{formatMoney(selectedVariant.compare_at_price, selectedVariant.currency_symbol)}</del>
-              : null}
+            {selectedVariant?.compare_at_price ? (
+              <del>{formatMoney(selectedVariant.compare_at_price, selectedVariant.currency_symbol)}</del>
+            ) : null}
           </div>
 
-          {/* Short description */}
-          <p className="bk-panel__desc">{descriptionText}</p>
+          {/* Description */}
+          <p className="bk3-desc" style={{ '--i': 7 } as React.CSSProperties}>{descriptionText}</p>
 
-          <div className="bk-divider" />
-
-          {/* Variant selector */}
-          <div className="bk-variants">
-            <div className="bk-variants__head">
-              <Layers size={15} />
+          {/* ── Variant selector ─── */}
+          <div className="bk3-variants" style={{ '--i': 8 } as React.CSSProperties}>
+            <div className="bk3-variants__hd">
+              <Layers size={14} />
               <span>اختر النسخة</span>
-              <small>
-                {variantsLoading ? '...' : `${variants.length || product.variant_count} نسخة`}
-              </small>
+              <small>{variantsLoading ? '...' : `${variants.length || product.variant_count} نسخة`}</small>
             </div>
-            <div className="bk-variants__grid">
+            <div className="bk3-variants__grid">
               {variants.map((v) => (
                 <button
                   key={v.variant_id}
                   type="button"
-                  className={v.variant_id === selectedVariant?.variant_id ? 'bk-vpill bk-vpill--active' : 'bk-vpill'}
+                  className={`bk3-var ${v.variant_id === selectedVariant?.variant_id ? 'bk3-var--on' : ''}`}
                   onClick={() => setSelectedVariantId(v.variant_id)}
                   disabled={!v.is_available}
                 >
-                  <span className="bk-vpill__name">{v.variant_name}</span>
-                  <b className="bk-vpill__price">{formatMoney(v.display_price, v.currency_symbol)}</b>
-                  <small className="bk-vpill__avail">
+                  <span className="bk3-var__name">{v.variant_name}</span>
+                  <b className="bk3-var__price">{formatMoney(v.display_price, v.currency_symbol)}</b>
+                  <small className="bk3-var__avail">
                     {v.is_digital ? '⚡ رقمي فوري' : v.availability_text || 'غير متوفر'}
                   </small>
                 </button>
               ))}
               {!variantsLoading && variants.length === 0 && (
-                <p className="bk-variants__empty">لا توجد نسخ متاحة حاليًا.</p>
+                <p className="bk3-variants__empty">لا توجد نسخ متاحة حاليًا.</p>
               )}
             </div>
           </div>
 
-          {/* Qty + add to cart */}
-          <div className="bk-buybox">
+          {/* ── Buybox ─── */}
+          <div className="bk3-buy" style={{ '--i': 9 } as React.CSSProperties}>
             {selectedVariant && !selectedVariant.is_digital && (
-              <div className="bk-buybox__qty">
+              <div className="bk3-buy__qty">
                 <QuantitySelector value={quantity} onChange={updateQuantity} />
               </div>
             )}
             {selectedVariant?.is_digital && (
-              <span className="bk-chip bk-chip--info">
-                <Sparkles size={13} /> نسخة رقمية — كمية 1 فقط
+              <span className="bk3-chip bk3-chip--digital">
+                <Sparkles size={13} /> نسخة رقمية
               </span>
             )}
             {!selectedVariant && (
-              <span className="bk-chip bk-chip--muted">اختر نسخة لتحديد الكمية</span>
+              <span className="bk3-chip bk3-chip--muted">اختر نسخة لتحديد الكمية</span>
             )}
 
-            <div className="bk-buybox__actions">
-              <button
-                type="button"
-                className="primary-button primary-button--full bk-btn-cart"
-                disabled={!canAddToCart}
-                onClick={() => {
-                  if (!selectedVariant) return;
-                  addToCart(product, selectedVariant, selectedVariant.is_digital ? 1 : quantity);
-                }}
-              >
-                <ShoppingBag size={17} />
-                {!selectedVariant ? 'اختر نسخة أولًا' : canAddToCart ? 'أضف إلى السلة' : 'غير متوفر'}
-              </button>
-              <button
-                type="button"
-                className={wished ? 'bk-btn-wish bk-btn-wish--active' : 'bk-btn-wish'}
-                onClick={() => toggleWishlist(product.id)}
-              >
-                <Heart size={16} fill={wished ? 'currentColor' : 'none'} />
-                {wished ? 'محفوظ' : 'أضف للمفضلة'}
-              </button>
-            </div>
+            <button
+              type="button"
+              className={`bk3-cart-btn ${addedToCart ? 'bk3-cart-btn--done' : ''}`}
+              disabled={!canAddToCart}
+              onClick={handleAddToCart}
+            >
+              <ShoppingBag size={17} />
+              <span>
+                {addedToCart
+                  ? 'تمت الإضافة ✓'
+                  : !selectedVariant
+                    ? 'اختر نسخة أولًا'
+                    : canAddToCart
+                      ? 'أضف إلى السلة'
+                      : 'غير متوفر'}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className={`bk3-wish-btn ${wished ? 'bk3-wish-btn--on' : ''}`}
+              onClick={() => toggleWishlist(product.id)}
+            >
+              <Heart size={15} fill={wished ? 'currentColor' : 'none'} />
+              {wished ? 'محفوظ في المفضلة' : 'أضف للمفضلة'}
+            </button>
           </div>
 
-          {/* Trust badges */}
-          <div className="bk-trust">
-            <div className="bk-trust__item">
-              <ShieldCheck size={15} />
-              <span>منتج أصلي معتمد</span>
-            </div>
-            <div className="bk-trust__item">
-              <Truck size={15} />
-              <span>شحن سريع وآمن</span>
-            </div>
-            <div className="bk-trust__item">
-              <BookOpenText size={15} />
-              <span>نسخ متعددة</span>
-            </div>
+          {/* Trust */}
+          <div className="bk3-trust" style={{ '--i': 10 } as React.CSSProperties}>
+            <div className="bk3-trust__i"><ShieldCheck size={14} /><span>منتج أصلي</span></div>
+            <div className="bk3-trust__i"><Truck size={14} /><span>شحن سريع</span></div>
+            <div className="bk3-trust__i"><BookOpenText size={14} /><span>نسخ متعددة</span></div>
           </div>
-
         </div>
+      </section>
 
-        {/* ── Related Sidebar ─── */}
-        <aside className="bk-sidebar-related">
-          <h3 className="bk-sidebar-related__title">كتب مشابهة</h3>
-          {related.length > 0 ? (
-            <div className="bk-sidebar-related__list">
-              {related.slice(0, 4).map((item) => (
-                <ProductCard key={item.product_id} product={item} />
-              ))}
-            </div>
-          ) : (
-            <p className="bk-sidebar-related__empty">لا توجد كتب مشابهة حاليًا.</p>
-          )}
-        </aside>
-
-      </div>
-
-      {/* ── Tabs ─────────────────────────────────────────── */}
-      <div className="bk-tabs">
-        <div className="bk-tabs__nav">
+      {/* ── Tabs ─── */}
+      <section className="bk3-details" style={{ '--i': 11 } as React.CSSProperties}>
+        <div className="bk3-tab-nav">
           {(['about', 'specs'] as DetailsTab[]).map((tab) => (
             <button
               key={tab}
               type="button"
-              className={activeTab === tab ? 'bk-tabs__btn active' : 'bk-tabs__btn'}
+              className={`bk3-tab ${activeTab === tab ? 'bk3-tab--on' : ''}`}
               onClick={() => setActiveTab(tab)}
             >
               {tab === 'about' ? 'نبذة عن الكتاب' : 'المواصفات'}
@@ -318,21 +375,18 @@ export default function BookDetailsPage() {
           ))}
         </div>
 
-        <div className="bk-tabs__body">
+        <div className="bk3-tab-body">
           {activeTab === 'about' && (
-            <div className="bk-tabs__about">
-              <p>{descriptionText}</p>
-            </div>
+            <div className="bk3-about"><p>{descriptionText}</p></div>
           )}
-
           {activeTab === 'specs' && (
-            <dl className="bk-specs">
-              <div className="bk-specs__row"><dt>المؤلف</dt><dd>{product.author}</dd></div>
-              <div className="bk-specs__row"><dt>التصنيف</dt><dd>{categoryLabel}</dd></div>
-              <div className="bk-specs__row"><dt>نوع المنتج</dt><dd>{product.type || 'كتاب'}</dd></div>
-              <div className="bk-specs__row"><dt>النسخ المتاحة</dt><dd>{variants.length || product.variant_count}</dd></div>
+            <dl className="bk3-specs">
+              <div className="bk3-specs__r"><dt>المؤلف</dt><dd>{product.author}</dd></div>
+              <div className="bk3-specs__r"><dt>التصنيف</dt><dd>{categoryLabel}</dd></div>
+              <div className="bk3-specs__r"><dt>نوع المنتج</dt><dd>{product.type || 'كتاب'}</dd></div>
+              <div className="bk3-specs__r"><dt>النسخ المتاحة</dt><dd>{variants.length || product.variant_count}</dd></div>
               {selectedVariant && (
-                <div className="bk-specs__row">
+                <div className="bk3-specs__r">
                   <dt>النسخة المختارة</dt>
                   <dd>{selectedVariant.variant_name}</dd>
                 </div>
@@ -340,12 +394,24 @@ export default function BookDetailsPage() {
             </dl>
           )}
         </div>
-      </div>
+      </section>
 
-      {/* ── Lightbox ─────────────────────────────────────── */}
+      {/* ── Related ─── */}
+      {related.length > 0 && (
+        <section className="bk3-related" style={{ '--i': 12 } as React.CSSProperties}>
+          <h2 className="bk3-related__hd">كتب قد تعجبك</h2>
+          <div className="bk3-related__grid">
+            {related.slice(0, 4).map((item) => (
+              <ProductCard key={item.product_id} product={item} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Lightbox ─── */}
       {lightboxImage && (
         <div
-          className="image-lightbox"
+          className="bk3-lightbox"
           role="dialog"
           aria-modal="true"
           aria-label={`صورة ${product.title}`}
@@ -353,7 +419,7 @@ export default function BookDetailsPage() {
         >
           <button
             type="button"
-            className="image-lightbox__close"
+            className="bk3-lightbox__close"
             onClick={() => setLightboxImage(null)}
             aria-label="إغلاق"
           >
