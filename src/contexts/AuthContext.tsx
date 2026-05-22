@@ -66,8 +66,8 @@ function getArabicAuthError(message?: string) {
     return 'التسجيل معطّل حالياً. تواصل مع إدارة الموقع.';
   }
 
-  if (value.includes('smtp')) {
-    return 'فشل إرسال البريد الإلكتروني. تحقق من إعدادات البريد في لوحة التحكم.';
+  if (value.includes('smtp') || value.includes('magic link') || value.includes('sending')) {
+    return 'فشل إرسال البريد الإلكتروني. حاول مرة أخرى أو تواصل مع إدارة الموقع.';
   }
 
   if ((value.includes('invalid') || value.includes('format')) && value.includes('email')) {
@@ -215,15 +215,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (error) {
-        // Handle "user not found" gracefully — don't reveal whether the email exists
         const msg = error.message.toLowerCase();
-        if (msg.includes('not found') || msg.includes('no user') || msg.includes('signups not allowed')) {
-          return {
-            error: null,
-            message: 'إذا كان هذا البريد مسجلاً لدينا، سيصلك كود التحقق خلال لحظات.',
-          };
+
+        // Rate limit — tell the user clearly
+        if (msg.includes('rate') || msg.includes('limit')) {
+          return { error: getArabicAuthError(error.message) };
         }
-        return { error: getArabicAuthError(error.message) };
+
+        // For any other error (user not found, magic link failure, etc.)
+        // return a generic success-looking message to prevent email enumeration.
+        // An attacker should not be able to distinguish "user exists but email
+        // failed" from "user does not exist".
+        return {
+          error: null,
+          message: 'إذا كان هذا البريد مسجلاً لدينا، سيصلك كود التحقق خلال لحظات.',
+        };
       }
 
       return {
