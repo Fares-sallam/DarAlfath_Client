@@ -10,7 +10,12 @@ interface OtpInputProps {
 export default function OtpInput({ value, onChange, length = 6, disabled = false }: OtpInputProps) {
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
 
-  const digits = value.padEnd(length, '').split('').slice(0, length);
+  // Build a fixed-length array of single digit strings (or '' for empty slots)
+  const digits: string[] = [];
+  for (let i = 0; i < length; i++) {
+    const ch = value[i];
+    digits.push(ch && /\d/.test(ch) ? ch : '');
+  }
 
   const focusInput = useCallback((index: number) => {
     const el = inputsRef.current[index];
@@ -23,7 +28,8 @@ export default function OtpInput({ value, onChange, length = 6, disabled = false
   const updateDigit = useCallback((index: number, digit: string) => {
     const next = [...digits];
     next[index] = digit;
-    onChange(next.join('').replace(/\s/g, ''));
+    // Join and strip non-digit so the parent always gets a clean numeric string
+    onChange(next.join('').replace(/\D/g, ''));
   }, [digits, onChange]);
 
   const handleChange = useCallback((index: number, e: ChangeEvent<HTMLInputElement>) => {
