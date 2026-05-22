@@ -3695,6 +3695,71 @@ h3,
   font-weight: 900;
 }
 
+/* ── OTP Input ─────────────────────────────────── */
+
+.otp-input {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  direction: ltr;
+}
+
+.otp-input__cell {
+  width: 48px;
+  height: 56px;
+  border: 2px solid rgba(177, 146, 101, 0.35);
+  border-radius: 14px;
+  background: #fffefb;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 900;
+  text-align: center;
+  caret-color: #1d5ab0;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.otp-input__cell:focus {
+  outline: none;
+  border-color: #1d5ab0;
+  box-shadow: 0 0 0 4px rgba(29, 90, 176, 0.14);
+}
+
+.otp-input__cell--filled {
+  border-color: rgba(177, 146, 101, 0.6);
+  background: #faf6ee;
+}
+
+.otp-input__cell:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.auth-input--readonly {
+  opacity: 0.65;
+  cursor: default;
+  background: rgba(177, 146, 101, 0.06) !important;
+}
+
+html.dark .otp-input__cell {
+  background: #0D1847;
+  border-color: #1E2D6B;
+  color: #f0f0f0;
+}
+
+html.dark .otp-input__cell:focus {
+  border-color: #D4A520;
+  box-shadow: 0 0 0 4px rgba(212, 165, 32, 0.18);
+}
+
+html.dark .otp-input__cell--filled {
+  border-color: rgba(212, 165, 32, 0.45);
+  background: #131F55;
+}
+
+html.dark .auth-input--readonly {
+  background: #0a1236 !important;
+}
+
 .auth-alert {
   padding: 8px 10px;
   border-radius: 11px;

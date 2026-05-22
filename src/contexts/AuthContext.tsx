@@ -30,6 +30,8 @@ interface AuthContextValue {
   signUp: (input: SignUpInput) => Promise<AuthResult>;
   verifyEmailCode: (email: string, token: string) => Promise<AuthResult>;
   resendConfirmation: (email: string) => Promise<AuthResult>;
+  sendResetOtp: (email: string) => Promise<AuthResult>;
+  verifyResetOtp: (email: string, token: string) => Promise<AuthResult>;
   resetPassword: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
@@ -199,6 +201,48 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return {
         error: error ? getArabicAuthError(error.message) : null,
         message: `أرسلنا كود تحقق جديد إلى ${email.trim()}.`,
+      };
+    },
+    sendResetOtp: async (email) => {
+      if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email.trim(),
+        options: {
+          shouldCreateUser: false,
+        },
+      });
+
+      if (error) {
+        // Handle "user not found" gracefully — don't reveal whether the email exists
+        const msg = error.message.toLowerCase();
+        if (msg.includes('not found') || msg.includes('no user') || msg.includes('signups not allowed')) {
+          return {
+            error: null,
+            message: 'إذا كان هذا البريد مسجلاً لدينا، سيصلك كود التحقق خلال لحظات.',
+          };
+        }
+        return { error: getArabicAuthError(error.message) };
+      }
+
+      return {
+        error: null,
+        message: 'أرسلنا كود تحقق مكوّن من 6 أرقام إلى بريدك الإلكتروني.',
+      };
+    },
+    verifyResetOtp: async (email, token) => {
+      if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
+
+      const cleanedToken = token.replace(/\D/g, '');
+      const { error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: cleanedToken,
+        type: 'email',
+      });
+
+      return {
+        error: error ? getArabicAuthError(error.message) : null,
+        message: 'تم التحقق بنجاح. اختر كلمة مرور جديدة.',
       };
     },
     resetPassword: async (email) => {

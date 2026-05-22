@@ -2,8 +2,9 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BookOpen, ChevronLeft, CheckCircle2, Download, Heart, LogOut, PackageCheck, ShieldCheck, UserRound } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import OtpInput from '@/components/OtpInput';
 
-type AuthMode = 'login' | 'signup' | 'verify' | 'forgot' | 'reset';
+type AuthMode = 'login' | 'signup' | 'verify' | 'forgot' | 'forgot-verify' | 'reset';
 
 const initialForm = {
   fullName: '',
@@ -35,7 +36,8 @@ export default function AccountPage() {
     signUp,
     verifyEmailCode,
     resendConfirmation,
-    resetPassword,
+    sendResetOtp,
+    verifyResetOtp,
     updatePassword,
     signOut,
   } = useAuth();
@@ -131,12 +133,12 @@ export default function AccountPage() {
 
     if (mode === 'forgot') {
       if (!form.email.trim()) {
-        setError('أدخل البريد الإلكتروني لإرسال رابط إعادة التعيين.');
+        setError('أدخل البريد الإلكتروني لإرسال كود التحقق.');
         return;
       }
 
       setSubmitting(true);
-      const result = await resetPassword(form.email);
+      const result = await sendResetOtp(form.email);
       setSubmitting(false);
 
       if (result.error) {
@@ -144,7 +146,35 @@ export default function AccountPage() {
         return;
       }
 
-      setNotice(result.message || 'تم إرسال رابط إعادة التعيين.');
+      setNotice(result.message || 'تم إرسال كود التحقق.');
+      switchMode('forgot-verify');
+      setForm((prev) => ({ ...initialForm, email: prev.email }));
+      return;
+    }
+
+    if (mode === 'forgot-verify') {
+      if (!form.email.trim()) {
+        setError('أدخل البريد الإلكتروني المرتبط بحسابك.');
+        return;
+      }
+
+      if (form.verificationCode.replace(/\D/g, '').length !== 6) {
+        setError('أدخل كود التحقق المكوّن من 6 أرقام.');
+        return;
+      }
+
+      setSubmitting(true);
+      const result = await verifyResetOtp(form.email, form.verificationCode);
+      setSubmitting(false);
+
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setNotice(result.message || 'تم التحقق بنجاح.');
+      switchMode('reset');
+      setForm((prev) => ({ ...initialForm, email: prev.email }));
       return;
     }
 
@@ -250,6 +280,27 @@ export default function AccountPage() {
     }
 
     setNotice(result.message || 'تم إرسال رسالة التحقق مرة أخرى.');
+  };
+
+  const handleResendResetOtp = async () => {
+    setError('');
+    setNotice('');
+
+    if (!form.email.trim()) {
+      setError('أدخل البريد الإلكتروني أولاً.');
+      return;
+    }
+
+    setSubmitting(true);
+    const result = await sendResetOtp(form.email);
+    setSubmitting(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    setNotice(result.message || 'تم إرسال كود تحقق جديد.');
   };
 
   if (loading) {
@@ -393,20 +444,24 @@ export default function AccountPage() {
           <h1>
             {mode === 'forgot'
               ? 'استرجاع كلمة المرور'
-              : mode === 'reset'
-                ? 'كلمة مرور جديدة'
-                : mode === 'verify'
-                  ? 'تحقق من بريدك'
-                  : 'أهلًا بك في دار الفتح'}
+              : mode === 'forgot-verify'
+                ? 'أدخل كود التحقق'
+                : mode === 'reset'
+                  ? 'كلمة مرور جديدة'
+                  : mode === 'verify'
+                    ? 'تحقق من بريدك'
+                    : 'أهلًا بك في دار الفتح'}
           </h1>
           <p>
             {mode === 'verify'
               ? 'أرسلنا كود مكوّن من 6 أرقام إلى بريدك الإلكتروني. أدخله لتأكيد حسابك والبدء في التسوق.'
               : mode === 'forgot'
-                ? 'أدخل بريدك الإلكتروني وسنرسل لك رابطاً لإعادة تعيين كلمة المرور فوراً.'
-                : mode === 'reset'
-                  ? 'اختر كلمة مرور جديدة قوية لحماية حسابك.'
-                  : 'سجّل حسابك في دقيقة وتمتع بتجربة تسوق مريحة وآمنة — تابع طلباتك واحفظ مفضلتك في أي وقت.'}
+                ? 'أدخل بريدك الإلكتروني وسنرسل لك كود تحقق مكوّن من 6 أرقام لإعادة تعيين كلمة المرور.'
+                : mode === 'forgot-verify'
+                  ? 'أرسلنا كود تحقق مكوّن من 6 أرقام إلى بريدك. أدخله لتأكيد هويتك واختيار كلمة مرور جديدة.'
+                  : mode === 'reset'
+                    ? 'اختر كلمة مرور جديدة قوية لحماية حسابك.'
+                    : 'سجّل حسابك في دقيقة وتمتع بتجربة تسوق مريحة وآمنة — تابع طلباتك واحفظ مفضلتك في أي وقت.'}
           </p>
 
           <div className="auth-benefits">
@@ -448,9 +503,11 @@ export default function AccountPage() {
               <b>
                 {mode === 'forgot'
                   ? 'نسيت كلمة المرور'
-                  : mode === 'verify'
-                    ? 'كود التحقق'
-                    : 'تعيين كلمة مرور جديدة'}
+                  : mode === 'forgot-verify'
+                    ? 'كود إعادة التعيين'
+                    : mode === 'verify'
+                      ? 'كود التحقق'
+                      : 'تعيين كلمة مرور جديدة'}
               </b>
               <button type="button" onClick={() => switchMode('login')}>
                 العودة لتسجيل الدخول
@@ -479,6 +536,8 @@ export default function AccountPage() {
                 onChange={(event) => updateField('email', event.target.value)}
                 placeholder="name@example.com"
                 autoComplete="email"
+                readOnly={mode === 'forgot-verify'}
+                className={mode === 'forgot-verify' ? 'auth-input--readonly' : ''}
               />
             </label>
           ) : null}
@@ -486,19 +545,26 @@ export default function AccountPage() {
           {mode === 'verify' ? (
             <label>
               كود التحقق
-              <input
+              <OtpInput
                 value={form.verificationCode}
-                onChange={(event) => updateField('verificationCode', event.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="000000"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={6}
-                className="auth-code-input"
+                onChange={(val) => updateField('verificationCode', val)}
+                disabled={submitting}
               />
             </label>
           ) : null}
 
-          {mode !== 'forgot' && mode !== 'verify' ? (
+          {mode === 'forgot-verify' ? (
+            <label>
+              كود إعادة التعيين
+              <OtpInput
+                value={form.verificationCode}
+                onChange={(val) => updateField('verificationCode', val)}
+                disabled={submitting}
+              />
+            </label>
+          ) : null}
+
+          {mode !== 'forgot' && mode !== 'forgot-verify' && mode !== 'verify' ? (
             <label>
               {mode === 'reset' ? 'كلمة المرور الجديدة' : 'كلمة المرور'}
               <input
@@ -536,9 +602,11 @@ export default function AccountPage() {
                   ? 'إنشاء الحساب وإرسال التأكيد'
                   : mode === 'verify'
                     ? 'تأكيد الكود'
-                  : mode === 'forgot'
-                    ? 'إرسال رابط إعادة التعيين'
-                    : 'حفظ كلمة المرور الجديدة'}
+                    : mode === 'forgot'
+                      ? 'إرسال كود التحقق'
+                      : mode === 'forgot-verify'
+                        ? 'تأكيد الكود'
+                        : 'حفظ كلمة المرور الجديدة'}
           </button>
 
           {mode === 'verify' ? (
@@ -546,6 +614,15 @@ export default function AccountPage() {
               لم يصلك الكود؟{' '}
               <button type="button" onClick={handleResendConfirmation} disabled={submitting}>
                 إعادة إرسال التحقق
+              </button>
+            </p>
+          ) : null}
+
+          {mode === 'forgot-verify' ? (
+            <p className="auth-footnote">
+              لم يصلك الكود؟{' '}
+              <button type="button" onClick={handleResendResetOtp} disabled={submitting}>
+                إعادة إرسال كود التحقق
               </button>
             </p>
           ) : null}
