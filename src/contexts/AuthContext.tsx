@@ -5,6 +5,8 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 type AuthResult = {
   error: string | null;
   message?: string;
+  /** True when signup auto-confirmed (no OTP needed) */
+  autoConfirmed?: boolean;
 };
 
 export type AuthEvent =
@@ -148,7 +150,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp: async ({ email, password, fullName }) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -164,9 +166,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: getArabicAuthError(error.message) };
       }
 
+      // When mailer_autoconfirm is enabled, Supabase returns a session
+      // immediately — the user is already logged in, no OTP needed.
+      const autoConfirmed = !!data.session;
+
       return {
         error: null,
-        message: 'تم إنشاء حسابك بنجاح! يمكنك تسجيل الدخول الآن.',
+        autoConfirmed,
+        message: autoConfirmed
+          ? 'تم إنشاء حسابك بنجاح! مرحبًا بك في دار الفتح.'
+          : 'تم إنشاء حسابك! تحقق من بريدك الإلكتروني لتأكيد الحساب.',
       };
     },
     verifyEmailCode: async (email, token) => {
@@ -182,8 +191,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
+      if (error) {
+        return { error: getArabicAuthError(error.message) };
+      }
+
       return {
-        error: error ? getArabicAuthError(error.message) : null,
+        error: null,
         message: 'تم تأكيد البريد بنجاح. يمكنك استخدام حسابك الآن.',
       };
     },
@@ -199,8 +212,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       });
 
+      if (error) {
+        const msg = error.message.toLowerCase();
+
+        // Rate limit — tell the user clearly
+        if (msg.includes('rate') || msg.includes('limit')) {
+          return { error: getArabicAuthError(error.message) };
+        }
+
+        // Generic message to prevent email enumeration — don't reveal
+        // whether the email is registered or not.
+        return {
+          error: null,
+          message: `إذا كان البريد مسجلاً، سيصلك كود تحقق جديد إلى ${email.trim()}.`,
+        };
+      }
+
       return {
-        error: error ? getArabicAuthError(error.message) : null,
+        error: null,
         message: `أرسلنا كود تحقق جديد إلى ${email.trim()}.`,
       };
     },
@@ -247,8 +276,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         type: 'email',
       });
 
+      if (error) {
+        return { error: getArabicAuthError(error.message) };
+      }
+
       return {
-        error: error ? getArabicAuthError(error.message) : null,
+        error: null,
         message: 'تم التحقق بنجاح. اختر كلمة مرور جديدة.',
       };
     },

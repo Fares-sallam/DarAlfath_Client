@@ -280,6 +280,13 @@ export default function AccountPage() {
 
     setNotice(result.message || 'تمت العملية بنجاح.');
     if (mode === 'signup') {
+      // If auto-confirmed (mailer_autoconfirm enabled), the user is already
+      // signed in — go straight to profile instead of the OTP verify screen.
+      if (result.autoConfirmed) {
+        setForm(initialForm);
+        return;
+      }
+
       setPendingSignupPassword(form.password);
       setMode('verify');
       setForm((prev) => ({
