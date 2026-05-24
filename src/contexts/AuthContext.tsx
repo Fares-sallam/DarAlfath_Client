@@ -34,7 +34,6 @@ interface AuthContextValue {
   resendConfirmation: (email: string) => Promise<AuthResult>;
   sendResetOtp: (email: string) => Promise<AuthResult>;
   verifyResetOtp: (email: string, token: string) => Promise<AuthResult>;
-  resetPassword: (email: string) => Promise<AuthResult>;
   updatePassword: (password: string) => Promise<AuthResult>;
   signOut: () => Promise<AuthResult>;
 }
@@ -56,7 +55,7 @@ function getArabicAuthError(message?: string) {
     return 'الكود غير صحيح أو انتهت صلاحيته. اطلب كودًا جديدًا وحاول مرة أخرى.';
   }
 
-  if (value.includes('user already registered') || value.includes('already')) {
+  if (value.includes('user already registered') || value.includes('already been registered')) {
     return 'هذا البريد مسجل بالفعل. جرّب تسجيل الدخول بدل إنشاء حساب.';
   }
 
@@ -283,18 +282,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return {
         error: null,
         message: 'تم التحقق بنجاح. اختر كلمة مرور جديدة.',
-      };
-    },
-    resetPassword: async (email) => {
-      if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: getRedirectUrl('/account?mode=reset'),
-      });
-
-      return {
-        error: error ? getArabicAuthError(error.message) : null,
-        message: 'أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك الإلكتروني.',
       };
     },
     updatePassword: async (password) => {

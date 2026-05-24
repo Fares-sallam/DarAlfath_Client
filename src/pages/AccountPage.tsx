@@ -110,6 +110,8 @@ export default function AccountPage() {
     setMode(nextMode);
     setError('');
     setNotice('');
+    // Clear sensitive data when switching away from signup/verify flow
+    if (nextMode !== 'verify') setPendingSignupPassword('');
   };
 
   const handleSubmit = async (event: FormEvent) => {
