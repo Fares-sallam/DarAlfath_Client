@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 // HMAC Secret من Paymob — إجباري للتحقق من أصل الطلب
@@ -70,6 +71,12 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   try {
     const supabase = createClient(
@@ -120,15 +127,36 @@ Deno.serve(async (req) => {
       return jsonOk({ received: true });
     }
 
+    const { data: existingPayment } = await supabase
+      .from('pending_payments')
+      .select('status, resulting_order_id, paymob_order_id, coupon_code')
+      .eq('merchant_order_id', merchantOrderId)
+      .maybeSingle();
+
+    if (existingPayment?.status === 'completed') {
+      console.log(`[paymob-webhook] Payment already completed for ${merchantOrderId}`);
+      return jsonOk({ received: true, already: true, orderId: existingPayment.resulting_order_id });
+    }
+
+    if (!success && !pending && (
+      existingPayment?.status === 'failed' ||
+      existingPayment?.status === 'cancelled' ||
+      existingPayment?.status === 'expired'
+    )) {
+      console.log(`[paymob-webhook] Payment already closed as ${existingPayment.status} for ${merchantOrderId}`);
+      return jsonOk({ received: true, already: true });
+    }
+
     if (success && !pending) {
       // ── دفع ناجح: تأكيد الطلب وخصم المخزون ─────────────────────────────────
-      const { data, error } = await supabase.rpc('confirm_online_payment', {
-        p_order_id:       merchantOrderId,
-        p_transaction_id: transactionId,
+      const { data, error } = await supabase.rpc('complete_pending_payment', {
+        p_merchant_order_id:     merchantOrderId,
+        p_paymob_order_id:       String(paymobOrder.id ?? existingPayment?.paymob_order_id ?? ''),
+        p_paymob_transaction_id: transactionId,
       });
 
-      if (error) {
-        console.error('[paymob-webhook] confirm_online_payment error:', error.message);
+      if (error || !data?.success) {
+        console.error('[paymob-webhook] complete_pending_payment error:', error?.message ?? data?.error);
         // Return 500 so Paymob retries — the payment was real but our processing failed
         return new Response(JSON.stringify({ error: 'Internal processing failed' }), {
           status: 500,
@@ -138,19 +166,14 @@ Deno.serve(async (req) => {
       console.log('[paymob-webhook] Order confirmed:', JSON.stringify(data));
     } else if (!pending) {
       // ── دفع فاشل (ليس pending): إلغاء الطلب ─────────────────────────────────
-      // Fetch coupon_code BEFORE cancellation changes the row
-      const { data: pendingRow } = await supabase
-        .from('pending_payments')
-        .select('coupon_code')
-        .eq('merchant_order_id', merchantOrderId)
-        .maybeSingle();
-
-      const { data, error } = await supabase.rpc('cancel_pending_payment_order', {
-        p_order_id: merchantOrderId,
+      const failureData = (obj.data ?? {}) as Record<string, unknown>;
+      const { data, error } = await supabase.rpc('cancel_pending_payment', {
+        p_merchant_order_id: merchantOrderId,
+        p_reason: String(failureData.message ?? 'فشل الدفع'),
       });
 
       if (error) {
-        console.error('[paymob-webhook] cancel_pending_payment_order error:', error.message);
+        console.error('[paymob-webhook] cancel_pending_payment error:', error.message);
         // Return 500 so Paymob retries — we failed to process the cancellation
         return new Response(JSON.stringify({ error: 'Internal processing failed' }), {
           status: 500,
@@ -159,10 +182,10 @@ Deno.serve(async (req) => {
       }
 
       // Release coupon if one was claimed with this pending payment
-      if (pendingRow?.coupon_code) {
+      if (existingPayment?.coupon_code) {
         try {
-          await supabase.rpc('release_coupon', { p_coupon_code: pendingRow.coupon_code });
-          console.log(`[paymob-webhook] Coupon ${pendingRow.coupon_code} released`);
+          await supabase.rpc('release_coupon', { p_coupon_code: existingPayment.coupon_code });
+          console.log(`[paymob-webhook] Coupon ${existingPayment.coupon_code} released`);
         } catch (e) {
           console.warn('[paymob-webhook] release_coupon failed:', e);
         }
@@ -177,7 +200,10 @@ Deno.serve(async (req) => {
     return jsonOk({ received: true });
   } catch (err) {
     console.error('[paymob-webhook] Unexpected error:', err);
-    // نرجع 200 عشان Paymob ما يعيدش المحاولة بشكل متكرر
-    return jsonOk({ received: true, error: err instanceof Error ? err.message : 'unknown' });
+    // Return 500 so Paymob retries unexpected processing failures.
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : 'unknown' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });

@@ -13,7 +13,26 @@ supabase/migrations/001_stock_management.sql
 - Trigger `trg_restore_stock_on_cancellation` (يُعيد المخزون تلقائياً عند الإلغاء)
 - Constraint يمنع المخزون من الانخفاض لأقل من صفر
 
-## 2. نشر Edge Function
+## 2. ضبط أسرار Edge Functions
+
+قبل النشر على الإنتاج، اضبط الأسرار التالية من Supabase CLI أو Dashboard:
+
+```bash
+supabase secrets set INTERNAL_FUNCTION_SECRET="ضع_قيمة_طويلة_عشوائية"
+```
+
+هذا السر يحمي دالة إرسال البريد من الاستدعاء العام، ويجب أن تكون نفس القيمة متاحة لكل دوال الطلب والدفع.
+
+لتحصين إنشاء الطلبات ضد الإرسال الآلي، يمكن تفعيل Cloudflare Turnstile:
+
+```bash
+supabase secrets set REQUIRE_TURNSTILE="true"
+supabase secrets set TURNSTILE_SECRET_KEY="ضع_secret_key_من_Cloudflare"
+```
+
+لا تفعل `REQUIRE_TURNSTILE=true` إلا بعد ضبط `VITE_TURNSTILE_SITE_KEY` في الواجهة ونشرها، حتى لا تُرفض طلبات العملاء.
+
+## 3. نشر Edge Function
 
 ### باستخدام Supabase CLI:
 ```bash
@@ -26,8 +45,14 @@ supabase login
 # ربط المشروع (استبدل PROJECT_REF بمعرّف مشروعك)
 supabase link --project-ref tpwjhkbzppsruboygmzm
 
-# نشر الدالة
+# نشر دالة الطلب المباشر
 supabase functions deploy create-storefront-order --no-verify-jwt
+
+# دوال الدفع والبريد المستخدمة في مسار الشراء
+supabase functions deploy initiate-paymob-payment --no-verify-jwt
+supabase functions deploy check-paymob-transaction --no-verify-jwt
+supabase functions deploy paymob-webhook --no-verify-jwt
+supabase functions deploy send-order-email --no-verify-jwt
 ```
 
 ### أو يدوياً من Dashboard:
@@ -35,7 +60,7 @@ supabase functions deploy create-storefront-order --no-verify-jwt
 واسمها: `create-storefront-order`
 ثم انسخ محتوى: `supabase/functions/create-storefront-order/index.ts`
 
-## 3. التحقق من عمل المنظومة
+## 4. التحقق من عمل المنظومة
 
 ### اختبار خصم المخزون:
 1. أنشئ طلباً بكتاب ورقي عدد نسخه مثلاً 5
@@ -49,7 +74,7 @@ supabase functions deploy create-storefront-order --no-verify-jwt
 - إذا كانت آخر نسخة متبقية وأرسل شخصان طلبين في نفس اللحظة
 - سيُكمَل طلب واحد فقط، والآخر يحصل على رسالة: "المخزون غير كافٍ"
 
-## 4. عمود download_url في order_items (اختياري)
+## 5. عمود download_url في order_items (اختياري)
 
 لدعم روابط التحميل في DownloadsPage، أضف العمود:
 
@@ -57,7 +82,7 @@ supabase functions deploy create-storefront-order --no-verify-jwt
 ALTER TABLE order_items ADD COLUMN IF NOT EXISTS download_url TEXT;
 ```
 
-## 5. ملاحظات هامة
+## 6. ملاحظات هامة
 
 - **الكتب الرقمية** (`is_digital = true`): لا يُخصم منها مخزون أبداً
 - **الكتب الورقية** (`is_digital = false`) فقط: يُخصم ويُعاد

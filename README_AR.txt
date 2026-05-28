@@ -19,4 +19,14 @@
    رمز التحقق الخاص بك هو: {{ .Token }}
    أو استخدم رابط التحقق:
    {{ .ConfirmationURL }}
-9) شغّل npm run dev
+9) اختياري لتحصين صفحة إتمام الطلب:
+   - أنشئ موقع Cloudflare Turnstile
+   - ضع مفتاح الواجهة في .env.local:
+     VITE_TURNSTILE_SITE_KEY=your_turnstile_site_key
+   - لا تضبط REQUIRE_TURNSTILE=true في Supabase إلا بعد نشر مفتاح الواجهة
+10) في Supabase Edge Function Secrets اضبط:
+   INTERNAL_FUNCTION_SECRET=قيمة_سرية_طويلة
+   ولتفعيل Turnstile على السيرفر:
+   REQUIRE_TURNSTILE=true
+   TURNSTILE_SECRET_KEY=your_turnstile_secret_key
+11) شغّل npm run dev

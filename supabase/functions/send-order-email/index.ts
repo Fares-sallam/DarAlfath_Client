@@ -15,12 +15,14 @@ import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 const GMAIL_USER         = Deno.env.get('GMAIL_USER')         ?? '';
 const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD') ?? '';
 const ADMIN_EMAIL        = Deno.env.get('ADMIN_EMAIL')        ?? 'store@darolfath.com';
 const SITE_URL           = Deno.env.get('SITE_URL')           ?? 'https://dar-alfath-client.vercel.app';
+const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
 
 function jsonOk(data: unknown) {
   return new Response(JSON.stringify(data), {
@@ -230,8 +232,26 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 
   try {
+    if (INTERNAL_FUNCTION_SECRET) {
+      const receivedSecret = req.headers.get('x-internal-function-secret') ?? '';
+      if (receivedSecret !== INTERNAL_FUNCTION_SECRET) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } else {
+      console.warn('[email] INTERNAL_FUNCTION_SECRET not set — public invocation is allowed');
+    }
+
     if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
       console.warn('[email] GMAIL_USER or GMAIL_APP_PASSWORD not set — skipping');
       return jsonOk({ skipped: true, reason: 'gmail credentials missing' });

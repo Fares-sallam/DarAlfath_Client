@@ -20,12 +20,21 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 const PAYMOB_API_KEY = Deno.env.get('PAYMOB_API_KEY') ?? '';
+const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
 
 function jsonOk(data: unknown) {
   return new Response(JSON.stringify(data), {
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}
+
+function jsonError(message: string, status = 400) {
+  return new Response(JSON.stringify({ status: 'error', error: message }), {
+    status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
@@ -45,6 +54,9 @@ interface PaymobTxn {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+  if (req.method !== 'POST') {
+    return jsonError('Method not allowed', 405);
   }
 
   try {
@@ -198,6 +210,9 @@ Deno.serve(async (req) => {
       try {
         await supabase.functions.invoke('send-order-email', {
           body: { orderId: result.order_id },
+          headers: INTERNAL_FUNCTION_SECRET
+            ? { 'x-internal-function-secret': INTERNAL_FUNCTION_SECRET }
+            : undefined,
         });
       } catch (e) {
         console.warn('[check-paymob] email dispatch failed:', e);

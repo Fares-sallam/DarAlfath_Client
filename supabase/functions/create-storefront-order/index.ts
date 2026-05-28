@@ -3,7 +3,71 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
+const TURNSTILE_SECRET_KEY = Deno.env.get('TURNSTILE_SECRET_KEY') ?? '';
+const REQUIRE_TURNSTILE = (Deno.env.get('REQUIRE_TURNSTILE') ?? '').toLowerCase() === 'true';
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 12;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function getClientIp(req: Request): string {
+  return (
+    req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-real-ip') ||
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
+  );
+}
+
+function getRateLimitError(req: Request): string | null {
+  const now = Date.now();
+  const key = `create-order:${getClientIp(req)}`;
+  const current = rateBuckets.get(key);
+
+  if (rateBuckets.size > 1000) {
+    for (const [bucketKey, bucket] of rateBuckets) {
+      if (bucket.resetAt <= now) rateBuckets.delete(bucketKey);
+    }
+  }
+
+  if (!current || current.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return null;
+  }
+
+  current.count += 1;
+  if (current.count > RATE_LIMIT_MAX) {
+    return 'تم إرسال طلبات كثيرة خلال وقت قصير. حاول مرة أخرى بعد دقائق.';
+  }
+  return null;
+}
+
+async function verifyTurnstile(token: string | null | undefined, clientIp: string): Promise<boolean> {
+  if (!REQUIRE_TURNSTILE) return true;
+  if (!TURNSTILE_SECRET_KEY || !token) return false;
+
+  try {
+    const formData = new FormData();
+    formData.set('secret', TURNSTILE_SECRET_KEY);
+    formData.set('response', token);
+    if (clientIp !== 'unknown') formData.set('remoteip', clientIp);
+
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) return false;
+
+    const result = (await res.json()) as { success?: boolean };
+    return result.success === true;
+  } catch (err) {
+    console.warn('[create-order] Turnstile verification failed:', err);
+    return false;
+  }
+}
 
 function jsonError(message: string, status = 400) {
   return new Response(JSON.stringify({ error: message }), {
@@ -22,6 +86,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return jsonError('Method not allowed', 405);
+  }
+  const rateLimitError = getRateLimitError(req);
+  if (rateLimitError) {
+    return jsonError(rateLimitError, 429);
+  }
 
   try {
     // Use service role key so the function bypasses RLS and can write to orders
@@ -31,16 +102,29 @@ Deno.serve(async (req) => {
     );
 
     const body = await req.json();
-    const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items, paymentType, couponCode } = body;
-    // paymentType: 'cod' | 'online'  — 'online' = Paymob (no immediate stock deduction)
+    const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items, paymentType, couponCode, turnstileToken } = body;
+    // Paymob/online payments must go through initiate-paymob-payment.
 
     // ── Basic validation ──────────────────────────────────────────────────────
     if (!Array.isArray(items) || items.length === 0) {
       return jsonError('لا توجد منتجات في الطلب.');
     }
+    if (items.length > 50) {
+      return jsonError('عدد المنتجات في الطلب كبير جداً.');
+    }
 
     if (!customer?.fullName || !customer?.email || !customer?.phone) {
       return jsonError('بيانات العميل غير مكتملة.');
+    }
+    const customerEmail = String(customer.email ?? '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      return jsonError('البريد الإلكتروني غير صالح.');
+    }
+    if (!(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
+      return jsonError('تعذر التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.', 403);
+    }
+    if (paymentType === 'online') {
+      return jsonError('الدفع الإلكتروني يجب أن يبدأ عبر بوابة Paymob فقط.');
     }
 
     // ── Resolve authenticated user (optional) ────────────────────────────────
@@ -96,6 +180,24 @@ Deno.serve(async (req) => {
       });
       paymentMethodId = matched?.id ?? null;
     }
+    if (!paymentMethodId) {
+      return jsonError('طريقة الدفع غير صالحة.');
+    }
+
+    const { data: paymentMethodRow, error: paymentMethodError } = await supabase
+      .from('payment_methods')
+      .select('id, provider, is_active')
+      .eq('id', paymentMethodId)
+      .maybeSingle();
+
+    if (paymentMethodError || !paymentMethodRow || paymentMethodRow.is_active === false) {
+      return jsonError('طريقة الدفع غير متاحة حالياً.');
+    }
+
+    const providerName = String(paymentMethodRow.provider ?? '').toLowerCase().trim();
+    if (providerName.startsWith('paymob')) {
+      return jsonError('طريقة Paymob يجب أن تتم من مسار الدفع الإلكتروني فقط.');
+    }
 
     // ── إعادة جلب الأسعار الحقيقية من قاعدة البيانات (لا نثق بسعر العميل) ──
     // التحقق أن كل عنصر يحتوي على variant_id
@@ -142,7 +244,7 @@ Deno.serve(async (req) => {
         v.variant_type === 'رقمي' ||
         v.variant_type === 'digital';
       // Digital items are always quantity 1 (no reason to buy multiple copies)
-      const qty = isDigital ? 1 : Math.max(1, Math.floor(Number(item.quantity) || 1));
+      const qty = isDigital ? 1 : Math.min(99, Math.max(1, Math.floor(Number(item.quantity) || 1)));
       verifiedItems.push({
         product_id:     v.product_id ?? item.product_id,
         variant_id:     item.variant_id,
@@ -177,13 +279,8 @@ Deno.serve(async (req) => {
       serverShipping = qualifiesFreeShipping ? 0 : flatRate;
     }
 
-    // ── اختيار الـ RPC المناسب حسب نوع الدفع ────────────────────────────────
-    // online (Paymob): إنشاء الطلب بدون خصم مخزون — يُخصم بعد تأكيد الدفع
-    // cod/bank:        إنشاء الطلب + خصم المخزون فوراً (السلوك الحالي)
-    const isOnlinePayment = paymentType === 'online';
-    const rpcName = isOnlinePayment
-      ? 'create_order_pending_payment'
-      : 'create_order_with_stock_deduction';
+    // ── إنشاء الطلب + خصم المخزون فوراً لطرق الدفع غير Paymob ─────────────
+    const rpcName = 'create_order_with_stock_deduction';
 
     console.log(`[create-order] paymentType=${paymentType} → rpc=${rpcName} serverShipping=${serverShipping}`);
 
@@ -272,14 +369,15 @@ Deno.serve(async (req) => {
             // ── Atomic: claim coupon via DB-side `used_count + 1` ──
             // Prevents lost updates from concurrent orders.
             // Returns false if coupon is exhausted (used_count >= max_uses).
-            const { data: couponClaimed } = await supabase.rpc('claim_coupon', {
+            const { data: couponClaimed, error: claimError } = await supabase.rpc('claim_coupon', {
               p_coupon_id: coupon.id,
             });
+            if (claimError) throw claimError;
 
             if (couponClaimed) {
               const newTotal = subtotal - discountAmount + newShipping;
 
-              await supabase
+              const { error: updateCouponError } = await supabase
                 .from('orders')
                 .update({
                   coupon_id: coupon.id,
@@ -289,7 +387,16 @@ Deno.serve(async (req) => {
                 })
                 .eq('id', rpcData.id);
 
-              console.log(`[create-order] Coupon ${trimmedCode} applied: discount=${discountAmount} shipping=${newShipping} total=${newTotal}`);
+              if (updateCouponError) {
+                console.warn('[create-order] Coupon order update failed:', updateCouponError.message);
+                try {
+                  await supabase.rpc('release_coupon', { p_coupon_code: trimmedCode });
+                } catch (releaseErr) {
+                  console.warn('[create-order] release_coupon after update failure failed:', releaseErr);
+                }
+              } else {
+                console.log(`[create-order] Coupon ${trimmedCode} applied: discount=${discountAmount} shipping=${newShipping} total=${newTotal}`);
+              }
             } else {
               console.log(`[create-order] Coupon ${trimmedCode} exhausted (max_uses=${coupon.max_uses}) — discount NOT applied`);
             }
@@ -326,6 +433,9 @@ Deno.serve(async (req) => {
       try {
         await supabase.functions.invoke('send-order-email', {
           body: { orderId: rpcData.id },
+          headers: INTERNAL_FUNCTION_SECRET
+            ? { 'x-internal-function-secret': INTERNAL_FUNCTION_SECRET }
+            : undefined,
         });
       } catch (e) {
         console.warn('[create-order] email dispatch failed (degraded path):', e);
@@ -337,6 +447,9 @@ Deno.serve(async (req) => {
     try {
       await supabase.functions.invoke('send-order-email', {
         body: { orderId: rpcData.id },
+        headers: INTERNAL_FUNCTION_SECRET
+          ? { 'x-internal-function-secret': INTERNAL_FUNCTION_SECRET }
+          : undefined,
       });
     } catch (e) {
       console.warn('[create-order] email dispatch failed:', e);

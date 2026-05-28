@@ -14,6 +14,26 @@ import {
   type StorefrontOrder,
 } from '@/lib/storefrontOrders';
 
+declare global {
+  interface Window {
+    turnstile?: {
+      render: (
+        container: HTMLElement,
+        options: {
+          sitekey: string;
+          callback: (token: string) => void;
+          'expired-callback'?: () => void;
+          'error-callback'?: () => void;
+          language?: string;
+          theme?: 'light' | 'dark' | 'auto';
+        }
+      ) => string;
+      reset: (widgetId?: string) => void;
+      remove?: (widgetId: string) => void;
+    };
+  }
+}
+
 // ── بيانات المحافظات والمدن المصرية ───────────────────────────────────────
 const EGYPT_REGIONS: Record<string, string[]> = {
   'القاهرة':       ['القاهرة', 'مدينة نصر', 'هليوبوليس', 'المعادي', 'الزيتون', 'شبرا', 'عين شمس', 'المطرية', 'التجمع الخامس', 'مدينة بدر', 'المقطم', 'السلام', 'الخليفة'],
@@ -100,6 +120,12 @@ export default function CheckoutPage() {
   const [paymobStatusMsg, setPaymobStatusMsg] = useState<string>('جارٍ إنتظار تأكيد الدفع...');
   const pollAbortRef = useRef<{ cancelled: boolean }>({ cancelled: false });
 
+  const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim();
+  const captchaEnabled = Boolean(turnstileSiteKey);
+  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
+  const turnstileWidgetRef = useRef<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState('');
+
   // ── Coupon state ──────────────────────────────────────────
   const [couponCode, setCouponCode] = useState('');
   const [couponLoading, setCouponLoading] = useState(false);
@@ -128,9 +154,10 @@ export default function CheckoutPage() {
       form.phone.trim() &&
       form.governorate.trim() &&
       form.city.trim() &&
-      form.address.trim()
+      form.address.trim() &&
+      (!captchaEnabled || turnstileToken)
     );
-  }, [items.length, selectedPaymentId, form]);
+  }, [captchaEnabled, items.length, selectedPaymentId, form, turnstileToken]);
 
   // Diagnostic: list the missing fields so the user knows exactly what's wrong
   const missingFields = useMemo(() => {
@@ -143,8 +170,9 @@ export default function CheckoutPage() {
     if (!form.governorate.trim()) missing.push('المحافظة');
     if (!form.city.trim()) missing.push('المدينة');
     if (!form.address.trim()) missing.push('العنوان');
+    if (captchaEnabled && !turnstileToken) missing.push('التحقق الأمني');
     return missing;
-  }, [items.length, selectedPaymentId, form]);
+  }, [captchaEnabled, items.length, selectedPaymentId, form, turnstileToken]);
 
   const updateField = <K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) => {
     setForm((prev) => ({
@@ -291,6 +319,62 @@ export default function CheckoutPage() {
     setCouponError('');
   };
 
+  useEffect(() => {
+    if (!captchaEnabled || !turnstileSiteKey || !turnstileContainerRef.current) return undefined;
+
+    let cancelled = false;
+    const renderTurnstile = () => {
+      if (
+        cancelled ||
+        !window.turnstile ||
+        !turnstileContainerRef.current ||
+        turnstileWidgetRef.current
+      ) {
+        return;
+      }
+
+      turnstileWidgetRef.current = window.turnstile.render(turnstileContainerRef.current, {
+        sitekey: turnstileSiteKey,
+        language: 'ar',
+        theme: 'auto',
+        callback: (token) => setTurnstileToken(token),
+        'expired-callback': () => setTurnstileToken(''),
+        'error-callback': () => setTurnstileToken(''),
+      });
+    };
+
+    let script = document.querySelector<HTMLScriptElement>('script[data-turnstile-script="true"]');
+    if (window.turnstile) {
+      renderTurnstile();
+    } else {
+      if (!script) {
+        script = document.createElement('script');
+        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+        script.async = true;
+        script.defer = true;
+        script.dataset.turnstileScript = 'true';
+        document.head.appendChild(script);
+      }
+      script.addEventListener('load', renderTurnstile);
+    }
+
+    return () => {
+      cancelled = true;
+      script?.removeEventListener('load', renderTurnstile);
+      if (turnstileWidgetRef.current && window.turnstile?.remove) {
+        window.turnstile.remove(turnstileWidgetRef.current);
+      }
+      turnstileWidgetRef.current = null;
+      setTurnstileToken('');
+    };
+  }, [captchaEnabled, turnstileSiteKey]);
+
+  const resetTurnstile = () => {
+    if (!captchaEnabled || !turnstileWidgetRef.current || !window.turnstile) return;
+    window.turnstile.reset(turnstileWidgetRef.current);
+    setTurnstileToken('');
+  };
+
   // Clear coupon when cart/country changes
   useEffect(() => {
     setAppliedCoupon(null);
@@ -420,6 +504,7 @@ export default function CheckoutPage() {
               is_digital: i.is_digital,
             })),
             couponCode: appliedCoupon?.code || null,
+            turnstileToken: captchaEnabled ? turnstileToken : null,
           },
         });
 
@@ -477,6 +562,7 @@ export default function CheckoutPage() {
         shipping,
         paymentType:     'cod',
         couponCode:      appliedCoupon?.code || undefined,
+        turnstileToken:  captchaEnabled ? turnstileToken : null,
       });
 
       // الكوبون يُطبّق داخل create-storefront-order (سيرفر)
@@ -490,6 +576,7 @@ export default function CheckoutPage() {
       void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'تعذر إرسال الطلب إلى قاعدة البيانات.');
+      resetTurnstile();
     } finally {
       setSubmitting(false);
     }
@@ -518,7 +605,7 @@ export default function CheckoutPage() {
                 </div>
               </div>
             ) : null}
-            <p>تم تسجيل الطلب وسيظهر في لوحة التحكم وصفحة طلباتي خلال ثوانٍ.</p>
+            <p>شكرًا على طلبك وستتم مراجعته في أقرب وقت.</p>
             <div className="empty-state__actions">
               <Link to="/account/orders" className="primary-button">
                 <PackageCheck size={16} />
@@ -649,6 +736,13 @@ export default function CheckoutPage() {
                   </div>
                 )}
               </div>
+
+              {captchaEnabled ? (
+                <div className="contact-card">
+                  <h3>التحقق الأمني</h3>
+                  <div ref={turnstileContainerRef} />
+                </div>
+              ) : null}
 
               {/* ── كود الخصم ──────────────────────────────────── */}
               <div className="contact-card">

@@ -18,9 +18,15 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 const PAYMOB_API_KEY = Deno.env.get('PAYMOB_API_KEY') ?? '';
+const TURNSTILE_SECRET_KEY = Deno.env.get('TURNSTILE_SECRET_KEY') ?? '';
+const REQUIRE_TURNSTILE = (Deno.env.get('REQUIRE_TURNSTILE') ?? '').toLowerCase() === 'true';
+const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
+const RATE_LIMIT_MAX = 8;
+const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
 const INTEGRATION_IDS: Record<string, number> = {
   paymob_card:   Number(Deno.env.get('PAYMOB_CARD_INTEGRATION_ID')   ?? '0'),
@@ -33,6 +39,62 @@ const IFRAME_IDS: Record<string, string> = {
   paymob_fawry:  Deno.env.get('PAYMOB_FAWRY_IFRAME_ID')  ?? '',
   paymob_wallet: Deno.env.get('PAYMOB_WALLET_IFRAME_ID') ?? '',
 };
+
+function getClientIp(req: Request): string {
+  return (
+    req.headers.get('cf-connecting-ip') ||
+    req.headers.get('x-real-ip') ||
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    'unknown'
+  );
+}
+
+function getRateLimitError(req: Request): string | null {
+  const now = Date.now();
+  const key = `paymob:${getClientIp(req)}`;
+  const current = rateBuckets.get(key);
+
+  if (rateBuckets.size > 1000) {
+    for (const [bucketKey, bucket] of rateBuckets) {
+      if (bucket.resetAt <= now) rateBuckets.delete(bucketKey);
+    }
+  }
+
+  if (!current || current.resetAt <= now) {
+    rateBuckets.set(key, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return null;
+  }
+
+  current.count += 1;
+  if (current.count > RATE_LIMIT_MAX) {
+    return 'تم إرسال طلبات دفع كثيرة خلال وقت قصير. حاول مرة أخرى بعد دقائق.';
+  }
+  return null;
+}
+
+async function verifyTurnstile(token: string | null | undefined, clientIp: string): Promise<boolean> {
+  if (!REQUIRE_TURNSTILE) return true;
+  if (!TURNSTILE_SECRET_KEY || !token) return false;
+
+  try {
+    const formData = new FormData();
+    formData.set('secret', TURNSTILE_SECRET_KEY);
+    formData.set('response', token);
+    if (clientIp !== 'unknown') formData.set('remoteip', clientIp);
+
+    const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+    });
+    if (!res.ok) return false;
+
+    const result = (await res.json()) as { success?: boolean };
+    return result.success === true;
+  } catch (err) {
+    console.warn('[paymob] Turnstile verification failed:', err);
+    return false;
+  }
+}
 
 function jsonError(message: string, status = 400) {
   return new Response(JSON.stringify({ error: message }), {
@@ -61,6 +123,13 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+  if (req.method !== 'POST') {
+    return jsonError('Method not allowed', 405);
+  }
+  const rateLimitError = getRateLimitError(req);
+  if (rateLimitError) {
+    return jsonError(rateLimitError, 429);
+  }
 
   // Track coupon claim at handler scope so the catch block can release it
   let _claimedCouponCode: string | null = null;
@@ -84,6 +153,7 @@ Deno.serve(async (req) => {
       shipping,
       items,
       couponCode,
+      turnstileToken,
     } = body as {
       provider: string;
       customer: Record<string, string>;
@@ -98,6 +168,7 @@ Deno.serve(async (req) => {
         is_digital?: boolean;
       }>;
       couponCode?: string | null;
+      turnstileToken?: string | null;
     };
 
     if (!provider || !INTEGRATION_IDS[provider]) {
@@ -109,8 +180,18 @@ Deno.serve(async (req) => {
     if (!Array.isArray(items) || items.length === 0) {
       return jsonError('السلة فارغة');
     }
+    if (items.length > 50) {
+      return jsonError('عدد المنتجات في الطلب كبير جداً.');
+    }
     if (!customer?.fullName || !customer?.email || !customer?.phone) {
       return jsonError('بيانات العميل غير مكتملة');
+    }
+    const customerEmail = String(customer.email ?? '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      return jsonError('البريد الإلكتروني غير صالح');
+    }
+    if (!(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
+      return jsonError('تعذر التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.', 403);
     }
 
     // Paymob works with EGP only — reject non-Egyptian countries
@@ -132,8 +213,7 @@ Deno.serve(async (req) => {
     // The product_variants table in this project only has: id, product_id,
     // variant_name, variant_type, sku, price, base_price, sale_price, cost_price.
     // `is_digital` is NOT a column — it's derived from variant_type elsewhere.
-    // So we read price columns from DB, and trust the client's is_digital flag
-    // (the client got it from the public view which exposes it correctly).
+    // So we read price columns from DB and derive is_digital from variant_type.
     const variantIds = items.map((i) => i.variant_id).filter(Boolean);
     const { data: variantRows, error: vErr } = await supabase
       .from('product_variants')
@@ -166,7 +246,7 @@ Deno.serve(async (req) => {
         v.variant_type === 'رقمي' ||
         v.variant_type === 'digital';
       // Digital items are always quantity 1 (no reason to buy multiple copies)
-      const qty = isDigital ? 1 : Math.max(1, Math.floor(Number(it.quantity) || 1));
+      const qty = isDigital ? 1 : Math.min(99, Math.max(1, Math.floor(Number(it.quantity) || 1)));
       subtotal += realPrice * qty;
       // Use the field name expected by the existing create_order_with_stock_deduction RPC
       normalizedItems.push({
@@ -271,15 +351,13 @@ Deno.serve(async (req) => {
 
     const totalCents = Math.round((subtotal - discountAmount + finalShipping) * 100);
 
-    // Track if coupon was claimed so we can release it on failure
-    const couponWasClaimed = discountAmount > 0 || finalShipping !== serverShipping;
-
     // Helper: release the coupon if we claimed it but payment setup fails
     async function releaseCouponIfNeeded() {
-      if (couponWasClaimed && couponCode) {
+      if (_claimedCouponCode) {
         try {
-          await supabase.rpc('release_coupon', { p_coupon_code: String(couponCode).trim() });
-          console.log(`[paymob] Coupon ${couponCode} released after failure`);
+          await supabase.rpc('release_coupon', { p_coupon_code: _claimedCouponCode });
+          console.log(`[paymob] Coupon ${_claimedCouponCode} released after failure`);
+          _claimedCouponCode = null;
         } catch (e) {
           console.warn('[paymob] release_coupon failed:', e);
         }
@@ -309,7 +387,7 @@ Deno.serve(async (req) => {
       },
       p_notes:       customer.notes ?? '',
       p_items:       normalizedItems,
-      p_coupon_code: couponCode ?? null,
+      p_coupon_code: _claimedCouponCode,
     });
 
     if (rpcError) {
