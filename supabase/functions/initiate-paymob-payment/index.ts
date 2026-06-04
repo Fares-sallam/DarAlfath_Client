@@ -108,14 +108,17 @@ function jsonOk(data: unknown) {
   });
 }
 
-// Generate an order id like ORD-YYYYMMDD-xxxxxx (matches the existing pattern)
+// Generate an order id like ORD-YYYYMMDD-<32 hex> (matches the existing pattern).
+// The random suffix uses the FULL UUID (128 bits) — not a 6-char slice — so the
+// id is unguessable. This prevents enumeration of merchant_order_id, which is the
+// lookup key used by the public check-paymob-transaction endpoint.
 function generateMerchantOrderId(): string {
   const d = new Date();
   const ymd =
     d.getUTCFullYear().toString() +
     String(d.getUTCMonth() + 1).padStart(2, '0') +
     String(d.getUTCDate()).padStart(2, '0');
-  const rand = crypto.randomUUID().replace(/-/g, '').slice(0, 6);
+  const rand = crypto.randomUUID().replace(/-/g, '');
   return `ORD-${ymd}-${rand}`;
 }
 
