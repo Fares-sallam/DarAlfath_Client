@@ -10,6 +10,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import './styles.css';
 import './styles-enhancements.css'; // ✦ Dark mode rules — scoped under html.dark
+import './styles-craft.css';        // ✦ Craft layer — covers, motion, typography polish
 
 const queryClient = new QueryClient({
   defaultOptions: {

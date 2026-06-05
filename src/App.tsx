@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import ScrollToTop from '@/components/ScrollToTop';
 import StoreLayout from '@/components/StoreLayout';
 import HomePage from '@/pages/HomePage';
 import BooksPage from '@/pages/BooksPage';
@@ -18,7 +19,9 @@ import PaymentResultPage from '@/pages/PaymentResultPage';
 
 export default function App() {
   return (
-    <Routes>
+    <>
+      <ScrollToTop />
+      <Routes>
       <Route path="/" element={<StoreLayout />}>
         <Route index element={<HomePage />} />
         <Route path="books" element={<BooksPage />} />
@@ -36,6 +39,7 @@ export default function App() {
         <Route path="contact" element={<ContactPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+      </Routes>
+    </>
   );
 }

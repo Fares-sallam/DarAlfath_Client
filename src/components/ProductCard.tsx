@@ -1,26 +1,35 @@
 import { Heart } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { formatCatalogPrice } from '@/hooks/useStorefront';
 import type { ProductItem } from '@/types/store';
+import BookCover from '@/components/BookCover';
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 export default function ProductCard({
   product,
   compact = false,
+  index = 0,
+  featured = false,
 }: {
   product: ProductItem;
   compact?: boolean;
+  index?: number;
+  featured?: boolean;
 }) {
   const navigate = useNavigate();
   const { isInWishlist, toggleWishlist } = useWishlist();
-  const [imageFailed, setImageFailed] = useState(false);
+  const cardRef = useRef<HTMLElement | null>(null);
+  const rafId = useRef(0);
 
   const wished = isInWishlist(product.id);
   const variantLabel =
     product.variant_count > 1 ? `${product.variant_count} نسخ` : 'نسخة واحدة';
   const categoryLabel = product.category_name || product.category?.name || product.type;
-  const coverUrl = product.cover_url && !imageFailed ? product.cover_url : null;
 
   const discountPct = product.discount_percent && product.discount_percent > 0
     ? Math.round(product.discount_percent)
@@ -28,10 +37,46 @@ export default function ProductCard({
 
   const openBook = () => navigate(`/book/${product.id}`);
 
+  // ── 3D tilt: write --rx/--ry onto the cover element directly ──
+  // (Setting them on the card and relying on custom-property inheritance
+  //  proved unreliable; targeting the cover that owns the transform is robust.)
+  const onMove = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const el = cardRef.current;
+    if (!el || featured || prefersReducedMotion()) return;
+    const cover = el.querySelector<HTMLElement>('.book-card__cover');
+    if (!cover) return;
+    const { clientX, clientY } = e;
+    cancelAnimationFrame(rafId.current);
+    rafId.current = requestAnimationFrame(() => {
+      const rect = el.getBoundingClientRect();
+      const x = (clientX - rect.left) / rect.width;   // 0…1
+      const y = (clientY - rect.top) / rect.height;
+      cover.style.setProperty('--ry', `${(x - 0.5) * 16}deg`);  // max ±8°
+      cover.style.setProperty('--rx', `${(y - 0.5) * -12}deg`); // max ±6°
+    });
+  }, [featured]);
+
+  const onLeave = useCallback(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const cover = el.querySelector<HTMLElement>('.book-card__cover');
+    cancelAnimationFrame(rafId.current);
+    cover?.style.setProperty('--ry', '0deg');
+    cover?.style.setProperty('--rx', '0deg');
+  }, []);
+
+  const className =
+    (compact ? 'book-card book-card--compact' : 'book-card') +
+    (featured ? ' book-card--featured' : '');
+
   return (
     <article
-      className={compact ? 'book-card book-card--compact' : 'book-card'}
+      ref={cardRef}
+      className={className}
+      style={{ '--i': index } as React.CSSProperties}
       onClick={openBook}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
@@ -55,19 +100,12 @@ export default function ProductCard({
       </button>
 
       <div className="book-card__cover">
-        {coverUrl ? (
-          <img
-            src={coverUrl}
-            alt={product.title}
-            loading="lazy"
-            onError={() => setImageFailed(true)}
-          />
-        ) : (
-          <div className="book-card__cover-fallback">
-            <img src="/branding/dar-alfath-logo.jpeg" alt="دار الفتح" />
-            <span>دار الفتح</span>
-          </div>
-        )}
+        <BookCover
+          title={product.title}
+          author={product.author}
+          coverUrl={product.cover_url}
+          compact={compact}
+        />
 
         {discountPct > 0 ? (
           <span className="book-card__discount-badge" aria-label={`خصم ${discountPct}%`}>

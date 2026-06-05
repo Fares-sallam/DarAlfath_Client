@@ -13,6 +13,8 @@ import {
 } from '@/hooks/useStorefront';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
+import { flyToCart } from '@/lib/flyToCart';
+import BookCover from '@/components/BookCover';
 import type { ProductVariantItem } from '@/types/store';
 
 type DetailsTab = 'about' | 'specs';
@@ -126,6 +128,7 @@ export default function BookDetailsPage() {
   const handleAddToCart = () => {
     if (!selectedVariant) return;
     addToCart(product!, selectedVariant, selectedVariant.is_digital ? 1 : quantity);
+    flyToCart(bookRef.current);
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 1800);
   };
@@ -190,9 +193,7 @@ export default function BookDetailsPage() {
                 {mainImage ? (
                   <img src={mainImage} alt={product.title} />
                 ) : (
-                  <div className="bk3-book__placeholder">
-                    <img src="/branding/dar-alfath-logo.jpeg" alt="دار الفتح" />
-                  </div>
+                  <BookCover title={product.title} author={product.author} />
                 )}
               </div>
               {/* Pages edge */}
@@ -265,7 +266,7 @@ export default function BookDetailsPage() {
 
           {/* Price */}
           <div className="bk3-price" style={{ '--i': 6 } as React.CSSProperties}>
-            <strong>
+            <strong key={selectedVariantId || 'range'}>
               {selectedVariant
                 ? formatMoney(selectedVariant.display_price, selectedVariant.currency_symbol)
                 : formatCatalogPrice(product)}

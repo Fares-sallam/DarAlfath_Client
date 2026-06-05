@@ -21,17 +21,17 @@ export default function HomePage() {
     <div className="page-sections">
       <section className="hero-banner hero-banner--editorial">
         <div className="hero-banner__content">
-          <span className="hero-badge">
+          <span className="hero-badge" style={{ '--i': 0 } as React.CSSProperties}>
             <Sparkles size={16} />
             مكتبة عربية متصلة مباشرة بالكتالوج
           </span>
-          <h1>اختَر كتابك كأنك تتجول بين رفوف دار الفتح</h1>
-          <p>
+          <h1 style={{ '--i': 1 } as React.CSSProperties}>اختَر كتابك كأنك تتجول بين رفوف دار الفتح</h1>
+          <p style={{ '--i': 2 } as React.CSSProperties}>
             {settings?.store_description ||
               'تجربة شراء عربية هادئة تعرض الكتب والنسخ والأسعار بوضوح، وتربطك مباشرة بالكتالوج الآمن للزوار.'}
           </p>
 
-          <div className="hero-metrics" aria-label="إحصاءات المكتبة">
+          <div className="hero-metrics" aria-label="إحصاءات المكتبة" style={{ '--i': 3 } as React.CSSProperties}>
             <div>
               <strong>{products.length || '+'}</strong>
               <span>كتاب متاح</span>
@@ -46,7 +46,7 @@ export default function HomePage() {
             </div>
           </div>
 
-          <div className="hero-actions">
+          <div className="hero-actions" style={{ '--i': 4 } as React.CSSProperties}>
             <Link to="/books" className="primary-button">
               تسوّق الكتب
               <ArrowLeft size={16} />
@@ -108,8 +108,12 @@ export default function HomePage() {
           linkLabel="عرض كل الكتب"
         />
         <div className="books-grid">
-          {featuredProducts.map((product) => (
-            <ProductCard key={product.product_id} product={product} />
+          {featuredProducts.map((product, i) => (
+            <ProductCard
+              key={product.product_id}
+              product={product}
+              index={i}
+            />
           ))}
         </div>
       </section>

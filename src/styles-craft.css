@@ -1,0 +1,284 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   CRAFT LAYER — دار الفتح
+   Covers, motion choreography, typographic voice. Imported last so it can
+   refine the base without rewriting the 9k-line core stylesheet.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Motion tokens (exponential ease-out, no bounce) */
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out:    cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-fast: 140ms;
+  --dur-state: 240ms;
+  --dur-enter: 520ms;
+
+  /* On-brand accent in OKLCH (gold), used sparingly as the single accent */
+  --gold-oklch: oklch(0.78 0.11 85);
+  --navy-oklch: oklch(0.30 0.08 250);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   TYPOGRAPHY — three deliberate voices:
+   Reem Kufi (marketing display) · Amiri (literary / book titles) · Cairo (UI)
+   ────────────────────────────────────────────────────────────────────────── */
+.hero-banner h1,
+.catalog-hero h1 {
+  font-family: 'Reem Kufi', 'Cairo', sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.28;
+}
+
+/* Literary voice for anything that is a book's own title */
+.book-card h3,
+.book-cover__title,
+.bk3-title,
+.bk3-hero__title {
+  font-family: 'Amiri', 'Cairo', serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.book-card h3 {
+  font-size: 16.5px;
+  line-height: 1.45;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   GENERATED BOOK COVER (2:3)
+   ────────────────────────────────────────────────────────────────────────── */
+.book-cover__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.book-cover__gen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background:
+    radial-gradient(120% 80% at 78% 8%, hsl(var(--cover-hue) 48% 30% / 0.55), transparent 55%),
+    linear-gradient(168deg,
+      hsl(var(--cover-hue) 52% 22%) 0%,
+      hsl(var(--cover-hue) 56% 14%) 60%,
+      hsl(var(--cover-hue) 60% 10%) 100%);
+  isolation: isolate;
+}
+
+/* Gold spine running down the binding edge (RTL → right side) */
+.book-cover__spine {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 11px;
+  background:
+    linear-gradient(180deg, #f3dca0, #d8b15b 45%, #b98e3c 100%);
+  box-shadow:
+    inset -1px 0 1px rgba(255, 255, 255, 0.5),
+    -3px 0 8px rgba(0, 0, 0, 0.28);
+  z-index: 3;
+}
+
+/* Geometric motif — subtle gold lattice, rotated + varied per book */
+.book-cover__motif {
+  position: absolute;
+  inset: -20% -20% auto auto;
+  width: 150px;
+  height: 150px;
+  opacity: 0.16;
+  transform: rotate(var(--cover-rotate, 0deg));
+  transform-origin: center;
+  z-index: 1;
+  background-repeat: no-repeat;
+}
+.book-cover__gen--m0 .book-cover__motif {
+  background-image:
+    repeating-conic-gradient(from 0deg, #e9c877 0deg 12deg, transparent 12deg 24deg);
+  -webkit-mask: radial-gradient(circle, #000 58%, transparent 60%);
+          mask: radial-gradient(circle, #000 58%, transparent 60%);
+}
+.book-cover__gen--m1 .book-cover__motif {
+  background-image:
+    repeating-linear-gradient(45deg, #e9c877 0 2px, transparent 2px 13px),
+    repeating-linear-gradient(-45deg, #e9c877 0 2px, transparent 2px 13px);
+}
+.book-cover__gen--m2 .book-cover__motif {
+  background-image:
+    radial-gradient(circle at 50% 50%, transparent 30%, #e9c877 31% 34%, transparent 35%),
+    repeating-conic-gradient(from 22deg, #e9c877 0deg 8deg, transparent 8deg 45deg);
+  -webkit-mask: radial-gradient(circle, #000 60%, transparent 62%);
+          mask: radial-gradient(circle, #000 60%, transparent 62%);
+}
+.book-cover__gen--m3 .book-cover__motif {
+  background-image:
+    repeating-conic-gradient(from 0deg, #e9c877 0deg 6deg, transparent 6deg 30deg);
+  -webkit-mask: repeating-radial-gradient(circle, #000 0 6px, transparent 6px 13px);
+          mask: repeating-radial-gradient(circle, #000 0 6px, transparent 6px 13px);
+}
+
+/* Diagonal sheen */
+.book-cover__sheen {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.14) 0%, transparent 30%, transparent 70%, rgba(0, 0, 0, 0.12) 100%);
+  pointer-events: none;
+}
+
+.book-cover__plate {
+  position: relative;
+  z-index: 4;
+  padding: 16px 18px 20px;
+  padding-inline-end: 20px;
+  display: grid;
+  gap: 5px;
+  background: linear-gradient(180deg, transparent, rgba(4, 12, 30, 0.55) 62%);
+}
+
+.book-cover__kicker {
+  font-family: 'Reem Kufi', 'Cairo', sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #e9c877;
+  opacity: 0.92;
+}
+
+.book-cover__title {
+  margin: 0;
+  font-family: 'Amiri', serif;
+  font-weight: 700;
+  font-size: 19px;
+  line-height: 1.38;
+  color: #fbf4e3;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+}
+
+.book-cover__author {
+  font-size: 11.5px;
+  color: rgba(243, 233, 209, 0.72);
+}
+
+.book-cover__gen--compact .book-cover__title { font-size: 16px; }
+.book-cover__gen--compact .book-cover__plate { padding: 13px 14px 15px; }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   BOOK CARD — cover-forward, less chrome, 3D tilt, reveal
+   ────────────────────────────────────────────────────────────────────────── */
+.book-card {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 16px;
+  overflow: visible; /* let the cover's depth shadow + tilt breathe */
+  transition: transform var(--dur-state) var(--ease-out-quart);
+}
+.book-card:hover {
+  transform: none; /* lift moves to the cover, not the whole card */
+  box-shadow: none;
+}
+
+.book-card__cover {
+  aspect-ratio: 0.66;
+  border-radius: 14px;
+  box-shadow: 0 14px 30px rgba(16, 37, 66, 0.18), 0 2px 6px rgba(16, 37, 66, 0.12);
+  transform: perspective(820px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(0);
+  transition: transform var(--dur-state) var(--ease-out-quart),
+              box-shadow var(--dur-state) var(--ease-out-quart);
+}
+/* Promote to a GPU layer only while interacting — not permanently, which
+   would keep every catalog cover layered and inflate memory. */
+.book-card:hover .book-card__cover {
+  box-shadow: 0 26px 50px rgba(16, 37, 66, 0.30), 0 4px 10px rgba(16, 37, 66, 0.16);
+  will-change: transform;
+}
+
+.book-card__body {
+  padding: 12px 4px 4px;
+}
+
+/* Reveal-on-mount, staggered, capped at 10 */
+@keyframes craftReveal {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.book-card {
+  animation: craftReveal var(--dur-enter) var(--ease-out-expo) both;
+  animation-delay: calc(min(var(--i, 0), 10) * 45ms);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   HERO — page-load choreography
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes heroRise {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-banner--editorial .hero-banner__content > * {
+  animation: heroRise var(--dur-enter) var(--ease-out-expo) both;
+  animation-delay: calc(var(--i, 0) * 90ms + 60ms);
+}
+.hero-banner--editorial .hero-showcase {
+  animation: heroRise 700ms var(--ease-out-expo) both;
+  animation-delay: 240ms;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PRICE TRANSITION — re-animates when the variant changes (keyed remount)
+   ────────────────────────────────────────────────────────────────────────── */
+@keyframes priceSwap {
+  from { opacity: 0; transform: translateY(7px); filter: blur(3px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+.bk3-price strong {
+  display: inline-block;
+  animation: priceSwap var(--dur-state) var(--ease-out-quart);
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   FLY-TO-CART — clone of the cover arcs toward the cart icon
+   ────────────────────────────────────────────────────────────────────────── */
+.fly-clone {
+  position: fixed;
+  z-index: 9999;
+  border-radius: 8px;
+  object-fit: cover;
+  box-shadow: 0 12px 30px rgba(16, 37, 66, 0.35);
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+@keyframes cartBump {
+  0%   { transform: scale(1); }
+  35%  { transform: scale(1.32); }
+  100% { transform: scale(1); }
+}
+.cart-bump { animation: cartBump 420ms var(--ease-out-quart); }
+
+/* ──────────────────────────────────────────────────────────────────────────
+   REDUCED MOTION — crossfade instead of movement; kill tilt + flights
+   ────────────────────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .book-card,
+  .hero-banner--editorial .hero-banner__content > *,
+  .hero-banner--editorial .hero-showcase,
+  .bk3-price strong {
+    animation: craftReveal 0.01ms both !important;
+  }
+  .book-card__cover {
+    transform: none !important;
+    transition: none !important;
+  }
+  .fly-clone { display: none !important; }
+  .cart-bump { animation: none !important; }
+}

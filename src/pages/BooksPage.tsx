@@ -142,8 +142,8 @@ export default function BooksPage() {
           />
 
           <div className="books-grid books-grid--catalog">
-            {filtered.map((product) => (
-              <ProductCard key={product.product_id} product={product} compact />
+            {filtered.map((product, i) => (
+              <ProductCard key={product.product_id} product={product} compact index={i} />
             ))}
           </div>
         </section>
