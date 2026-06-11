@@ -212,97 +212,37 @@ export default function CheckoutPage() {
     try {
       const trimmedCode = couponCode.trim().toUpperCase();
 
-      // ── 1. اقرأ الكوبون من قاعدة البيانات مباشرة (RLS بيسمح بقراءة النشطة فقط) ──
-      const { data: coupon, error: fetchErr } = await supabase
-        .from('coupons')
-        .select('id, code, type, value, min_order, max_uses, used_count, product_id, country_id, user_id, valid_from, valid_to, is_active')
-        .eq('code', trimmedCode)
-        .eq('is_active', true)
-        .maybeSingle();
+      // ── التحقق server-side عبر Edge Function (بدون قراءة مباشرة لجدول
+      //    الكوبونات، لمنع تعداد الأكواد). نفس منطق التحقق والحساب تمامًا. ──
+      const { data: result, error: fnErr } = await supabase.functions.invoke('validate-coupon', {
+        body: {
+          code: trimmedCode,
+          subtotal,
+          shipping: Number(shipping) || 0,
+          countryId: selectedCountry?.id ?? null,
+          items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, price: i.price })),
+        },
+      });
 
-      if (fetchErr) {
-        console.error('[coupon] fetch error:', fetchErr);
+      if (fnErr) {
+        console.error('[coupon] validate error:', fnErr);
         setCouponError('تعذر التحقق من كود الخصم. حاول مرة أخرى.');
         return;
       }
 
-      if (!coupon) {
-        setCouponError('كود الخصم غير صالح.');
+      if (!result?.valid) {
+        setCouponError(result?.error || 'كود الخصم غير صالح.');
         return;
-      }
-
-      // ── 2. منطق التحقق (نفس اللي في الـ Edge Function) ──────
-      const now = new Date();
-      if (coupon.valid_from && now < new Date(coupon.valid_from)) {
-        setCouponError('كود الخصم لم يبدأ بعد.');
-        return;
-      }
-      if (coupon.valid_to && now > new Date(coupon.valid_to)) {
-        setCouponError('كود الخصم منتهي الصلاحية.');
-        return;
-      }
-      if (coupon.max_uses != null && coupon.used_count >= coupon.max_uses) {
-        setCouponError('كود الخصم وصل للحد الأقصى من الاستخدام.');
-        return;
-      }
-      if (coupon.min_order != null && coupon.min_order > 0 && subtotal < coupon.min_order) {
-        setCouponError(`الحد الأدنى للطلب ${coupon.min_order} ${currencySymbol} للاستفادة من هذا الكود.`);
-        return;
-      }
-      if (coupon.country_id && coupon.country_id !== (selectedCountry?.id ?? null)) {
-        setCouponError('كود الخصم غير متاح لبلدك.');
-        return;
-      }
-      if (coupon.user_id && coupon.user_id !== (user?.id ?? null)) {
-        setCouponError('كود الخصم مخصص لمستخدم آخر.');
-        return;
-      }
-      if (coupon.product_id && !items.some((i) => i.product_id === coupon.product_id)) {
-        setCouponError('كود الخصم خاص بمنتج غير موجود في سلتك.');
-        return;
-      }
-
-      // ── 3. حساب الخصم ──────────────────────────────────────
-      let calculatedAmount = 0;
-      let freeShipping = false;
-      let description = '';
-
-      switch (coupon.type) {
-        case 'نسبة':
-          calculatedAmount = Math.round((subtotal * coupon.value / 100) * 100) / 100;
-          description = `خصم ${coupon.value}%`;
-          break;
-        case 'مبلغ ثابت':
-          calculatedAmount = Math.min(coupon.value, subtotal);
-          description = `خصم ${coupon.value} ${currencySymbol}`;
-          break;
-        case 'شحن مجاني':
-          freeShipping = true;
-          calculatedAmount = Number(shipping) || 0;
-          description = 'شحن مجاني';
-          break;
-        case 'خصم منتج': {
-          const match = items.find((i) => i.product_id === coupon.product_id);
-          if (match) {
-            const lineTotal = match.price * match.quantity;
-            calculatedAmount = Math.min(coupon.value, lineTotal);
-          }
-          description = 'خصم على المنتج';
-          break;
-        }
-        default:
-          setCouponError('نوع الكوبون غير مدعوم.');
-          return;
       }
 
       setAppliedCoupon({
-        couponId: coupon.id,
+        couponId: result.couponId,
         code: trimmedCode,
-        type: coupon.type,
-        value: coupon.value,
-        calculatedAmount,
-        freeShipping,
-        description,
+        type: result.discount.type,
+        value: result.discount.value,
+        calculatedAmount: result.discount.calculatedAmount,
+        freeShipping: result.discount.freeShipping,
+        description: result.discount.description,
       });
       setCouponError('');
     } catch (err) {
