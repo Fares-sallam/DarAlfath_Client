@@ -240,16 +240,13 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (INTERNAL_FUNCTION_SECRET) {
-      const receivedSecret = req.headers.get('x-internal-function-secret') ?? '';
-      if (receivedSecret !== INTERNAL_FUNCTION_SECRET) {
-        return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-          status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-    } else {
-      console.warn('[email] INTERNAL_FUNCTION_SECRET not set — public invocation is allowed');
+    // Fail CLOSED: reject if the internal secret is not configured, or wrong.
+    const receivedSecret = req.headers.get('x-internal-function-secret') ?? '';
+    if (!INTERNAL_FUNCTION_SECRET || receivedSecret !== INTERNAL_FUNCTION_SECRET) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {

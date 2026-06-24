@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { BookOpenCheck, Download, ExternalLink, FileClock } from 'lucide-react';
+import { BookOpenCheck, Download, FileClock } from 'lucide-react';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomerOrders } from '@/hooks/useCustomerOrders';
@@ -68,23 +68,18 @@ export default function DownloadsPage() {
 
                   <div className="download-card__action">
                     <b>{formatMoney((item.price_per_item - item.discount_per_item) * item.quantity, currency)}</b>
-                    {item.download_url && downloadable ? (
-                      <a
-                        href={item.download_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="primary-button"
-                      >
-                        <Download size={15} />
-                        تنزيل الملف
-                        <ExternalLink size={13} />
-                      </a>
+                    {downloadable ? (
+                      <button type="button" className="ghost-button" disabled>
+                        <FileClock size={15} />
+                        متاح فقط داخل التطبيق
+                      </button>
                     ) : (
                       <button type="button" className="ghost-button" disabled>
                         <FileClock size={15} />
-                        {downloadable ? 'بانتظار رابط التنزيل' : 'بانتظار موافقة الإدارة'}
+                        بانتظار موافقة الإدارة
                       </button>
                     )}
+                    {downloadable ? <small>عرض ملفات PDF متاح فقط من التطبيق.</small> : null}
                   </div>
                 </article>
               );

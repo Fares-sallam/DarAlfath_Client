@@ -3,7 +3,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+const RL_WINDOW_MS = 5 * 60 * 1000;
+const RL_MAX = 40;
+const rlBuckets = new Map<string, { count: number; resetAt: number }>();
+function rateLimited(req: Request): boolean {
+  const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const now = Date.now();
+  const b = rlBuckets.get(ip);
+  if (rlBuckets.size > 2000) for (const [k, v] of rlBuckets) if (v.resetAt <= now) rlBuckets.delete(k);
+  if (!b || b.resetAt <= now) { rlBuckets.set(ip, { count: 1, resetAt: now + RL_WINDOW_MS }); return false; }
+  b.count += 1; return b.count > RL_MAX;
+}
 
 function jsonOk(data: unknown) {
   return new Response(JSON.stringify(data), {
@@ -32,6 +45,12 @@ type ItemInput = { product_id: string; quantity: number; price: number };
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+  if (req.method !== 'POST') {
+    return jsonOk({ valid: false, error: 'Method not allowed' });
+  }
+  if (rateLimited(req)) {
+    return jsonOk({ valid: false, error: 'محاولات كثيرة. حاول بعد قليل.' });
   }
 
   try {

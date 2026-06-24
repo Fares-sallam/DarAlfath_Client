@@ -419,7 +419,7 @@ Deno.serve(async (req) => {
         shipping_companies(company_name, logo_url),
         order_items(
           id, product_id, variant_id, quantity,
-          price_per_item, discount_per_item, is_digital, download_url,
+          price_per_item, discount_per_item, is_digital,
           products(id, title, author, cover_url, type),
           product_variants(id, variant_name)
         )

@@ -12,7 +12,6 @@ export type StorefrontOrderItem = {
   price_per_item: number;
   discount_per_item: number;
   is_digital: boolean;
-  download_url?: string | null;
   products?: {
     id: string;
     title: string;
@@ -204,7 +203,6 @@ export async function fetchCustomerOrders(userId?: string, email?: string) {
       price_per_item,
       discount_per_item,
       is_digital,
-      download_url,
       products(id, title, author, cover_url, type),
       product_variants(id, variant_name)
     )

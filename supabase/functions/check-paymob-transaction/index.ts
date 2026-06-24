@@ -26,6 +26,24 @@ const corsHeaders = {
 const PAYMOB_API_KEY = Deno.env.get('PAYMOB_API_KEY') ?? '';
 const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
 
+// ── In-memory rate limit (per IP per isolate) ──
+const RL_WINDOW_MS = 5 * 60 * 1000;
+const RL_MAX = 120; // polling-friendly
+const rlBuckets = new Map<string, { count: number; resetAt: number }>();
+function rateLimited(req: Request): boolean {
+  const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const now = Date.now();
+  const b = rlBuckets.get(ip);
+  if (rlBuckets.size > 2000) for (const [k, v] of rlBuckets) if (v.resetAt <= now) rlBuckets.delete(k);
+  if (!b || b.resetAt <= now) { rlBuckets.set(ip, { count: 1, resetAt: now + RL_WINDOW_MS }); return false; }
+  b.count += 1; return b.count > RL_MAX;
+}
+
+async function sha256Hex(input: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function jsonOk(data: unknown) {
   return new Response(JSON.stringify(data), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -58,6 +76,9 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') {
     return jsonError('Method not allowed', 405);
   }
+  if (rateLimited(req)) {
+    return jsonError('محاولات كثيرة. حاول بعد قليل.', 429);
+  }
 
   try {
     if (!PAYMOB_API_KEY) {
@@ -69,9 +90,10 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const { merchantOrderId, cancel } = (await req.json()) as {
+    const { merchantOrderId, cancel, clientSecret } = (await req.json()) as {
       merchantOrderId: string;
       cancel?: boolean;
+      clientSecret?: string;
     };
 
     if (!merchantOrderId) {
@@ -81,7 +103,7 @@ Deno.serve(async (req) => {
     // ── Idempotency: if already completed, just return order id ────────
     const { data: existing } = await supabase
       .from('pending_payments')
-      .select('status, resulting_order_id, paymob_order_id, failure_reason, coupon_code')
+      .select('status, resulting_order_id, paymob_order_id, failure_reason, coupon_code, client_secret_hash')
       .eq('merchant_order_id', merchantOrderId)
       .maybeSingle();
 
@@ -89,6 +111,10 @@ Deno.serve(async (req) => {
       return jsonOk({ status: 'not_found', error: 'لم نجد طلباً معلقاً بهذا الرقم' });
     }
 
+    // ── Idempotent terminal states: return status WITHOUT requiring the secret.
+    //    قراءة طلب مكتمل/فاشل عبر رقمه (UUID غير قابل للتخمين) غير ضارّة، وتمنع
+    //    ظهور 403 خاطئ في صفحة العودة من Paymob لو كان تبويب المتابعة قد أكمل
+    //    الدفع ومسح السرّ المخزّن بالفعل.
     if (existing.status === 'completed') {
       return jsonOk({
         status:  'success',
@@ -102,6 +128,16 @@ Deno.serve(async (req) => {
         status: 'failed',
         error:  existing.failure_reason ?? 'الدفع فشل',
       });
+    }
+
+    // ── Ownership: الطلب ما زال pending — نطلب الـ clientSecret الصادر عند initiate
+    //    قبل الاستعلام من Paymob أو الإلغاء. merchant_order_id وحده لا يكفي للتصرّف
+    //    في دفعة حيّة.
+    if (existing.client_secret_hash) {
+      const provided = (clientSecret ?? '').trim();
+      if (!provided || (await sha256Hex(provided)) !== existing.client_secret_hash) {
+        return jsonError('غير مصرح بالوصول لهذا الطلب.', 403);
+      }
     }
 
     // ── Get Paymob auth token ──────────────────────────────────────────
@@ -173,11 +209,13 @@ Deno.serve(async (req) => {
     if (!txn || txn.id == null) {
       // cancel=true + no transaction → safe to cancel (nothing was charged)
       if (cancel) {
-        await supabase.rpc('cancel_pending_payment', {
+        const { data: cancelRes } = await supabase.rpc('cancel_pending_payment', {
           p_merchant_order_id: merchantOrderId,
           p_reason: 'ألغاه العميل (لا توجد معاملة)',
         });
-        await releaseCouponIfNeeded();
+        // حرّر الكوبون فقط لو هذا الاستدعاء هو من حوّل الحالة (يمنع تحريرًا مزدوجًا
+        // لو سبقه webhook أو expiry). already=true يعني سبقه غيره فلا نحرّر ثانيةً.
+        if (cancelRes?.success && !cancelRes?.already) await releaseCouponIfNeeded();
         return jsonOk({ status: 'failed', error: 'تم إلغاء الدفع.', cancelled: true });
       }
       return jsonOk({ status: 'pending' });
@@ -194,6 +232,8 @@ Deno.serve(async (req) => {
           p_merchant_order_id:     merchantOrderId,
           p_paymob_order_id:       String(txn.order?.id ?? existing.paymob_order_id ?? ''),
           p_paymob_transaction_id: String(txn.id),
+          p_amount_cents:          txn.amount_cents ?? null,
+          p_currency:              'EGP',
         },
       );
 
@@ -226,11 +266,12 @@ Deno.serve(async (req) => {
     }
 
     if (isFailed) {
-      await supabase.rpc('cancel_pending_payment', {
+      const { data: cancelRes } = await supabase.rpc('cancel_pending_payment', {
         p_merchant_order_id: merchantOrderId,
         p_reason:            txn.data?.message ?? 'فشل الدفع',
       });
-      await releaseCouponIfNeeded();
+      // حرّر الكوبون فقط لو هذا الاستدعاء هو من حوّل الحالة (يمنع التحرير المزدوج).
+      if (cancelRes?.success && !cancelRes?.already) await releaseCouponIfNeeded();
       return jsonOk({
         status: 'failed',
         error:  txn.data?.message ?? 'فشل الدفع',

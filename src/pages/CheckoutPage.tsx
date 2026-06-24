@@ -119,6 +119,7 @@ export default function CheckoutPage() {
   const [paymobPaymentUrl, setPaymobPaymentUrl] = useState<string | null>(null);
   const [paymobStatusMsg, setPaymobStatusMsg] = useState<string>('جارٍ إنتظار تأكيد الدفع...');
   const pollAbortRef = useRef<{ cancelled: boolean }>({ cancelled: false });
+  const paymobClientSecretRef = useRef<string>('');
 
   const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim();
   const captchaEnabled = Boolean(turnstileSiteKey);
@@ -322,6 +323,12 @@ export default function CheckoutPage() {
     setCouponError('');
   }, [subtotal, items.length, selectedCountry?.id]);
 
+  const clearPendingPaymob = () => {
+    localStorage.removeItem('paymob_pending_order_id');
+    localStorage.removeItem('paymob_pending_client_secret');
+    paymobClientSecretRef.current = '';
+  };
+
   // ── Polling Paymob until terminal state ──────────────────────────
   const pollPaymobTransaction = async (merchantOrderId: string) => {
     const MAX_DURATION_MS = 10 * 60 * 1000; // 10 minutes
@@ -334,17 +341,18 @@ export default function CheckoutPage() {
         // Timeout — explicitly cancel pending payment to release reserved stock
         try {
           await supabase.functions.invoke('check-paymob-transaction', {
-            body: { merchantOrderId, cancel: true },
+            body: { merchantOrderId, cancel: true, clientSecret: paymobClientSecretRef.current },
           });
         } catch { /* ignore */ }
         setSubmitError('انتهت مهلة انتظار تأكيد الدفع. حاول مرة أخرى.');
         setPaymobPolling(false);
+        clearPendingPaymob();
         return;
       }
 
       try {
         const { data, error } = await supabase.functions.invoke('check-paymob-transaction', {
-          body: { merchantOrderId },
+          body: { merchantOrderId, clientSecret: paymobClientSecretRef.current },
         });
 
         if (!error && data) {
@@ -363,7 +371,7 @@ export default function CheckoutPage() {
             setSubmittedOrder(orderRow as unknown as StorefrontOrder);
             setSubmitted(true);
             setPaymobPolling(false);
-            localStorage.removeItem('paymob_pending_order_id');
+            clearPendingPaymob();
             clearCart();
             void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
             void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
@@ -372,7 +380,7 @@ export default function CheckoutPage() {
 
           if (data.status === 'failed') {
             // Payment failed — release stock, keep cart, show error
-            localStorage.removeItem('paymob_pending_order_id');
+            clearPendingPaymob();
             setSubmitError(data.error || 'فشل الدفع. حاول مرة أخرى أو اختر طريقة دفع أخرى.');
             setPaymobPolling(false);
             return;
@@ -402,10 +410,11 @@ export default function CheckoutPage() {
       try {
         // Explicitly cancel pending payment to release reserved stock
         await supabase.functions.invoke('check-paymob-transaction', {
-          body: { merchantOrderId: paymobMerchantOrderId, cancel: true },
+          body: { merchantOrderId: paymobMerchantOrderId, cancel: true, clientSecret: paymobClientSecretRef.current },
         });
       } catch { /* ignore */ }
     }
+    clearPendingPaymob();
     setSubmitError('تم إلغاء عملية الدفع. الكتب لا تزال في سلتك.');
   };
 
@@ -467,8 +476,11 @@ export default function CheckoutPage() {
         }
 
         // Open Paymob in a new tab, start polling, show modal in the current tab
+        const clientSecret = data.clientSecret ?? '';
+        paymobClientSecretRef.current = clientSecret;
         setPaymobMerchantOrderId(data.merchantOrderId);
         localStorage.setItem('paymob_pending_order_id', data.merchantOrderId);
+        localStorage.setItem('paymob_pending_client_secret', clientSecret);
         setPaymobPaymentUrl(data.paymentUrl);
         setPaymobPolling(true);
         setSubmitting(false);

@@ -153,6 +153,8 @@ Deno.serve(async (req) => {
         p_merchant_order_id:     merchantOrderId,
         p_paymob_order_id:       String(paymobOrder.id ?? existingPayment?.paymob_order_id ?? ''),
         p_paymob_transaction_id: transactionId,
+        p_amount_cents:          obj.amount_cents != null ? Number(obj.amount_cents) : null,
+        p_currency:              String(obj.currency ?? 'EGP'),
       });
 
       if (error || !data?.success) {
@@ -181,8 +183,9 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Release coupon if one was claimed with this pending payment
-      if (existingPayment?.coupon_code) {
+      // Release coupon ONLY if this call actually transitioned the payment.
+      // data.already=true يعني أن check-paymob أو expiry سبقنا للتحرير → لا نكرّره.
+      if (existingPayment?.coupon_code && data?.success && !data?.already) {
         try {
           await supabase.rpc('release_coupon', { p_coupon_code: existingPayment.coupon_code });
           console.log(`[paymob-webhook] Coupon ${existingPayment.coupon_code} released`);

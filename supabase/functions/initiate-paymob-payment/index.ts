@@ -174,10 +174,11 @@ Deno.serve(async (req) => {
       turnstileToken?: string | null;
     };
 
-    if (!provider || !INTEGRATION_IDS[provider]) {
+    const normalizedProvider = String(provider ?? '').toLowerCase().trim();
+    if (!normalizedProvider || !INTEGRATION_IDS[normalizedProvider]) {
       return jsonError(`بيانات Paymob غير مضبوطة للطريقة: ${provider}`, 500);
     }
-    if (!IFRAME_IDS[provider]) {
+    if (!IFRAME_IDS[normalizedProvider]) {
       return jsonError(`Iframe ID غير مضبوط للطريقة: ${provider}`, 500);
     }
     if (!Array.isArray(items) || items.length === 0) {
@@ -201,6 +202,27 @@ Deno.serve(async (req) => {
     const countryCode = (country?.code ?? '').toUpperCase();
     if (countryCode && countryCode !== 'EG') {
       return jsonError('الدفع الإلكتروني عبر Paymob متاح لمصر فقط حاليًا.');
+    }
+
+    // ── Validate the chosen payment method: exists, active, and a Paymob
+    //    provider (so a non-Paymob / inactive method can't be forced here) ──
+    if (!paymentMethodId) {
+      return jsonError('طريقة الدفع مطلوبة.', 400);
+    }
+    {
+      const { data: pm, error: pmError } = await supabase
+        .from('payment_methods')
+        .select('provider, is_active')
+        .eq('id', paymentMethodId)
+        .maybeSingle();
+      if (pmError) {
+        console.error('[paymob] payment method lookup error:', pmError);
+        return jsonError('تعذر التحقق من طريقة الدفع.', 500);
+      }
+      const pmProvider = String(pm?.provider ?? '').toLowerCase().trim();
+      if (!pm || pm.is_active === false || pmProvider !== normalizedProvider || !pmProvider.startsWith('paymob')) {
+        return jsonError('طريقة الدفع غير صالحة أو غير متاحة.', 400);
+      }
     }
 
     // ── Auth user (optional, for guest checkout) ────────────────────
@@ -370,6 +392,13 @@ Deno.serve(async (req) => {
     // ── Generate merchant order id ──────────────────────────────────
     const merchantOrderId = generateMerchantOrderId();
 
+    // Per-payment client secret: return plaintext to the buyer; store only its
+    // SHA-256 hash. The buyer must echo it back to read/cancel the payment.
+    const clientSecret = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+    const clientSecretHash = Array.from(new Uint8Array(
+      await crypto.subtle.digest('SHA-256', new TextEncoder().encode(clientSecret)),
+    )).map((b) => b.toString(16).padStart(2, '0')).join('');
+
     // ── Create pending payment + reserve stock (atomic) ─────────────
     const { error: rpcError } = await supabase.rpc('create_pending_payment', {
       p_merchant_order_id: merchantOrderId,
@@ -398,6 +427,12 @@ Deno.serve(async (req) => {
       await releaseCouponIfNeeded();
       return jsonError(rpcError.message || 'تعذر حجز المنتجات');
     }
+
+    // Store the client-secret hash on the freshly-created pending payment.
+    await supabase
+      .from('pending_payments')
+      .update({ client_secret_hash: clientSecretHash })
+      .eq('merchant_order_id', merchantOrderId);
 
     // ── Paymob Legacy Auth API (3 steps) ────────────────────────────
     console.log('[paymob] Step 1/3: auth token');
@@ -477,7 +512,7 @@ Deno.serve(async (req) => {
         expiration:     1800,
         order_id:       paymobOrderId,
         currency:       'EGP',
-        integration_id: INTEGRATION_IDS[provider],
+        integration_id: INTEGRATION_IDS[normalizedProvider],
         lock_order_when_paid: true,   // prevent double-charging on same order
         billing_data: {
           apartment:       'NA',
@@ -516,11 +551,12 @@ Deno.serve(async (req) => {
     }
 
     const paymentUrl =
-      `https://accept.paymob.com/api/acceptance/iframes/${IFRAME_IDS[provider]}?payment_token=${paymentToken}`;
+      `https://accept.paymob.com/api/acceptance/iframes/${IFRAME_IDS[normalizedProvider]}?payment_token=${paymentToken}`;
 
     return jsonOk({
       paymentUrl,
       merchantOrderId,
+      clientSecret,
       paymobOrderId,
       amountCents: totalCents,
     });
