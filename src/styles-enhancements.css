@@ -2076,6 +2076,10 @@ html.dark .video-card__body p {
   position: fixed;
   inset: 0;
   z-index: 200;
+  /* القائمة الجانبية للموبايل تظل في الـDOM مزاحة خارج الشاشة (translateX) حتى وهي
+     مقفولة؛ بدون قصّ هنا تُنشئ سكرولاً أفقيًا على صفحة RTL. القصّ يمنع ذلك ولا يؤثر
+     على القائمة وهي مفتوحة (تكون داخل حدود الـoverlay). */
+  overflow-x: hidden;
   background: rgba(6, 13, 46, 0.55);
   backdrop-filter: blur(4px);
   opacity: 0;
