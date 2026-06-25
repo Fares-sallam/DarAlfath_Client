@@ -141,10 +141,13 @@ BEGIN
 
   v_total := GREATEST(v_subtotal - v_discount + v_shipping, 0);
 
+  -- ملاحظة: create_order_with_stock_deduction يستقبل country_id و payment_method_id
+  -- كـ TEXT (يحوّلهما داخليًا إلى UUID). أعمدة pending_payments من نوع UUID، لذا
+  -- نحوّلهما صراحةً بـ ::text وإلا فشل حلّ الدالة ("function does not exist").
   SELECT create_order_with_stock_deduction(
     p_user_id           := v_pending.user_id,
-    p_country_id        := v_pending.country_id,
-    p_payment_method_id := v_pending.payment_method_id,
+    p_country_id        := v_pending.country_id::text,
+    p_payment_method_id := v_pending.payment_method_id::text,
     p_shipping_cost     := v_shipping,
     p_shipping_address  := v_pending.shipping_address,
     p_notes             := v_pending.notes,
@@ -157,9 +160,11 @@ BEGIN
       'error', COALESCE(v_rpc_result->>'error', 'فشل إنشاء الطلب'));
   END IF;
 
+  -- payment_status يجب أن يكون قيمة عربية مسموحة بقيد orders_payment_status_check
+  -- (معلق/مدفوع/مرتجع/فاشل). 'paid' الإنجليزية تُخالف القيد وتُفشل إنشاء الطلب.
   UPDATE orders
      SET coupon_id = v_coupon_id, discount_amount = v_discount,
-         total_price = v_total, payment_status = 'paid'
+         total_price = v_total, payment_status = 'مدفوع'
    WHERE id = v_order_id;
 
   -- ⚠️ P4: لا نزيد used_count هنا — تم claim الكوبون عند initiate-paymob-payment.

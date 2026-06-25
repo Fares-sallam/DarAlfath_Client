@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
         price_per_item: Number(i.price_per_item) || 0,
       })),
       currency: (orderRow.countries as { currency_symbol?: string } | null)?.currency_symbol ?? 'ج.م',
-      is_paid:  orderRow.payment_status === 'paid',
+      is_paid:  orderRow.payment_status === 'مدفوع',
     };
 
     const subjectCustomer = orderData.is_paid

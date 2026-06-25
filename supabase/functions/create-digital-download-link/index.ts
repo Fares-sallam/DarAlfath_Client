@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
   }
 
   // ── Entitlement: paid, or an admin-approved downloadable status ──
-  const entitled = order.payment_status === 'paid' || ALLOWED_STATUSES.includes(order.status);
+  const entitled = order.payment_status === 'مدفوع' || ALLOWED_STATUSES.includes(order.status);
   if (!entitled) {
     await audit(false, 'not_paid', item.product_id);
     return json({ error: 'الطلب غير مدفوع أو بانتظار موافقة الإدارة.' }, 403);
