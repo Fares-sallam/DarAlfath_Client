@@ -2,17 +2,23 @@
 -- تحصين إضافي: audit_logs + coupons
 -- ══════════════════════════════════════════════════════════════════════════
 
--- 0) is_admin() self-contained — حتى لا تعتمد السياسات على دالة خارجية قد تكون
---    غير موجودة. الأدمن عبر profiles.role (نفس مصدر get_my_role على live).
+-- 0) is_admin() self-contained — تطابق نموذج live: المالك بالإيميل (نفس سياسات
+--    orders/products)، والموظفون عبر profiles.role أو صف في admin_settings.
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid()
-      AND role = ANY (ARRAY['super_admin', 'admin', 'manager'])
-  );
+  SELECT
+    COALESCE((auth.jwt() ->> 'email') = 'faresalsaid780@gmail.com', false)
+    OR EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid()
+        AND role = ANY (ARRAY['super_admin', 'admin', 'manager'])
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.admin_settings
+      WHERE user_id = auth.uid()
+    );
 $$;
 
 -- 1) audit_logs: قصر الإدراج على الموظفين (يمنع العميل من تزوير سجلات).

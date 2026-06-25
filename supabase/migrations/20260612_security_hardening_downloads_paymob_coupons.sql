@@ -5,19 +5,24 @@
 -- ══════════════════════════════════════════════════════════════════════════
 
 -- ── دالة is_admin() self-contained ────────────────────────────────────────
--- تُعرّف هنا حتى تعمل الـ migration على القاعدة الحيّة وعلى إعادة بناء نظيفة دون
--- الاعتماد على دالة خارجية قد لا تكون موجودة (get_my_role غير موجودة في migrations،
--- وتعريف admin_settings غير مطبّق على live). الأدمن يُعرَّف عبر profiles.role —
--- نفس المصدر الذي يقرأه get_my_role على القاعدة الحيّة.
+-- تُعرّف هنا حتى تعمل الـ migration على القاعدة الحيّة وعلى إعادة بناء نظيفة. تطابق
+-- نموذج الأدمن الفعلي على live: المالك مُعرَّف بالإيميل (نفس سياسات orders/products)،
+-- والموظفون عبر profiles.role أو وجود صف في admin_settings. لا تعتمد على get_my_role.
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.profiles
-    WHERE id = auth.uid()
-      AND role = ANY (ARRAY['super_admin', 'admin', 'manager'])
-  );
+  SELECT
+    COALESCE((auth.jwt() ->> 'email') = 'faresalsaid780@gmail.com', false)
+    OR EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid()
+        AND role = ANY (ARRAY['super_admin', 'admin', 'manager'])
+    )
+    OR EXISTS (
+      SELECT 1 FROM public.admin_settings
+      WHERE user_id = auth.uid()
+    );
 $$;
 
 -- ── P1: جدول تدقيق محاولات التحميل الرقمي ─────────────────────────────────
