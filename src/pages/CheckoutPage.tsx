@@ -221,7 +221,7 @@ export default function CheckoutPage() {
           subtotal,
           shipping: Number(shipping) || 0,
           countryId: selectedCountry?.id ?? null,
-          items: items.map((i) => ({ product_id: i.product_id, quantity: i.quantity, price: i.price })),
+          items: items.map((i) => ({ product_id: i.product_id, variant_id: i.variant_id, quantity: i.quantity, price: i.price })),
         },
       });
 
