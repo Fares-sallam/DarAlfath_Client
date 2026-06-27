@@ -139,12 +139,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signIn: async (email, password) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password,
+      // بوابة الدخول الآمنة: قفل البريد دقيقتين بعد 5 محاولات فاشلة (ضد التخمين).
+      const { data, error: fnError } = await supabase.functions.invoke('secure-login', {
+        body: { email: email.trim(), password },
       });
 
-      return { error: error ? getArabicAuthError(error.message) : null };
+      if (fnError) {
+        // استجابة غير 2xx (401/429): اقرأ رسالة الخطأ (تتضمن رسالة القفل).
+        let msg = 'تعذر تسجيل الدخول. حاول مرة أخرى.';
+        try {
+          const ctx = (fnError as { context?: Response }).context;
+          if (ctx) { const b = await ctx.json(); if (b?.error) msg = b.error; }
+        } catch { /* ignore */ }
+        return { error: msg };
+      }
+
+      if (data?.access_token && data?.refresh_token) {
+        const { error: setErr } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+        return { error: setErr ? getArabicAuthError(setErr.message) : null };
+      }
+
+      return { error: data?.error ?? 'تعذر تسجيل الدخول.' };
     },
     signUp: async ({ email, password, fullName }) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
