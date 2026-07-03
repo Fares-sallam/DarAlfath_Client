@@ -102,11 +102,33 @@ export default function CheckoutPage() {
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
 
+  // الكتب الرقمية تتطلب دفعًا إلكترونيًا مؤكدًا فقط — الدفع عند الاستلام لا معنى
+  // له لملف لا يُسلَّم فعليًا، وقد يمنح وصولاً مجانيًا لو أكّد الأدمن الطلب لاحقًا
+  // كإجراء روتيني (نفس القاعدة المطبّقة في التطبيق).
+  const hasDigitalItem = items.some((i) => i.is_digital);
+  const availablePaymentMethods = useMemo(
+    () =>
+      hasDigitalItem
+        ? paymentMethods.filter((m) => m.provider.toLowerCase().startsWith('paymob'))
+        : paymentMethods,
+    [paymentMethods, hasDigitalItem]
+  );
+
   useEffect(() => {
-    if (paymentMethods.length > 0 && !selectedPaymentId) {
-      setSelectedPaymentId(paymentMethods[0].id);
+    // أعد الاختيار لو مفيش طريقة مختارة، أو لو المختارة لم تعد متاحة (مثلاً كانت
+    // COD وتغيّرت السلة لتضم كتابًا رقميًا).
+    const stillValid = availablePaymentMethods.some((m) => m.id === selectedPaymentId);
+    if (availablePaymentMethods.length > 0 && (!selectedPaymentId || !stillValid)) {
+      setSelectedPaymentId(availablePaymentMethods[0].id);
     }
-  }, [paymentMethods, selectedPaymentId]);
+  }, [availablePaymentMethods, selectedPaymentId]);
+
+  const selectedMethod = useMemo(
+    () => availablePaymentMethods.find((m) => m.id === selectedPaymentId) ?? null,
+    [availablePaymentMethods, selectedPaymentId]
+  );
+
+  const isPaymob = selectedMethod?.provider?.toLowerCase().startsWith('paymob') ?? false;
 
   const [submitted, setSubmitted] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<StorefrontOrder | null>(null);
@@ -150,6 +172,7 @@ export default function CheckoutPage() {
     return Boolean(
       items.length > 0 &&
       selectedPaymentId &&
+      (!hasDigitalItem || isPaymob) &&
       isTripleName(form.fullName) &&
       form.email.trim() &&
       form.phone.trim() &&
@@ -158,13 +181,14 @@ export default function CheckoutPage() {
       form.address.trim() &&
       (!captchaEnabled || turnstileToken)
     );
-  }, [captchaEnabled, items.length, selectedPaymentId, form, turnstileToken]);
+  }, [captchaEnabled, items.length, selectedPaymentId, hasDigitalItem, isPaymob, form, turnstileToken]);
 
   // Diagnostic: list the missing fields so the user knows exactly what's wrong
   const missingFields = useMemo(() => {
     const missing: string[] = [];
     if (items.length === 0) missing.push('السلة فارغة');
     if (!selectedPaymentId) missing.push('طريقة الدفع');
+    if (hasDigitalItem && !isPaymob) missing.push('الكتب الرقمية تتطلب الدفع الإلكتروني (لا يوجد دفع عند الاستلام)');
     if (!form.fullName.trim()) missing.push('الاسم الكامل');
     if (!form.email.trim()) missing.push('البريد الإلكتروني');
     if (!form.phone.trim()) missing.push('رقم الهاتف');
@@ -173,7 +197,7 @@ export default function CheckoutPage() {
     if (!form.address.trim()) missing.push('العنوان');
     if (captchaEnabled && !turnstileToken) missing.push('التحقق الأمني');
     return missing;
-  }, [captchaEnabled, items.length, selectedPaymentId, form, turnstileToken]);
+  }, [captchaEnabled, items.length, selectedPaymentId, hasDigitalItem, isPaymob, form, turnstileToken]);
 
   const updateField = <K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) => {
     setForm((prev) => ({
@@ -186,13 +210,6 @@ export default function CheckoutPage() {
 
   // مدن المحافظة المختارة
   const availableCities = EGYPT_REGIONS[form.governorate] ?? [];
-
-  const selectedMethod = useMemo(
-    () => paymentMethods.find((m) => m.id === selectedPaymentId) ?? null,
-    [paymentMethods, selectedPaymentId]
-  );
-
-  const isPaymob = selectedMethod?.provider?.toLowerCase().startsWith('paymob') ?? false;
 
   // ── Adjusted totals (with coupon) ─────────────────────────
   // For "شحن مجاني" coupon: the saving IS the shipping cost; we zero shipping
@@ -670,11 +687,21 @@ export default function CheckoutPage() {
               <div className="contact-card">
                 <h3>طريقة الدفع</h3>
 
+                {hasDigitalItem ? (
+                  <p style={{ fontSize: '0.85rem', opacity: 0.75, marginBottom: 8 }}>
+                    سلتك تحتوي على كتاب رقمي — الدفع الإلكتروني إلزامي (لا يتوفر الدفع عند الاستلام).
+                  </p>
+                ) : null}
+
                 {paymentMethods.length === 0 ? (
                   <p style={{ opacity: 0.5, fontSize: '0.9rem' }}>جاري تحميل طرق الدفع...</p>
+                ) : availablePaymentMethods.length === 0 ? (
+                  <p style={{ color: 'var(--error, #e53e3e)', fontSize: '0.85rem' }}>
+                    لا تتوفر حاليًا طريقة دفع إلكتروني للكتب الرقمية. تواصل مع الدعم.
+                  </p>
                 ) : (
                   <div className="variant-selector__grid">
-                    {paymentMethods.map((method) => (
+                    {availablePaymentMethods.map((method) => (
                       <button
                         key={method.id}
                         type="button"
