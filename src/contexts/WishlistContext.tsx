@@ -11,22 +11,25 @@ interface WishlistContextValue {
 const WishlistContext = createContext<WishlistContextValue | undefined>(undefined);
 const STORAGE_KEY = 'daralfath_client_wishlist';
 
-export function WishlistProvider({ children }: { children: React.ReactNode }) {
-  const [wishlistIds, setWishlistIds] = useState<string[]>([]);
-
-  useEffect(() => {
+function loadWishlistFromStorage(): string[] {
+  try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return;
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is string => typeof item === 'string');
+  } catch {
+    return [];
+  }
+}
 
-    try {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        setWishlistIds(parsed.filter((item): item is string => typeof item === 'string'));
-      }
-    } catch {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  }, []);
+export function WishlistProvider({ children }: { children: React.ReactNode }) {
+  // Lazy initializer: reads localStorage synchronously on first render, before
+  // any effect can run. A separate load-effect would race with the save-effect
+  // below — on mount both fire in the same pass, and the save-effect (still
+  // closing over the initial [] state) would overwrite the just-read value
+  // with an empty array.
+  const [wishlistIds, setWishlistIds] = useState<string[]>(loadWishlistFromStorage);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(wishlistIds));

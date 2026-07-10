@@ -6,7 +6,10 @@ import { useWishlistProducts } from '@/hooks/useStorefront';
 
 export default function WishlistPage() {
   const { wishlistIds, clearWishlist } = useWishlist();
-  const { data: items = [] } = useWishlistProducts(wishlistIds);
+  const { data: items = [], isLoading } = useWishlistProducts(wishlistIds);
+  // لا نعرض "لا توجد كتب محفوظة" أثناء تحميل الكتالوج لو فيه معرّفات محفوظة
+  // فعليًا — وإلا يظهر وميض مضلِّل بأن المفضلة فارغة قبل أن تُحمَّل تفاصيلها.
+  const stillResolvingSavedItems = isLoading && wishlistIds.length > 0;
 
   return (
     <div className="page-sections">
@@ -20,7 +23,9 @@ export default function WishlistPage() {
           {items.length ? <button type="button" className="ghost-button" onClick={clearWishlist}>مسح القائمة</button> : null}
         </div>
 
-        {items.length ? (
+        {stillResolvingSavedItems ? (
+          <section className="page-card page-card--loading" />
+        ) : items.length ? (
           <div className="books-grid">{items.map((item) => <ProductCard key={item.id} product={item} compact />)}</div>
         ) : (
           <div className="empty-state">
