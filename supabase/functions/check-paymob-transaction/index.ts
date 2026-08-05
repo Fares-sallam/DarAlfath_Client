@@ -23,8 +23,18 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const PAYMOB_API_KEY = Deno.env.get('PAYMOB_API_KEY') ?? '';
+const PAYMOB_SECRET_KEY = Deno.env.get('PAYMOB_SECRET_KEY') ?? '';
+const PAYMOB_PUBLIC_KEY = Deno.env.get('PAYMOB_PUBLIC_KEY') ?? '';
+const PAYMOB_BASE_URL = 'https://accept.paymob.com';
 const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
+
+// ── TEMP diagnostic-only: Paymob sandbox path (2026-08-04) ─────────────────
+// Same isolated gate as initiate-paymob-payment — see the block comment
+// there. Remove this block and the x-paymob-diag-key check below once the
+// end-to-end verification is done.
+const PAYMOB_DIAG_SECRET     = Deno.env.get('PAYMOB_DIAG_SECRET') ?? '';
+const PAYMOB_TEST_SECRET_KEY = Deno.env.get('PAYMOB_TEST_SECRET_KEY') ?? '';
+const PAYMOB_TEST_PUBLIC_KEY = Deno.env.get('PAYMOB_TEST_PUBLIC_KEY') ?? '';
 
 // ── In-memory rate limit (per IP per isolate) ──
 const RL_WINDOW_MS = 5 * 60 * 1000;
@@ -69,6 +79,40 @@ interface PaymobTxn {
   amount_cents?: number;
 }
 
+// Verified live 2026-08-04: the Intention API's /v1/intention/element/ endpoint
+// does NOT return a `transactions` array (that assumption was carried over
+// from the classic Order Inquiry response shape and never actually matched
+// this endpoint — meaning this function could never detect a successful
+// payment before this fix). The authoritative outcome is the top-level
+// `paid` boolean; the per-transaction fields (id, amount_cents, decline
+// message, ...) only show up as query params on `redirection_url`, and only
+// once a transaction has actually been attempted (an untouched intention has
+// no `redirection_url` at all — confirmed live).
+function txnFromRedirectionUrl(url: string | null | undefined): PaymobTxn | null {
+  if (!url) return null;
+  let params: URLSearchParams;
+  try {
+    params = new URL(url).searchParams;
+  } catch {
+    return null;
+  }
+  if (!params.has('id')) return null;
+  return {
+    id:             Number(params.get('id')),
+    success:        params.get('success') === 'true',
+    pending:        params.get('pending') === 'true',
+    is_voided:      params.get('is_voided') === 'true',
+    is_refunded:    params.get('is_refunded') === 'true',
+    error_occured:  params.get('error_occured') === 'true',
+    data:           { message: params.get('data.message') ?? undefined },
+    order: {
+      id:                params.has('order') ? Number(params.get('order')) : undefined,
+      merchant_order_id: params.get('merchant_order_id') ?? undefined,
+    },
+    amount_cents:   params.has('amount_cents') ? Number(params.get('amount_cents')) : undefined,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -81,8 +125,12 @@ Deno.serve(async (req) => {
   }
 
   try {
-    if (!PAYMOB_API_KEY) {
-      return jsonOk({ status: 'error', error: 'PAYMOB_API_KEY غير مضبوط' });
+    // TEMP diagnostic-only — see block comment near PAYMOB_DIAG_SECRET above.
+    const useTestMode = !!PAYMOB_DIAG_SECRET && req.headers.get('x-paymob-diag-key') === PAYMOB_DIAG_SECRET;
+    const activeSecretKey = useTestMode ? PAYMOB_TEST_SECRET_KEY : PAYMOB_SECRET_KEY;
+    const activePublicKey = useTestMode ? PAYMOB_TEST_PUBLIC_KEY : PAYMOB_PUBLIC_KEY;
+    if (!activeSecretKey || !activePublicKey) {
+      return jsonOk({ status: 'error', error: 'مفاتيح Paymob غير مضبوطة' });
     }
 
     const supabase = createClient(
@@ -103,7 +151,7 @@ Deno.serve(async (req) => {
     // ── Idempotency: if already completed, just return order id ────────
     const { data: existing } = await supabase
       .from('pending_payments')
-      .select('status, resulting_order_id, paymob_order_id, failure_reason, coupon_code, client_secret_hash')
+      .select('status, resulting_order_id, paymob_order_id, failure_reason, coupon_code, client_secret_hash, paymob_client_secret')
       .eq('merchant_order_id', merchantOrderId)
       .maybeSingle();
 
@@ -140,57 +188,62 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Get Paymob auth token ──────────────────────────────────────────
-    const authRes = await fetch('https://accept.paymob.com/api/auth/tokens', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ api_key: PAYMOB_API_KEY }),
-    });
-
-    if (!authRes.ok) {
-      const t = await authRes.text();
-      console.error('[check-paymob] Paymob auth failed:', t);
-      return jsonOk({ status: 'pending', error: 'تعذر الاتصال بـ Paymob' });
+    // ── Read the intention's current state from Paymob ─────────────────
+    // The classic /api/ecommerce/orders/transaction_inquiry endpoint needs a
+    // classic auth token, which this merchant account can no longer issue
+    // (verified live 2026-08-04 — /api/auth/tokens returns "incorrect
+    // credentials"). The Intention API's element endpoint returns the same
+    // authoritative transaction state, keyed by public key + the intention's
+    // own client_secret which we persisted at initiate time.
+    //
+    // Source of truth is still Paymob, never the caller: nothing below reads
+    // any client-supplied status.
+    if (!existing.paymob_client_secret) {
+      // Pre-migration rows (created under the classic flow) have no intention
+      // secret. They can only be resolved by the HMAC-verified webhook or by
+      // the expiry sweep — never silently completed here.
+      console.warn('[check-paymob] no intention client_secret for', merchantOrderId);
+      return jsonOk({ status: 'pending' });
     }
 
-    const { token: authToken } = await authRes.json();
+    const elementUrl =
+      `${PAYMOB_BASE_URL}/v1/intention/element/${encodeURIComponent(activePublicKey)}` +
+      `/${encodeURIComponent(existing.paymob_client_secret)}/`;
 
-    // ── Query Paymob's transaction inquiry API ─────────────────────────
-    //  POST /api/ecommerce/orders/transaction_inquiry
-    //    { auth_token, order_id }  ← Paymob's order id (NOT our merchant_order_id)
-    //  Or:
-    //  POST same endpoint
-    //    { auth_token, merchant_order_id } ← our id
-    //
-    //  We use merchant_order_id since that's what we always have.
-    const inquiryRes = await fetch(
-      'https://accept.paymob.com/api/ecommerce/orders/transaction_inquiry',
-      {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          auth_token:        authToken,
-          merchant_order_id: merchantOrderId,
-        }),
-      },
-    );
+    const inquiryRes = await fetch(elementUrl, {
+      method: 'GET',
+      headers: { 'Authorization': `Token ${activeSecretKey}` },
+    });
 
     if (!inquiryRes.ok) {
       const t = await inquiryRes.text();
-      console.warn('[check-paymob] inquiry failed:', inquiryRes.status, t.substring(0, 200));
+      console.warn('[check-paymob] intention lookup failed:', inquiryRes.status, t.substring(0, 200));
       // Don't treat as failure yet — let client keep polling
       return jsonOk({ status: 'pending' });
     }
 
-    const inquiry = (await inquiryRes.json()) as PaymobTxn | PaymobTxn[];
-    const txn: PaymobTxn = Array.isArray(inquiry) ? inquiry[0] : inquiry;
+    const intention = await inquiryRes.json() as {
+      status?: string;
+      paid?: boolean;
+      confirmed?: boolean;
+      intention_detail?: { amount?: number };
+      redirection_url?: string;
+    };
 
-    console.log('[check-paymob] inquiry result:', JSON.stringify({
-      success:       txn?.success,
-      pending:       txn?.pending,
-      error_occured: txn?.error_occured,
-      message:       txn?.data?.message,
-      id:            txn?.id,
+    // See txnFromRedirectionUrl's comment above: this endpoint has no
+    // `transactions` array. `paid` is the authoritative success signal;
+    // redirection_url's query string is the only place per-transaction detail
+    // (id, decline message, ...) is exposed once an attempt has happened.
+    const txn: PaymobTxn = txnFromRedirectionUrl(intention.redirection_url) ?? {};
+
+    console.log('[check-paymob] intention state:', JSON.stringify({
+      intentionStatus: intention.status,
+      paid:            intention.paid,
+      confirmed:       intention.confirmed,
+      success:         txn?.success,
+      pending:         txn?.pending,
+      error_occured:   txn?.error_occured,
+      id:              txn?.id,
     }));
 
     // Helper: release coupon if it was claimed with this pending payment

@@ -3,41 +3,80 @@
 //  ──────────────────────────────────────────────────────────────────────
 //  • Does NOT create an `orders` row. Instead, it saves the cart + customer
 //    info in `pending_payments` (with reserved stock) and returns the
-//    Paymob iframe URL.
-//  • The real `orders` row is only created later by `check-paymob-transaction`
-//    after Paymob confirms a successful payment.
+//    Paymob checkout URL.
+//  • The real `orders` row is only created later by `paymob-webhook` /
+//    `check-paymob-transaction` after Paymob confirms a successful payment.
 //
-//  Security highlights:
+//  Paymob integration: Intention API (secret key), NOT the legacy 3-step
+//  classic flow. Verified live 2026-08-04 that this merchant account rejects
+//  /api/auth/tokens outright ("incorrect credentials") while /v1/intention
+//  accepts the secret key, so the classic path is gone, not misconfigured.
+//
+//  Security highlights (all unchanged from the classic implementation):
 //    – Cart prices / shipping / total are RE-CALCULATED server-side from the
 //      products table (the client cannot fake a discount).
 //    – Stock is reserved atomically (FOR UPDATE inside the RPC).
-//    – A unique merchant_order_id is generated server-side.
+//    – A unique merchant_order_id is generated server-side and sent to Paymob
+//      as `special_reference`, so webhook callbacks correlate back to it.
+//
+//  App exemption (2026-08-04): the mobile app cannot render a Cloudflare
+//  Turnstile challenge (no browser). A request carrying `x-app-key` equal to
+//  APP_DOWNLOAD_SECRET — the same app-only secret already used by
+//  create-digital-download-link — is trusted as the published app and skips
+//  Turnstile. Any other caller (the website included) still goes through it.
+//  Rate limiting and every price/payment verification below still apply
+//  regardless of this exemption.
 // ════════════════════════════════════════════════════════════════════════
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const PAYMOB_API_KEY = Deno.env.get('PAYMOB_API_KEY') ?? '';
+const PAYMOB_SECRET_KEY = Deno.env.get('PAYMOB_SECRET_KEY') ?? '';
+const PAYMOB_PUBLIC_KEY = Deno.env.get('PAYMOB_PUBLIC_KEY') ?? '';
+const PAYMOB_BASE_URL = 'https://accept.paymob.com';
+// Where Paymob POSTs the transaction-processed callback, and where the buyer
+// is sent back to after the checkout completes.
+const WEBHOOK_URL = `${Deno.env.get('SUPABASE_URL') ?? ''}/functions/v1/paymob-webhook`;
+const REDIRECT_URL = Deno.env.get('PAYMOB_REDIRECT_URL') ?? '';
 const TURNSTILE_SECRET_KEY = Deno.env.get('TURNSTILE_SECRET_KEY') ?? '';
 const REQUIRE_TURNSTILE = (Deno.env.get('REQUIRE_TURNSTILE') ?? '').toLowerCase() === 'true';
+// Same app-only secret create-digital-download-link already checks. Lets the
+// mobile app skip Turnstile (it has no browser to solve the challenge) while
+// the website still goes through it.
+const APP_KEY_SECRET = Deno.env.get('APP_DOWNLOAD_SECRET') ?? '';
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX = 8;
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 
+// Intention API takes integration ids directly in `payment_methods`; the
+// legacy per-method iframe ids are no longer used (unified checkout renders
+// every enabled method from the single intention).
 const INTEGRATION_IDS: Record<string, number> = {
   paymob_card:   Number(Deno.env.get('PAYMOB_CARD_INTEGRATION_ID')   ?? '0'),
   paymob_fawry:  Number(Deno.env.get('PAYMOB_FAWRY_INTEGRATION_ID')  ?? '0'),
   paymob_wallet: Number(Deno.env.get('PAYMOB_WALLET_INTEGRATION_ID') ?? '0'),
 };
 
-const IFRAME_IDS: Record<string, string> = {
-  paymob_card:   Deno.env.get('PAYMOB_CARD_IFRAME_ID')   ?? '',
-  paymob_fawry:  Deno.env.get('PAYMOB_FAWRY_IFRAME_ID')  ?? '',
-  paymob_wallet: Deno.env.get('PAYMOB_WALLET_IFRAME_ID') ?? '',
+// ── TEMP diagnostic-only: Paymob sandbox path (2026-08-04) ─────────────────
+// Verifies the Intention API + webhook + check-paymob-transaction chain
+// end-to-end against Paymob's test mode before trusting new live integration
+// IDs. Gated behind its OWN dedicated secret (PAYMOB_DIAG_SECRET, generated
+// for this diagnostic only) via the x-paymob-diag-key header — deliberately
+// NOT reusing APP_KEY_SECRET, so this stays in its own trust domain and
+// can't be widened by anything the app already knows. The live website never
+// sends this header and can't hit this branch.
+// Remove this block, the header check below, and the five PAYMOB_TEST_*/
+// PAYMOB_DIAG_SECRET secrets once verified end-to-end.
+const PAYMOB_DIAG_SECRET     = Deno.env.get('PAYMOB_DIAG_SECRET') ?? '';
+const PAYMOB_TEST_SECRET_KEY = Deno.env.get('PAYMOB_TEST_SECRET_KEY') ?? '';
+const PAYMOB_TEST_PUBLIC_KEY = Deno.env.get('PAYMOB_TEST_PUBLIC_KEY') ?? '';
+const TEST_INTEGRATION_IDS: Record<string, number> = {
+  paymob_card:   Number(Deno.env.get('PAYMOB_TEST_CARD_INTEGRATION_ID')   ?? '0'),
+  paymob_wallet: Number(Deno.env.get('PAYMOB_TEST_WALLET_INTEGRATION_ID') ?? '0'),
 };
 
 function getClientIp(req: Request): string {
@@ -138,10 +177,6 @@ Deno.serve(async (req) => {
   let _claimedCouponCode: string | null = null;
 
   try {
-    if (!PAYMOB_API_KEY) {
-      return jsonError('PAYMOB_API_KEY غير مضبوط', 500);
-    }
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -174,12 +209,21 @@ Deno.serve(async (req) => {
       turnstileToken?: string | null;
     };
 
-    const normalizedProvider = String(provider ?? '').toLowerCase().trim();
-    if (!normalizedProvider || !INTEGRATION_IDS[normalizedProvider]) {
-      return jsonError(`بيانات Paymob غير مضبوطة للطريقة: ${provider}`, 500);
+    // Trusted app callers (mobile) skip Turnstile — they cannot render the
+    // widget. Everyone else (the website) still must pass it.
+    const isTrustedApp = !!APP_KEY_SECRET && req.headers.get('x-app-key') === APP_KEY_SECRET;
+    // TEMP diagnostic-only — see block comment near TEST_INTEGRATION_IDS above.
+    const useTestMode = !!PAYMOB_DIAG_SECRET && req.headers.get('x-paymob-diag-key') === PAYMOB_DIAG_SECRET;
+    const activeSecretKey      = useTestMode ? PAYMOB_TEST_SECRET_KEY : PAYMOB_SECRET_KEY;
+    const activePublicKey      = useTestMode ? PAYMOB_TEST_PUBLIC_KEY : PAYMOB_PUBLIC_KEY;
+    const activeIntegrationIds = useTestMode ? TEST_INTEGRATION_IDS   : INTEGRATION_IDS;
+    if (!activeSecretKey || !activePublicKey) {
+      return jsonError('مفاتيح Paymob غير مضبوطة', 500);
     }
-    if (!IFRAME_IDS[normalizedProvider]) {
-      return jsonError(`Iframe ID غير مضبوط للطريقة: ${provider}`, 500);
+
+    const normalizedProvider = String(provider ?? '').toLowerCase().trim();
+    if (!normalizedProvider || !activeIntegrationIds[normalizedProvider]) {
+      return jsonError(`بيانات Paymob غير مضبوطة للطريقة: ${provider}`, 500);
     }
     if (!Array.isArray(items) || items.length === 0) {
       return jsonError('السلة فارغة');
@@ -194,7 +238,9 @@ Deno.serve(async (req) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
       return jsonError('البريد الإلكتروني غير صالح');
     }
-    if (!(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
+    // useTestMode also skips Turnstile here — it already requires knowing
+    // PAYMOB_DIAG_SECRET, so this doesn't widen who can bypass the check.
+    if (!isTrustedApp && !useTestMode && !(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
       return jsonError('تعذر التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.', 403);
     }
 
@@ -434,130 +480,94 @@ Deno.serve(async (req) => {
       .update({ client_secret_hash: clientSecretHash })
       .eq('merchant_order_id', merchantOrderId);
 
-    // ── Paymob Legacy Auth API (3 steps) ────────────────────────────
-    console.log('[paymob] Step 1/3: auth token');
-    const authRes = await fetch('https://accept.paymob.com/api/auth/tokens', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ api_key: PAYMOB_API_KEY }),
-    });
-    if (!authRes.ok) {
-      const t = await authRes.text();
-      await supabase.rpc('cancel_pending_payment', {
-        p_merchant_order_id: merchantOrderId,
-        p_reason: 'Paymob auth failed',
-      });
-      await releaseCouponIfNeeded();
-      return jsonError(`فشل التوثيق مع Paymob: ${t.substring(0, 200)}`);
-    }
-    const { token: authToken } = await authRes.json();
-    if (!authToken) {
-      await supabase.rpc('cancel_pending_payment', {
-        p_merchant_order_id: merchantOrderId,
-        p_reason: 'No auth token',
-      });
-      await releaseCouponIfNeeded();
-      return jsonError('Paymob لم يرسل auth_token');
-    }
-
-    console.log('[paymob] Step 2/3: register order');
-    const regRes = await fetch('https://accept.paymob.com/api/ecommerce/orders', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        auth_token:        authToken,
-        delivery_needed:   'false',
-        amount_cents:      String(totalCents),
-        currency:          'EGP',
-        items:             [],
-        merchant_order_id: merchantOrderId,
-      }),
-    });
-    if (!regRes.ok) {
-      const t = await regRes.text();
-      await supabase.rpc('cancel_pending_payment', {
-        p_merchant_order_id: merchantOrderId,
-        p_reason: 'Paymob register failed',
-      });
-      await releaseCouponIfNeeded();
-      return jsonError(`فشل تسجيل الطلب في Paymob: ${t.substring(0, 200)}`);
-    }
-    const { id: paymobOrderId } = await regRes.json();
-    if (!paymobOrderId) {
-      await supabase.rpc('cancel_pending_payment', {
-        p_merchant_order_id: merchantOrderId,
-        p_reason: 'No paymob order id',
-      });
-      await releaseCouponIfNeeded();
-      return jsonError('Paymob لم يرسل order_id');
-    }
-
-    // Save paymob_order_id back to pending_payments
-    await supabase
-      .from('pending_payments')
-      .update({ paymob_order_id: String(paymobOrderId) })
-      .eq('merchant_order_id', merchantOrderId);
-
-    console.log('[paymob] Step 3/3: payment key');
+    // ── Paymob Intention API (single call) ──────────────────────────
+    // `special_reference` carries OUR merchantOrderId so the webhook and the
+    // status poll can both correlate the callback back to this pending row.
     const nameParts = (customer.fullName ?? '').trim().split(' ');
     const firstName = nameParts[0] || 'NA';
     const lastName  = nameParts.slice(1).join(' ') || 'NA';
 
-    const pkRes = await fetch('https://accept.paymob.com/api/acceptance/payment_keys', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const failAndCleanup = async (reason: string, message: string) => {
+      await supabase.rpc('cancel_pending_payment', {
+        p_merchant_order_id: merchantOrderId,
+        p_reason: reason,
+      });
+      await releaseCouponIfNeeded();
+      return jsonError(message);
+    };
+
+    console.log('[paymob] creating intention for', merchantOrderId);
+    const intentionRes = await fetch(`${PAYMOB_BASE_URL}/v1/intention/`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${activeSecretKey}`,
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
-        auth_token:     authToken,
-        amount_cents:   String(totalCents),
-        expiration:     1800,
-        order_id:       paymobOrderId,
-        currency:       'EGP',
-        integration_id: INTEGRATION_IDS[normalizedProvider],
-        lock_order_when_paid: true,   // prevent double-charging on same order
+        amount:           totalCents,
+        currency:         'EGP',
+        payment_methods:  [activeIntegrationIds[normalizedProvider]],
+        special_reference: merchantOrderId,
+        notification_url: WEBHOOK_URL,
+        ...(REDIRECT_URL ? { redirection_url: REDIRECT_URL } : {}),
         billing_data: {
-          apartment:       'NA',
-          email:           customer.email ?? 'NA',
-          floor:           'NA',
-          first_name:      firstName,
-          street:          customer.address ?? 'NA',
-          building:        'NA',
-          phone_number:    customer.phone ?? 'NA',
-          shipping_method: 'NA',
-          postal_code:     'NA',
-          city:            customer.city ?? 'NA',
-          country:         country?.code ?? 'EG',
-          last_name:       lastName,
-          state:           customer.governorate ?? 'NA',
+          apartment:    'NA',
+          email:        customer.email ?? 'NA',
+          floor:        'NA',
+          first_name:   firstName,
+          street:       customer.address || 'NA',
+          building:     'NA',
+          phone_number: customer.phone ?? 'NA',
+          postal_code:  'NA',
+          city:         customer.city || 'NA',
+          country:      country?.code ?? 'EG',
+          last_name:    lastName,
+          state:        customer.governorate || 'NA',
         },
       }),
     });
-    if (!pkRes.ok) {
-      const t = await pkRes.text();
-      await supabase.rpc('cancel_pending_payment', {
-        p_merchant_order_id: merchantOrderId,
-        p_reason: 'Paymob payment_key failed',
-      });
-      await releaseCouponIfNeeded();
-      return jsonError(`فشل توليد payment_key: ${t.substring(0, 200)}`);
-    }
-    const { token: paymentToken } = await pkRes.json();
-    if (!paymentToken) {
-      await supabase.rpc('cancel_pending_payment', {
-        p_merchant_order_id: merchantOrderId,
-        p_reason: 'No payment token',
-      });
-      await releaseCouponIfNeeded();
-      return jsonError('Paymob لم يرسل payment_token');
+
+    if (!intentionRes.ok) {
+      const t = await intentionRes.text();
+      console.error('[paymob] intention failed:', intentionRes.status, t.substring(0, 400));
+      return await failAndCleanup(
+        'Paymob intention failed',
+        `تعذر بدء عملية الدفع: ${t.substring(0, 200)}`,
+      );
     }
 
+    const intention = await intentionRes.json() as {
+      client_secret?: string;
+      id?: string;
+      intention_order_id?: number;
+    };
+
+    if (!intention.client_secret) {
+      console.error('[paymob] intention returned no client_secret:', JSON.stringify(intention).substring(0, 300));
+      return await failAndCleanup('No client_secret', 'Paymob لم يرسل بيانات الدفع');
+    }
+
+    // intention_order_id is what arrives as `obj.order.id` in the webhook, so
+    // storing it here keeps complete_pending_payment's order-match check intact.
+    await supabase
+      .from('pending_payments')
+      .update({
+        paymob_order_id:      intention.intention_order_id != null
+          ? String(intention.intention_order_id)
+          : null,
+        paymob_client_secret: intention.client_secret,
+      })
+      .eq('merchant_order_id', merchantOrderId);
+
     const paymentUrl =
-      `https://accept.paymob.com/api/acceptance/iframes/${IFRAME_IDS[normalizedProvider]}?payment_token=${paymentToken}`;
+      `${PAYMOB_BASE_URL}/unifiedcheckout/?publicKey=${encodeURIComponent(activePublicKey)}` +
+      `&clientSecret=${encodeURIComponent(intention.client_secret)}`;
 
     return jsonOk({
       paymentUrl,
       merchantOrderId,
       clientSecret,
-      paymobOrderId,
+      paymobOrderId: intention.intention_order_id ?? null,
       amountCents: totalCents,
     });
   } catch (err) {

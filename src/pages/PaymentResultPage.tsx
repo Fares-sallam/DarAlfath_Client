@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
-import { CheckCircle2, XCircle, PackageCheck, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, PackageCheck, Loader2, Clock } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { supabase } from '@/lib/supabase';
@@ -22,9 +22,14 @@ export default function PaymentResultPage() {
   const { clearCart } = useCart();
   const didRun = useRef(false);
 
-  const [state, setState] = useState<'loading' | 'success' | 'failed' | 'pending'>('loading');
+  // `unconfirmed` ≠ `failed`. `failed` means Paymob told us the payment did NOT
+  // go through. `unconfirmed` means we simply could not get an answer in time —
+  // the money may well have been taken. Conflating the two told paying customers
+  // "الطلب لم يتم" and invited them to pay a second time.
+  const [state, setState] = useState<'loading' | 'success' | 'failed' | 'unconfirmed' | 'pending'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [orderId, setOrderId] = useState<string | null>(null);
+  const [reference, setReference] = useState<string | null>(null);
 
   useEffect(() => {
     if (didRun.current) return;
@@ -47,6 +52,8 @@ export default function PaymentResultPage() {
       return;
     }
 
+    setReference(merchantOrderId);
+
     // Always verify with our backend — never trust URL params
     void verifyTransaction(merchantOrderId, fallbackClientSecret);
 
@@ -56,9 +63,10 @@ export default function PaymentResultPage() {
           body: { merchantOrderId: mOrderId, clientSecret },
         });
 
+        // A transport/auth error tells us nothing about the payment itself —
+        // treat it as "unknown", never as a failure.
         if (error) {
-          setState('failed');
-          setErrorMessage('تعذر التحقق من حالة الدفع. تواصل مع الدعم.');
+          setState('unconfirmed');
           return;
         }
 
@@ -79,15 +87,17 @@ export default function PaymentResultPage() {
           return;
         }
 
-        // Pending — keep polling for up to 1 minute
+        // Pending — keep polling. 3 minutes, not 1: a slow Paymob lookup or a
+        // late webhook used to trip the old 60s cutoff and report a paid order
+        // as failed. We deliberately do NOT clear the stored order id on
+        // timeout, so a refresh re-checks instead of stranding the payment.
         let attempts = 0;
-        const maxAttempts = 20;
+        const maxAttempts = 60;
         const interval = setInterval(async () => {
           attempts++;
           if (attempts > maxAttempts) {
             clearInterval(interval);
-            setState('failed');
-            setErrorMessage('انتهت مهلة التأكيد. الطلب لم يتم.');
+            setState('unconfirmed');
             return;
           }
           const { data: poll } = await supabase.functions.invoke('check-paymob-transaction', {
@@ -108,9 +118,9 @@ export default function PaymentResultPage() {
             clearPendingPaymob();
           }
         }, 3000);
-      } catch (e) {
-        setState('failed');
-        setErrorMessage(e instanceof Error ? e.message : 'خطأ غير متوقع.');
+      } catch {
+        // Same reasoning as the transport-error branch above: unknown, not failed.
+        setState('unconfirmed');
       }
     }
   }, [params, queryClient, clearCart]);
@@ -123,6 +133,45 @@ export default function PaymentResultPage() {
             <Loader2 size={48} className="paymob-modal__spinner" />
             <h3>جارٍ التحقق من عملية الدفع</h3>
             <p>برجاء الانتظار قليلاً... نتأكد من Paymob مباشرةً.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // We could not reach a verdict. The payment may have succeeded, so the one
+  // thing this screen must never do is imply the order failed or nudge the
+  // customer into paying twice.
+  if (state === 'unconfirmed') {
+    return (
+      <div className="page-sections">
+        <section className="page-card">
+          <div className="empty-state">
+            <Clock size={48} color="var(--gold, #d4a24a)" />
+            <h3>لم نتمكن من تأكيد الدفع بعد</h3>
+            <p>
+              لو تم خصم المبلغ من حسابك، فطلبك محفوظ وسيتم تأكيده تلقائيًا خلال دقائق.
+            </p>
+            <p style={{ fontWeight: 700 }}>
+              من فضلك لا تدفع مرة أخرى حتى لا يُخصم المبلغ مرتين.
+            </p>
+            {reference && (
+              <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>
+                رقم العملية: {reference}
+              </p>
+            )}
+            <p style={{ fontSize: '0.9rem', opacity: 0.7 }}>
+              حدّث الصفحة بعد قليل للتأكد، أو تواصل معنا برقم العملية لو استمرت المشكلة.
+            </p>
+            <div className="empty-state__actions">
+              <Link to="/account/orders" className="primary-button">
+                <PackageCheck size={16} />
+                عرض طلباتي
+              </Link>
+              <Link to="/contact" className="ghost-button">
+                تواصل معنا
+              </Link>
+            </div>
           </div>
         </section>
       </div>
