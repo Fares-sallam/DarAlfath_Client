@@ -1,7 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProductItem, ProductVariantItem } from '@/types/store';
 import { useCountry } from '@/contexts/CountryContext';
 import { useStoreSettings } from '@/hooks/useStorefront';
+import { supabase } from '@/lib/supabase';
 
 export interface CartItem {
   key: string;
@@ -31,6 +32,9 @@ interface CartContextValue {
   updateQuantity: (key: string, quantity: number) => void;
   removeFromCart: (key: string) => void;
   clearCart: () => void;
+  /** Titles dropped by the staleness reconciliation, for a one-time notice. */
+  unavailableRemoved: string[];
+  dismissUnavailableNotice: () => void;
 }
 
 const CartContext = createContext<CartContextValue | undefined>(undefined);
@@ -108,9 +112,52 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // so cart is populated before any effect can overwrite it with []
   const [items, setItems] = useState<CartItem[]>(loadCartFromStorage);
 
+  const [unavailableRemoved, setUnavailableRemoved] = useState<string[]>([]);
+  // Variant-id sets already reconciled, so this never loops on its own writes.
+  const reconciledRef = useRef<string>('');
+
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
   }, [items]);
+
+  // The cart lives in localStorage and keeps whatever was in it when the item
+  // was added. If a product is later deleted or deactivated, the stale row
+  // survives here, the UI happily renders it, and checkout dies at the last
+  // step with "لم نجد أي منتجات بهذه المعرّفات" — with no way for the customer
+  // to tell which item is at fault. Reconcile against the public catalog and
+  // drop what can no longer be bought, telling the customer what happened.
+  useEffect(() => {
+    const variantIds = items.map((item) => item.variant_id);
+    if (variantIds.length === 0) return;
+
+    const signature = [...variantIds].sort().join(',');
+    if (reconciledRef.current === signature) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const { data, error } = await supabase
+        .from('product_variants_public')
+        .select('variant_id')
+        .in('variant_id', variantIds);
+
+      // Fail open: a network blip must never empty someone's cart.
+      if (cancelled || error || !data) return;
+
+      const liveIds = new Set(data.map((row) => row.variant_id as string));
+      const missing = items.filter((item) => !liveIds.has(item.variant_id));
+
+      reconciledRef.current = signature;
+      if (missing.length === 0) return;
+
+      setUnavailableRemoved(missing.map((item) => item.title));
+      setItems((prev) => prev.filter((item) => liveIds.has(item.variant_id)));
+    })();
+
+    return () => { cancelled = true; };
+  }, [items]);
+
+  const dismissUnavailableNotice = () => setUnavailableRemoved([]);
 
   const addToCart = (
     product: ProductItem,
@@ -208,8 +255,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       updateQuantity,
       removeFromCart,
       clearCart,
+      unavailableRemoved,
+      dismissUnavailableNotice,
     };
-  }, [items, selectedCountry, shippingFlatRate, freeShippingThresholdValue]);
+  }, [items, selectedCountry, shippingFlatRate, freeShippingThresholdValue, unavailableRemoved]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

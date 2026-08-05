@@ -18,6 +18,7 @@ export default function CartPage() {
     updateQuantity,
     removeFromCart,
     clearCart,
+    unavailableRemoved,
   } = useCart();
 
   return (
@@ -40,6 +41,12 @@ export default function CartPage() {
             </button>
           ) : null}
         </div>
+
+        {unavailableRemoved.length > 0 ? (
+          <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.9rem' }}>
+            لم تعد هذه المنتجات متاحة وتمت إزالتها من سلتك: {unavailableRemoved.join('، ')}
+          </div>
+        ) : null}
 
         {items.length ? (
           <div className="cart-layout">

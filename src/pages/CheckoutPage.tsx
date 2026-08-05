@@ -85,7 +85,7 @@ type CheckoutForm = {
 export default function CheckoutPage() {
   usePageTitle('إتمام الطلب');
   const queryClient = useQueryClient();
-  const { items, subtotal, shipping, total, currencySymbol, clearCart } = useCart();
+  const { items, subtotal, shipping, total, currencySymbol, clearCart, unavailableRemoved } = useCart();
   const { user } = useAuth();
   const { selectedCountry } = useCountry();
   const { data: paymentMethods = [] } = usePaymentMethods();
@@ -821,6 +821,12 @@ export default function CheckoutPage() {
                 <Truck size={14} />
                 الشحن يُحسب للكتب الورقية فقط
               </div>
+
+              {unavailableRemoved.length > 0 ? (
+                <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.85rem' }}>
+                  لم تعد هذه المنتجات متاحة وتمت إزالتها من سلتك: {unavailableRemoved.join('، ')}
+                </div>
+              ) : null}
 
               {submitError ? (
                 <div className="auth-alert auth-alert--error">{submitError}</div>
