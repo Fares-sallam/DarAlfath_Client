@@ -61,24 +61,6 @@ const INTEGRATION_IDS: Record<string, number> = {
   paymob_wallet: Number(Deno.env.get('PAYMOB_WALLET_INTEGRATION_ID') ?? '0'),
 };
 
-// ── TEMP diagnostic-only: Paymob sandbox path (2026-08-04) ─────────────────
-// Verifies the Intention API + webhook + check-paymob-transaction chain
-// end-to-end against Paymob's test mode before trusting new live integration
-// IDs. Gated behind its OWN dedicated secret (PAYMOB_DIAG_SECRET, generated
-// for this diagnostic only) via the x-paymob-diag-key header — deliberately
-// NOT reusing APP_KEY_SECRET, so this stays in its own trust domain and
-// can't be widened by anything the app already knows. The live website never
-// sends this header and can't hit this branch.
-// Remove this block, the header check below, and the five PAYMOB_TEST_*/
-// PAYMOB_DIAG_SECRET secrets once verified end-to-end.
-const PAYMOB_DIAG_SECRET     = Deno.env.get('PAYMOB_DIAG_SECRET') ?? '';
-const PAYMOB_TEST_SECRET_KEY = Deno.env.get('PAYMOB_TEST_SECRET_KEY') ?? '';
-const PAYMOB_TEST_PUBLIC_KEY = Deno.env.get('PAYMOB_TEST_PUBLIC_KEY') ?? '';
-const TEST_INTEGRATION_IDS: Record<string, number> = {
-  paymob_card:   Number(Deno.env.get('PAYMOB_TEST_CARD_INTEGRATION_ID')   ?? '0'),
-  paymob_wallet: Number(Deno.env.get('PAYMOB_TEST_WALLET_INTEGRATION_ID') ?? '0'),
-};
-
 function getClientIp(req: Request): string {
   return (
     req.headers.get('cf-connecting-ip') ||
@@ -212,17 +194,12 @@ Deno.serve(async (req) => {
     // Trusted app callers (mobile) skip Turnstile — they cannot render the
     // widget. Everyone else (the website) still must pass it.
     const isTrustedApp = !!APP_KEY_SECRET && req.headers.get('x-app-key') === APP_KEY_SECRET;
-    // TEMP diagnostic-only — see block comment near TEST_INTEGRATION_IDS above.
-    const useTestMode = !!PAYMOB_DIAG_SECRET && req.headers.get('x-paymob-diag-key') === PAYMOB_DIAG_SECRET;
-    const activeSecretKey      = useTestMode ? PAYMOB_TEST_SECRET_KEY : PAYMOB_SECRET_KEY;
-    const activePublicKey      = useTestMode ? PAYMOB_TEST_PUBLIC_KEY : PAYMOB_PUBLIC_KEY;
-    const activeIntegrationIds = useTestMode ? TEST_INTEGRATION_IDS   : INTEGRATION_IDS;
-    if (!activeSecretKey || !activePublicKey) {
+    if (!PAYMOB_SECRET_KEY || !PAYMOB_PUBLIC_KEY) {
       return jsonError('مفاتيح Paymob غير مضبوطة', 500);
     }
 
     const normalizedProvider = String(provider ?? '').toLowerCase().trim();
-    if (!normalizedProvider || !activeIntegrationIds[normalizedProvider]) {
+    if (!normalizedProvider || !INTEGRATION_IDS[normalizedProvider]) {
       return jsonError(`بيانات Paymob غير مضبوطة للطريقة: ${provider}`, 500);
     }
     if (!Array.isArray(items) || items.length === 0) {
@@ -238,9 +215,7 @@ Deno.serve(async (req) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
       return jsonError('البريد الإلكتروني غير صالح');
     }
-    // useTestMode also skips Turnstile here — it already requires knowing
-    // PAYMOB_DIAG_SECRET, so this doesn't widen who can bypass the check.
-    if (!isTrustedApp && !useTestMode && !(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
+    if (!isTrustedApp && !(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
       return jsonError('تعذر التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.', 403);
     }
 
@@ -500,13 +475,13 @@ Deno.serve(async (req) => {
     const intentionRes = await fetch(`${PAYMOB_BASE_URL}/v1/intention/`, {
       method: 'POST',
       headers: {
-        'Authorization': `Token ${activeSecretKey}`,
+        'Authorization': `Token ${PAYMOB_SECRET_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
         amount:           totalCents,
         currency:         'EGP',
-        payment_methods:  [activeIntegrationIds[normalizedProvider]],
+        payment_methods:  [INTEGRATION_IDS[normalizedProvider]],
         special_reference: merchantOrderId,
         notification_url: WEBHOOK_URL,
         ...(REDIRECT_URL ? { redirection_url: REDIRECT_URL } : {}),
@@ -560,7 +535,7 @@ Deno.serve(async (req) => {
       .eq('merchant_order_id', merchantOrderId);
 
     const paymentUrl =
-      `${PAYMOB_BASE_URL}/unifiedcheckout/?publicKey=${encodeURIComponent(activePublicKey)}` +
+      `${PAYMOB_BASE_URL}/unifiedcheckout/?publicKey=${encodeURIComponent(PAYMOB_PUBLIC_KEY)}` +
       `&clientSecret=${encodeURIComponent(intention.client_secret)}`;
 
     return jsonOk({

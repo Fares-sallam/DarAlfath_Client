@@ -1,0 +1,34 @@
+-- ══════════════════════════════════════════════════════════════════════════
+-- Re-close the products / product_variants read leak.
+--
+-- 20260731_fix_catalog_inventory_rls_staff_access.sql consolidated these two
+-- tables onto is_admin()-gated policies. Verified live 2026-08-05 that two
+-- NEW wide-open policies had since been added outside version control (they
+-- exist in neither repo's migrations, so they were created straight from the
+-- Supabase dashboard):
+--
+--     products_select_public          SELECT  TO public  USING (true)
+--     product_variants_select_public  SELECT  TO public  USING (true)
+--
+-- With those in place any anonymous visitor could read the base tables, which
+-- carry internal margin data. Confirmed live with nothing but the anon key:
+--     product_variants -> cost_price = 100
+--     products         -> profit = 33, cost_price = 100
+--
+-- Safe to drop, verified before doing so:
+--   • The storefront never touches these tables. It reads only
+--     products_public_catalog / product_variants_public (grep of src/: zero
+--     direct `.from('products')` / `.from('product_variants')` calls). Those
+--     views are owned by postgres, bypass RLS, and expose no cost_price or
+--     profit column — checked against information_schema.
+--   • The dashboard does read the base tables directly (17 call sites), but
+--     always as a signed-in admin, which the surviving isadmin_full_* policies
+--     already cover.
+--
+-- If public catalog reads are ever genuinely needed on the base tables, add a
+-- column-limited view instead of a USING (true) policy — a row policy cannot
+-- restrict columns, so it will always expose cost_price and profit.
+-- ══════════════════════════════════════════════════════════════════════════
+
+DROP POLICY IF EXISTS products_select_public          ON public.products;
+DROP POLICY IF EXISTS product_variants_select_public  ON public.product_variants;

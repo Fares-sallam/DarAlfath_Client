@@ -28,14 +28,6 @@ const PAYMOB_PUBLIC_KEY = Deno.env.get('PAYMOB_PUBLIC_KEY') ?? '';
 const PAYMOB_BASE_URL = 'https://accept.paymob.com';
 const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
 
-// ── TEMP diagnostic-only: Paymob sandbox path (2026-08-04) ─────────────────
-// Same isolated gate as initiate-paymob-payment — see the block comment
-// there. Remove this block and the x-paymob-diag-key check below once the
-// end-to-end verification is done.
-const PAYMOB_DIAG_SECRET     = Deno.env.get('PAYMOB_DIAG_SECRET') ?? '';
-const PAYMOB_TEST_SECRET_KEY = Deno.env.get('PAYMOB_TEST_SECRET_KEY') ?? '';
-const PAYMOB_TEST_PUBLIC_KEY = Deno.env.get('PAYMOB_TEST_PUBLIC_KEY') ?? '';
-
 // ── In-memory rate limit (per IP per isolate) ──
 const RL_WINDOW_MS = 5 * 60 * 1000;
 const RL_MAX = 120; // polling-friendly
@@ -125,11 +117,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // TEMP diagnostic-only — see block comment near PAYMOB_DIAG_SECRET above.
-    const useTestMode = !!PAYMOB_DIAG_SECRET && req.headers.get('x-paymob-diag-key') === PAYMOB_DIAG_SECRET;
-    const activeSecretKey = useTestMode ? PAYMOB_TEST_SECRET_KEY : PAYMOB_SECRET_KEY;
-    const activePublicKey = useTestMode ? PAYMOB_TEST_PUBLIC_KEY : PAYMOB_PUBLIC_KEY;
-    if (!activeSecretKey || !activePublicKey) {
+    if (!PAYMOB_SECRET_KEY || !PAYMOB_PUBLIC_KEY) {
       return jsonOk({ status: 'error', error: 'مفاتيح Paymob غير مضبوطة' });
     }
 
@@ -207,12 +195,12 @@ Deno.serve(async (req) => {
     }
 
     const elementUrl =
-      `${PAYMOB_BASE_URL}/v1/intention/element/${encodeURIComponent(activePublicKey)}` +
+      `${PAYMOB_BASE_URL}/v1/intention/element/${encodeURIComponent(PAYMOB_PUBLIC_KEY)}` +
       `/${encodeURIComponent(existing.paymob_client_secret)}/`;
 
     const inquiryRes = await fetch(elementUrl, {
       method: 'GET',
-      headers: { 'Authorization': `Token ${activeSecretKey}` },
+      headers: { 'Authorization': `Token ${PAYMOB_SECRET_KEY}` },
     });
 
     if (!inquiryRes.ok) {
