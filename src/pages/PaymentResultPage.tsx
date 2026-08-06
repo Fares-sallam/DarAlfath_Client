@@ -46,6 +46,16 @@ export default function PaymentResultPage() {
       localStorage.removeItem('paymob_pending_client_secret');
     };
 
+    // Paymob appends the full transaction detail to this redirect — amount,
+    // card last-4, brand, transaction/order ids, merchant profile id. None of
+    // it is secret (the `hmac` is a signature, not a key) and none of it is
+    // trusted below, but leaving it in the address bar parks that detail in
+    // browser history, screenshots and anything that captures URLs. We have
+    // everything we need in local variables by this point, so drop it.
+    if (window.location.search) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     if (!merchantOrderId) {
       setState('failed');
       setErrorMessage('لم نتمكن من تحديد الطلب. حاول مرة أخرى.');
