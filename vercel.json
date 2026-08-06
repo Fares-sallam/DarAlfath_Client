@@ -6,11 +6,7 @@
     {
       "source": "/(.*)",
       "headers": [
-        {
-          "comment": "Paymob redirects back to /payment/result with the transaction detail in the query string (amount, card last-4, order ids). Without this, that whole URL could ride along in the Referer header to any third-party origin the page talks to — Google Fonts among them. Modern browsers already default to this value; stating it explicitly keeps the guarantee independent of browser defaults.",
-          "key": "Referrer-Policy",
-          "value": "strict-origin-when-cross-origin"
-        }
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }
   ]
