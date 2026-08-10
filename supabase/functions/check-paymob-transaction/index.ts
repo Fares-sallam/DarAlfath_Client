@@ -224,6 +224,11 @@ Deno.serve(async (req) => {
     // (id, decline message, ...) is exposed once an attempt has happened.
     const txn: PaymobTxn = txnFromRedirectionUrl(intention.redirection_url) ?? {};
 
+    // Computed here (not just below) so the "no transaction yet" branch right
+    // below can also defer to it — see the isSuccess/isFailed comment further
+    // down for why this needs to gate every branch, not just the main one.
+    const paidByIntention = intention.paid === true;
+
     console.log('[check-paymob] intention state:', JSON.stringify({
       intentionStatus: intention.status,
       paid:            intention.paid,
@@ -246,8 +251,10 @@ Deno.serve(async (req) => {
       }
     }
 
-    // No transaction yet → customer hasn't completed payment
-    if (!txn || txn.id == null) {
+    // No transaction yet → customer hasn't completed payment. (Guarded by
+    // !paidByIntention: if Paymob already confirmed paid, we fall through to
+    // the isSuccess check below instead of reporting "cancelled" here.)
+    if ((!txn || txn.id == null) && !paidByIntention) {
       // cancel=true + no transaction → safe to cancel (nothing was charged)
       if (cancel) {
         const { data: cancelRes } = await supabase.rpc('cancel_pending_payment', {
@@ -262,8 +269,14 @@ Deno.serve(async (req) => {
       return jsonOk({ status: 'pending' });
     }
 
-    const isSuccess = txn.success === true && txn.pending !== true && txn.error_occured !== true;
-    const isFailed  = txn.success === false || txn.error_occured === true;
+    // `intention.paid` is the authoritative signal per the comment above, but
+    // until now nothing actually read it — isSuccess/isFailed were decided
+    // purely from the (sometimes stale) redirection_url snapshot. Paid=true
+    // now short-circuits isSuccess and blocks isFailed outright, so a stale
+    // "failed" redirect can never override a Paymob-confirmed paid intention.
+    const isSuccess = (txn.success === true && txn.pending !== true && txn.error_occured !== true)
+      || (paidByIntention && txn.id != null);
+    const isFailed  = !paidByIntention && (txn.success === false || txn.error_occured === true);
 
     if (isSuccess) {
       // Convert pending_payment → real order
@@ -311,6 +324,25 @@ Deno.serve(async (req) => {
         p_merchant_order_id: merchantOrderId,
         p_reason:            txn.data?.message ?? 'فشل الدفع',
       });
+
+      // Found live 2026-08-06: this poll and the paymob-webhook can race on the
+      // same pending_payment. cancel_pending_payment correctly refuses to touch
+      // a row the webhook already completed (success:false, "الطلب تم بالفعل")
+      // — but this endpoint used to report "failed" to the customer regardless
+      // of that refusal, so a payment the webhook had just confirmed as paid
+      // still showed as failed on screen. Re-read the row on refusal and defer
+      // to its real status instead of assuming the refusal means failure.
+      if (cancelRes?.success === false) {
+        const { data: recheck } = await supabase
+          .from('pending_payments')
+          .select('status, resulting_order_id')
+          .eq('merchant_order_id', merchantOrderId)
+          .maybeSingle();
+        if (recheck?.status === 'completed' && recheck.resulting_order_id) {
+          return jsonOk({ status: 'success', orderId: recheck.resulting_order_id, already: true });
+        }
+      }
+
       // حرّر الكوبون فقط لو هذا الاستدعاء هو من حوّل الحالة (يمنع التحرير المزدوج).
       if (cancelRes?.success && !cancelRes?.already) await releaseCouponIfNeeded();
       return jsonOk({
