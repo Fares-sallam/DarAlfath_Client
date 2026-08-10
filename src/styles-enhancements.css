@@ -640,6 +640,10 @@ html.dark .tracking-step.active .tracking-step__icon { color: #D4A520; }
 html.dark .tracking-step.done   .tracking-step__icon { color: #D4A520; }
 html.dark .tracking-step__label                  { color: #8A93B8; }
 html.dark .tracking-step.active .tracking-step__label { color: #F0EDFF; font-weight: 800; }
+/* Without this, "done" labels fell back to the light theme's green
+   (#16a34a) while the icon and connector line above them were already
+   gold — two different "done" colors on the same step. */
+html.dark .tracking-step.done .tracking-step__label { color: #D4A520; }
 html.dark .tracking-step__line                   { background: #1E2D6B; }
 html.dark .tracking-step__line.done {
   background: linear-gradient(90deg, #D4A520, #B8891A);
@@ -658,6 +662,16 @@ html.dark .order-card__id    { color: #D4A520; font-weight: 900; }
 html.dark .order-card__date  { color: #8A93B8; }
 html.dark .order-card__total { color: #F0C842; font-weight: 900; }
 html.dark .order-card__item  { color: #C8D0F0; }
+
+/* .order-card__meta only ever had a light-theme rule (rgba(255,255,255,.78))
+   — the near-white boxes sat unstyled on the dark card, the exact opposite
+   of every other nested panel in this component. */
+html.dark .order-card__meta div {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid #1E2D6B;
+}
+html.dark .order-card__meta span { color: #8A93B8; }
+html.dark .order-card__meta b    { color: #F0EDFF; }
 
 /* Status chips */
 html.dark .status-chip {
