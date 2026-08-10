@@ -1,6 +1,7 @@
 import { Heart } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import ProductCard from '@/components/ProductCard';
+import { OrnamentDivider } from '@/components/Ornament';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useWishlistProducts } from '@/hooks/useStorefront';
 
@@ -22,6 +23,7 @@ export default function WishlistPage() {
           </div>
           {items.length ? <button type="button" className="ghost-button" onClick={clearWishlist}>مسح القائمة</button> : null}
         </div>
+        <OrnamentDivider />
 
         {stillResolvingSavedItems ? (
           <section className="page-card page-card--loading" />

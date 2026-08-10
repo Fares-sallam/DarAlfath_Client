@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CheckCircle2, CreditCard, ExternalLink, Loader2, PackageCheck, Tag, Truck, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { OrnamentDivider } from '@/components/Ornament';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -600,6 +601,7 @@ export default function CheckoutPage() {
             <p>أدخل بياناتك ثم راجع الطلب قبل الإرسال.</p>
           </div>
         </div>
+        <OrnamentDivider />
 
         {items.length === 0 ? (
           <div className="empty-state">

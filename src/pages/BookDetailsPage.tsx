@@ -1,4 +1,4 @@
-import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers } from 'lucide-react';
+import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
@@ -15,6 +15,7 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { flyToCart } from '@/lib/flyToCart';
 import BookCover from '@/components/BookCover';
+import ScrollRail from '@/components/ScrollRail';
 import type { ProductVariantItem } from '@/types/store';
 
 type DetailsTab = 'about' | 'specs';
@@ -112,12 +113,31 @@ export default function BookDetailsPage() {
 
   useEffect(() => { setQuantity(1); }, [selectedVariantId]);
 
+  // Lightbox keyboard: Escape closes, arrows walk the gallery. RTL keeps the
+  // physical key meaning (Left = next in reading order) so it matches the
+  // on-screen arrow placement.
   useEffect(() => {
     if (!lightboxImage) return undefined;
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setLightboxImage(null); };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setLightboxImage(null); return; }
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const idx = displayedImages.indexOf(lightboxImage);
+      if (idx === -1 || displayedImages.length < 2) return;
+      const step = e.key === 'ArrowLeft' ? 1 : -1;
+      const next = (idx + step + displayedImages.length) % displayedImages.length;
+      setLightboxImage(displayedImages[next]);
+      setSelectedImage(displayedImages[next]);
+    };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [lightboxImage]);
+    // the page behind must not scroll while the overlay owns the viewport
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightboxImage, displayedImages]);
 
   const updateQuantity = (value: number) => {
     if (!selectedVariant || selectedVariant.is_digital) { setQuantity(1); return; }
@@ -206,20 +226,23 @@ export default function BookDetailsPage() {
             </div>
           </div>
 
-          {/* Thumbnails */}
+          {/* Thumbnails — scrolls rather than truncating: books carry many
+              images, and the old `.slice(0, 5)` silently hid the rest. */}
           {displayedImages.length > 1 && (
-            <div className="bk3-thumbs">
-              {displayedImages.slice(0, 5).map((img) => (
+            <ScrollRail ariaLabel={`صور ${product.title}`} className="bk3-thumbs-rail">
+              {displayedImages.map((img, i) => (
                 <button
                   key={img}
                   type="button"
                   className={`bk3-thumb ${img === mainImage ? 'bk3-thumb--on' : ''}`}
                   onClick={() => setSelectedImage(img)}
+                  aria-label={`عرض الصورة ${i + 1} من ${displayedImages.length}`}
+                  aria-current={img === mainImage}
                 >
-                  <img src={img} alt={product.title} />
+                  <img src={img} alt="" loading="lazy" />
                 </button>
               ))}
-            </div>
+            </ScrollRail>
           )}
         </div>
 
@@ -409,26 +432,70 @@ export default function BookDetailsPage() {
         </section>
       )}
 
-      {/* ── Lightbox ─── */}
-      {lightboxImage && (
-        <div
-          className="bk3-lightbox"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`صورة ${product.title}`}
-          onClick={() => setLightboxImage(null)}
-        >
-          <button
-            type="button"
-            className="bk3-lightbox__close"
+      {/* ── Lightbox — a gallery, not a single frame: the open image can be
+             panned when it overflows, and stepped through when the book has
+             more than one image. ─── */}
+      {lightboxImage && (() => {
+        const idx = displayedImages.indexOf(lightboxImage);
+        const many = displayedImages.length > 1;
+        const step = (dir: 1 | -1) => {
+          if (idx === -1) return;
+          const next = (idx + dir + displayedImages.length) % displayedImages.length;
+          setLightboxImage(displayedImages[next]);
+          setSelectedImage(displayedImages[next]);
+        };
+        return (
+          <div
+            className="bk3-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label={`صورة ${product.title}`}
             onClick={() => setLightboxImage(null)}
-            aria-label="إغلاق"
           >
-            <X size={22} />
-          </button>
-          <img src={lightboxImage} alt={product.title} onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
+            <button
+              type="button"
+              className="bk3-lightbox__close"
+              onClick={() => setLightboxImage(null)}
+              aria-label="إغلاق"
+            >
+              <X size={22} />
+            </button>
+
+            {many && (
+              <>
+                <button
+                  type="button"
+                  className="bk3-lightbox__nav bk3-lightbox__nav--prev"
+                  onClick={(e) => { e.stopPropagation(); step(-1); }}
+                  aria-label="الصورة السابقة"
+                >
+                  <ChevronRight size={26} />
+                </button>
+                <button
+                  type="button"
+                  className="bk3-lightbox__nav bk3-lightbox__nav--next"
+                  onClick={(e) => { e.stopPropagation(); step(1); }}
+                  aria-label="الصورة التالية"
+                >
+                  <ChevronLeft size={26} />
+                </button>
+              </>
+            )}
+
+            {/* own scroll container so a tall image can be read top to bottom
+                instead of being squeezed to fit */}
+            <div className="bk3-lightbox__stage" onClick={(e) => e.stopPropagation()}>
+              <img src={lightboxImage} alt={product.title} />
+            </div>
+
+            {many && (
+              <p className="bk3-lightbox__count" aria-live="polite">
+                {idx + 1} / {displayedImages.length}
+              </p>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
