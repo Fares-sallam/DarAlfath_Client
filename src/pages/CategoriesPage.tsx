@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { ArrowLeft, ChevronDown, Layers3, LibraryBig } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { OrnamentDivider } from '@/components/Ornament';
 import { useCategories, useProducts } from '@/hooks/useStorefront';
 
 export default function CategoriesPage() {
@@ -46,6 +47,7 @@ export default function CategoriesPage() {
           افتح أي تصنيف بمجرد الوقوف عليه، ثم انتقل مباشرة إلى الكتب أو إلى
           صفحة عرض التصنيف بالكامل.
         </p>
+        <OrnamentDivider />
       </section>
 
       {isLoading ? <section className="page-card page-card--loading" /> : null}

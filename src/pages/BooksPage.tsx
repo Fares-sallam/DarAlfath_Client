@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
+import { OrnamentDivider } from '@/components/Ornament';
 import { useCategories, useProducts } from '@/hooks/useStorefront';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
@@ -91,6 +92,7 @@ export default function BooksPage() {
             هذه صفحة الكتب فقط: ابحث، صفِّ النتائج، وافتح صفحة أي كتاب لاختيار
             النسخة المناسبة قبل الإضافة إلى السلة.
           </p>
+          <OrnamentDivider />
         </div>
       </section>
 

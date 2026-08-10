@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { BookOpenCheck, Download, FileClock } from 'lucide-react';
+import { OrnamentDivider } from '@/components/Ornament';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomerOrders } from '@/hooks/useCustomerOrders';
@@ -30,6 +31,7 @@ export default function DownloadsPage() {
             {downloads.length} ملف
           </div>
         </div>
+        <OrnamentDivider />
 
         {!user ? (
           <div className="empty-state">

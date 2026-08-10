@@ -1,0 +1,778 @@
+/* ══════════════════════════════════════════════════════════════════════
+   HOME — frontispiece, shelf rails, ornaments
+   Loaded last so it wins over the generic page styles without !important.
+   Everything here is scoped to the homepage or to components only the
+   homepage uses, so this file can be removed wholesale to revert.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Both themes get the same geometry; only the surface and ink swap.
+   Gold is the one constant — it's the brand, and it reads on both. */
+:root {
+  --home-gold: #b5863f;
+  --home-gold-bright: #d8b15b;
+  /* Gold as SMALL TEXT needs to clear 4.5:1; the ornament gold above only
+     ever draws strokes and shapes, where 3:1 is the bar. Measured on the
+     frontispiece cream (#fdfaf3): ornament gold lands at 3.12 — fine for the
+     rules and rosettes, short for an 11px label — this one lands at 5.28. */
+  --home-gold-text: #8c6024;
+  --home-frame: rgba(181, 134, 63, 0.42);
+  --home-ink: #102542;
+  --home-ink-soft: #5b6b84;
+  --home-surface: linear-gradient(168deg, #fffdf9, #fbf6ec);
+  --home-motif: rgba(181, 134, 63, 0.055);
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+html.dark {
+  --home-gold: #D4A520;
+  --home-gold-bright: #F0C842;
+  /* On the dark surface the ornament gold already measures 7.99:1, so text
+     and ornament share one value here. */
+  --home-gold-text: #D4A520;
+  --home-frame: rgba(212, 165, 32, 0.34);
+  --home-ink: #F0EDFF;
+  --home-ink-soft: #9AA3C4;
+  --home-surface: linear-gradient(168deg, #0D1847, #070E32);
+  --home-motif: rgba(212, 165, 32, 0.05);
+}
+
+.page-sections--home {
+  gap: clamp(28px, 5vw, 56px);
+}
+
+/* ── Page-wide cursor light ───────────────────────────────────────────
+   One light source for the whole homepage, not just the frontispiece box.
+   Fixed to the viewport so it doesn't scroll away, `soft-light`/`screen`
+   blended so it reads through opaque card backgrounds instead of sitting
+   behind them invisibly, and kept well under the sticky header's z-index:30
+   so it never washes out the nav. */
+.page-cursor-light {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: var(--glow, 0);
+  transition: opacity 0.5s var(--ease-out-quint);
+  /* `soft-light` measured almost invisible here: this gold sits too close to
+     mid-gray for soft-light's math to move a light cream backdrop much.
+     `multiply` reads as a real warm shadow instead — visible, and it
+     actually darkens, matching the light-theme behavior asked for. */
+  mix-blend-mode: multiply;
+  /* A pinpoint, not a pool. This should feel like a small point of light
+     under the finger, not a lamp covering whatever it passes over. */
+  background: radial-gradient(
+    circle 30px at var(--mx, 50%) var(--my, 50%),
+    rgba(181, 134, 63, 0.55),
+    transparent 72%
+  );
+}
+
+html.dark .page-cursor-light {
+  mix-blend-mode: screen;
+  background: radial-gradient(
+    circle 35px at var(--mx, 50%) var(--my, 50%),
+    rgba(240, 200, 66, 0.4),
+    transparent 72%
+  );
+}
+
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .page-cursor-light { display: none; }
+}
+
+/* ── Frontispiece ─────────────────────────────────────────────────── */
+
+.frontispiece {
+  padding: 0;
+  background: none;
+  border: 0;
+}
+
+.frontispiece__frame {
+  position: relative;
+  border: 1px solid var(--home-frame);
+  border-radius: 4px;
+  background: var(--home-surface);
+  padding: clamp(30px, 6vw, 68px) clamp(20px, 5vw, 64px);
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* Inner hairline: the double rule of a manuscript title page. */
+.frontispiece__frame::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border: 1px solid var(--home-frame);
+  border-radius: 2px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+/* Ruled diagonal lattice — the ghost of a manuscript's guide lines, not a
+   checkerboard. Hairlines rather than filled cells, so it stays texture and
+   never resolves into shapes that compete with the title. */
+.frontispiece__frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(45deg, var(--home-motif) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(-45deg, var(--home-motif) 0 1px, transparent 1px 22px);
+  mask-image: radial-gradient(ellipse 78% 68% at 50% 45%, #000 12%, transparent 76%);
+}
+
+/* ── Watermark ─────────────────────────────────────────────────────
+   The emblem ships as a JPEG on a white card, so the white has to be
+   blended away rather than masked: multiply drops it into the cream, and on
+   navy the image is inverted first so screen can drop the (now black)
+   card instead. Deliberately at the threshold of visible. */
+.frontispiece__watermark {
+  position: absolute;
+  top: 50%;
+  inset-inline-start: 50%;
+  translate: 50% -50%;
+  /* Oversized on purpose: at this scale the lockup's wordmark stops reading
+     as words and becomes texture, which is the point — it must never
+     compete with the lede sitting on top of it. */
+  width: min(104%, 780px);
+  height: auto;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  /* Raised twice now: 0.028 → 0.056 → 0.1, asked each time to read more
+     clearly against the lede text sitting on top of it. */
+  opacity: 0.1;
+  mix-blend-mode: multiply;
+  mask-image: radial-gradient(circle at 50% 50%, #000 30%, transparent 68%);
+}
+
+html.dark .frontispiece__watermark {
+  opacity: 0.13;
+  filter: invert(1);
+  mix-blend-mode: screen;
+}
+
+/* ── Cursor light ──────────────────────────────────────────────────
+   --mx/--my are written by Frontispiece.tsx inside a rAF; --glow gates the
+   whole thing so it fades out on mouseleave instead of snapping. Light
+   theme deepens (a glow reads as nothing on cream), dark theme brightens. */
+.frontispiece__glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--glow, 0);
+  transition: opacity 0.45s var(--ease-out-quint);
+  /* A quarter the old radius (190→48) — a small mark under the cursor,
+     not a wash across the whole frontispiece. */
+  background: radial-gradient(
+    circle 48px at var(--mx, 50%) var(--my, 50%),
+    rgba(120, 86, 30, 0.13),
+    transparent 70%
+  );
+}
+
+html.dark .frontispiece__glow {
+  background: radial-gradient(
+    circle 50px at var(--mx, 50%) var(--my, 50%),
+    rgba(240, 200, 66, 0.14),
+    transparent 70%
+  );
+}
+
+/* Touch has no cursor to follow, and reduced-motion users opted out of
+   incidental movement. */
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .frontispiece__glow { display: none; }
+}
+
+.ornament-corner {
+  position: absolute;
+  width: clamp(30px, 4.5vw, 46px);
+  height: clamp(30px, 4.5vw, 46px);
+  color: var(--home-gold);
+  opacity: 0.75;
+  pointer-events: none;
+}
+.ornament-corner--tl { top: 13px; inset-inline-start: 13px; }
+.ornament-corner--tr { top: 13px; inset-inline-end: 13px; transform: scaleX(-1); }
+.ornament-corner--bl { bottom: 13px; inset-inline-start: 13px; transform: scaleY(-1); }
+.ornament-corner--br { bottom: 13px; inset-inline-end: 13px; transform: scale(-1); }
+
+/* Headpiece medallion — sits in normal flow above the eyebrow, so it just
+   pushes the title block down rather than needing its own positioning. */
+.ornament-medallion {
+  display: block;
+  width: clamp(30px, 4vw, 40px);
+  height: clamp(30px, 4vw, 40px);
+  margin: 0 auto clamp(14px, 2.4vw, 20px);
+  color: var(--home-gold);
+  opacity: 0.8;
+}
+
+/* Margin ticks — the frame's side gutters read empty at wide widths, so
+   these break them up without competing with the centered text column. */
+.ornament-sidemark {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  width: clamp(10px, 1.6vw, 14px);
+  height: clamp(90px, 20vw, 150px);
+  color: var(--home-gold);
+  opacity: 0.55;
+  pointer-events: none;
+}
+.ornament-sidemark--start { inset-inline-start: clamp(10px, 2.6vw, 26px); }
+.ornament-sidemark--end   { inset-inline-end: clamp(10px, 2.6vw, 26px); }
+
+/* The gutters they live in all but disappear on phones — not worth the
+   visual noise next to the text at that width. */
+@media (max-width: 640px) {
+  .ornament-sidemark { display: none; }
+}
+
+.frontispiece__inner {
+  position: relative;
+  z-index: 1; /* above watermark and cursor light */
+  max-width: 62ch;
+  margin-inline: auto;
+  text-align: center;
+}
+
+.frontispiece__eyebrow {
+  margin: 0 0 clamp(14px, 2.4vw, 22px);
+  font-size: clamp(11px, 1.15vw, 12.5px);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--home-gold-text);
+}
+
+.frontispiece__title {
+  margin: 0;
+  font-size: clamp(30px, 5.6vw, 62px);
+  line-height: 1.14;
+  font-weight: 800;
+  color: var(--home-ink);
+  letter-spacing: -0.015em;
+}
+
+.frontispiece__lede {
+  margin: 0 auto;
+  max-width: 46ch;
+  font-size: clamp(14px, 1.5vw, 16.5px);
+  line-height: 1.85;
+  color: var(--home-ink-soft);
+}
+
+.frontispiece__actions {
+  margin-top: clamp(22px, 3.4vw, 34px);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* ── Ornament divider ─────────────────────────────────────────────── */
+
+.ornament-divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--home-gold);
+  margin-block: clamp(18px, 2.8vw, 26px);
+}
+
+.ornament-divider__rule {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--home-frame) 35%, var(--home-frame) 65%, transparent);
+}
+
+.ornament-divider__mark {
+  width: 48px;
+  height: 24px;
+  flex: none;
+}
+
+/* ── Scroll rail ──────────────────────────────────────────────────── */
+
+.scroll-rail {
+  position: relative;
+  /* A grid/flex child defaults to min-width:auto, which lets the track grow to
+     the full width of its content instead of scrolling — with enough items
+     that pushes the whole page into horizontal scroll. Verified with 30
+     thumbnails: without this the track measured 2096px wide inside a 630px
+     column. */
+  min-width: 0;
+  max-width: 100%;
+}
+
+.scroll-rail__track {
+  display: flex;
+  gap: clamp(12px, 1.6vw, 18px);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 4px;
+  padding: 4px 4px 14px;
+  /* room for the card's own hover lift, which would otherwise clip */
+  margin-block-start: -4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--home-frame) transparent;
+  overscroll-behavior-x: contain;
+}
+
+.scroll-rail__track:focus-visible {
+  outline: 2px solid var(--home-gold);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.scroll-rail__track::-webkit-scrollbar { height: 6px; }
+.scroll-rail__track::-webkit-scrollbar-track { background: transparent; }
+.scroll-rail__track::-webkit-scrollbar-thumb {
+  background: var(--home-frame);
+  border-radius: 99px;
+}
+
+.shelf-rail__item {
+  flex: 0 0 auto;
+  width: clamp(150px, 42vw, 208px);
+  scroll-snap-align: start;
+}
+
+/* Cards inside a rail stretch to the rail item, not the grid. */
+.shelf-rail__item > .book-card { height: 100%; }
+
+/* ── Book card hover: the card itself is what lights up ──────────────
+   The page-wide cursor light is a diffuse pool; standing over a specific
+   book should make THAT book stand out, not just whatever's under the
+   pointer. A gold frame traces the cover, echoing the frontispiece's own
+   ruled border, layered on top of (not replacing) its existing depth
+   shadow — restated in full here since the last-loaded rule wins outright. */
+.book-card__cover {
+  outline: 1.5px solid transparent;
+  outline-offset: 4px;
+  border-radius: 14px;
+  transition: outline-color 0.35s var(--ease-out-quint),
+              box-shadow 0.35s var(--ease-out-quint);
+}
+.book-card:hover .book-card__cover,
+.book-card:focus-visible .book-card__cover {
+  outline-color: var(--home-gold);
+  box-shadow:
+    0 26px 50px rgba(16, 37, 66, 0.30),
+    0 4px 10px rgba(16, 37, 66, 0.16),
+    0 0 22px rgba(181, 134, 63, 0.4);
+}
+html.dark .book-card:hover .book-card__cover,
+html.dark .book-card:focus-visible .book-card__cover {
+  box-shadow:
+    0 26px 50px rgba(16, 37, 66, 0.30),
+    0 4px 10px rgba(16, 37, 66, 0.16),
+    0 0 22px rgba(240, 200, 66, 0.35);
+}
+
+.scroll-rail__arrow {
+  position: absolute;
+  top: 38%;
+  z-index: 4;
+  display: none;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--home-frame);
+  background: var(--home-surface);
+  color: var(--home-gold);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(9, 20, 48, 0.16);
+  transition: opacity 0.2s var(--ease-out-quint), transform 0.2s var(--ease-out-quint);
+}
+.scroll-rail__arrow--prev { inset-inline-start: -6px; }
+.scroll-rail__arrow--next { inset-inline-end: -6px; }
+.scroll-rail__arrow:hover:not(:disabled) { transform: scale(1.06); }
+.scroll-rail__arrow:disabled { opacity: 0; pointer-events: none; }
+
+/* Arrows are a pointer affordance; touch users just swipe. */
+@media (hover: hover) and (pointer: fine) {
+  .scroll-rail__arrow { display: flex; }
+}
+
+/* ── House note ───────────────────────────────────────────────────── */
+
+.house-note__body {
+  max-width: 58ch;
+  padding: clamp(22px, 4vw, 40px) 0;
+}
+
+/* Scoped to the parent so it outranks `.house-note__body p` below — the
+   kicker is a <p> too, and the looser selector was winning the colour. */
+.house-note__body .house-note__kicker {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: var(--home-gold-text);
+}
+
+.house-note__body h2 {
+  margin: 0 0 12px;
+  font-size: clamp(22px, 3.1vw, 34px);
+  line-height: 1.28;
+  color: var(--home-ink);
+}
+
+.house-note__body p {
+  margin: 0 0 20px;
+  font-size: clamp(13.5px, 1.4vw, 15.5px);
+  line-height: 1.9;
+  color: var(--home-ink-soft);
+}
+
+/* ── Reveal ───────────────────────────────────────────────────────── */
+
+.reveal {
+  opacity: 0;
+  transform: translate3d(0, 18px, 0);
+  transition:
+    opacity 0.7s var(--ease-out-quint),
+    transform 0.7s var(--ease-out-quint);
+}
+
+.reveal.is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal,
+  .reveal.is-revealed {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .scroll-rail__track { scroll-behavior: auto; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   BOOK GALLERY — thumbnail rail + navigable lightbox
+   Books are getting many images each; the thumbnail strip used to render
+   only the first five and the lightbox showed one fixed frame. These rules
+   sit in the home layer because it loads last, so they override the base
+   .bk3-* rules without touching them.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* The rail replaces the centred flex row; centring a scrollable strip
+   fights the scroll, so it starts at the reading edge instead. */
+.bk3-thumbs-rail .scroll-rail__track {
+  justify-content: flex-start;
+  padding-block: 2px 10px;
+  scroll-snap-type: x mandatory;
+}
+
+.bk3-thumbs-rail .bk3-thumb {
+  scroll-snap-align: center;
+}
+
+/* Selected thumbnail keeps its gold ring inside the scroller. */
+.bk3-thumbs-rail .bk3-thumb--on {
+  border-color: var(--home-gold);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--home-gold) 26%, transparent);
+}
+
+/* ── Lightbox stage ───────────────────────────────────────────────── */
+
+/* A stage that can scroll: tall scans and spreads are readable end to end
+   rather than being shrunk to fit the viewport. */
+.bk3-lightbox__stage {
+  max-width: min(92vw, 1100px);
+  max-height: 88vh;
+  overflow: auto;
+  border-radius: 12px;
+  cursor: default;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.35) transparent;
+}
+
+.bk3-lightbox__stage::-webkit-scrollbar { width: 8px; height: 8px; }
+.bk3-lightbox__stage::-webkit-scrollbar-track { background: transparent; }
+.bk3-lightbox__stage::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.35);
+  border-radius: 99px;
+}
+
+/* Width-constrained, height free — that combination is what allows the
+   vertical pan above. */
+.bk3-lightbox__stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  border-radius: 12px;
+}
+
+.bk3-lightbox__nav {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 2;
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.2s var(--ease-out-quint), transform 0.2s var(--ease-out-quint);
+}
+.bk3-lightbox__nav:hover { background: rgba(255, 255, 255, 0.26); transform: translateY(-50%) scale(1.06); }
+.bk3-lightbox__nav--prev { inset-inline-start: clamp(8px, 3vw, 32px); }
+.bk3-lightbox__nav--next { inset-inline-end: clamp(8px, 3vw, 32px); }
+
+.bk3-lightbox__count {
+  position: absolute;
+  bottom: clamp(14px, 3vh, 28px);
+  inset-inline: 0;
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.82);
+  pointer-events: none;
+}
+
+/* On phones the arrows would sit on top of the image; swiping the stage is
+   the natural gesture there, and the counter still reports position. */
+@media (max-width: 560px) {
+  .bk3-lightbox__nav { display: none; }
+  .bk3-lightbox__stage { max-width: 96vw; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   CART — a ledger, not a form.
+   Scoped under .page-sections--cart and using fresh class names
+   (cart-row / cart-summary, not cart-item / order-summary) so none of
+   this touches the checkout page, which reuses those older classes for
+   its own summary sidebar. Colors lean on the site's base tokens
+   (--text/--muted/--line/--surface) for the chrome and --home-gold-*
+   only for accents — this is a working page, not the frontispiece. */
+
+.page-sections--cart {
+  gap: clamp(20px, 3.5vw, 32px);
+}
+
+.cart-head__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.cart-head__eyebrow {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--home-gold-text);
+}
+
+.cart-head h1 {
+  margin: 0 0 8px;
+  font-size: clamp(26px, 4vw, 34px);
+  color: var(--text);
+}
+
+.cart-head__lede {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.8;
+  max-width: 52ch;
+}
+
+.cart-head .ornament-divider { margin-top: 22px; }
+
+/* ── Layout ── */
+.cart-layout-v2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 336px;
+  gap: 28px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .cart-layout-v2 { grid-template-columns: 1fr; }
+}
+
+/* ── Rows ── */
+.cart-rows { display: grid; gap: 14px; }
+
+.cart-row {
+  display: grid;
+  grid-template-columns: 84px 1fr auto;
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.35s var(--ease-out-quint), border-color 0.35s var(--ease-out-quint);
+  animation: cartRowIn 0.5s var(--ease-out-quint) both;
+  animation-delay: calc(min(var(--i, 0), 8) * 55ms);
+}
+
+@keyframes cartRowIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cart-row { animation: none; }
+}
+
+.cart-row:hover {
+  border-color: var(--home-frame);
+  box-shadow: var(--shadow-sm), 0 0 0 1px var(--home-frame);
+}
+
+.cart-row__cover {
+  width: 84px;
+  height: 108px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--home-motif);
+  outline: 1px solid var(--line);
+  outline-offset: 0;
+}
+.cart-row__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.cart-row__content h3 {
+  margin: 0 0 4px;
+  font-size: 17px;
+  color: var(--text);
+  line-height: 1.35;
+}
+.cart-row__content p { margin: 0 0 2px; color: var(--muted); font-size: 13.5px; }
+.cart-row__type {
+  display: inline-block;
+  font-size: 11.5px;
+  color: var(--home-gold-text);
+  letter-spacing: 0.03em;
+}
+
+.cart-row__controls {
+  display: grid;
+  gap: 10px;
+  justify-items: end;
+}
+.cart-row__price { color: var(--text); font-size: 16px; font-weight: 800; }
+
+.cart-row__remove {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.25s var(--ease-out-quint), background 0.25s var(--ease-out-quint),
+              border-color 0.25s var(--ease-out-quint);
+}
+.cart-row__remove:hover {
+  color: #d1453b;
+  background: rgba(209, 69, 59, 0.1);
+  border-color: rgba(209, 69, 59, 0.25);
+}
+
+@media (max-width: 560px) {
+  .cart-row {
+    grid-template-columns: 64px 1fr;
+    grid-template-areas: "cover content" "controls controls";
+  }
+  .cart-row__cover { grid-area: cover; width: 64px; height: 84px; }
+  .cart-row__content { grid-area: content; }
+  .cart-row__controls {
+    grid-area: controls;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+  }
+}
+
+/* ── Summary ledger ── */
+.cart-summary {
+  position: sticky;
+  top: 150px;
+  display: grid;
+  gap: 14px;
+  padding: 22px;
+  border-radius: 20px;
+  border: 1px solid var(--home-frame);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.cart-summary__eyebrow {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--home-gold-text);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cart-summary__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 14.5px;
+}
+.cart-summary__row b { color: var(--text); font-weight: 700; }
+
+.cart-summary__row--total {
+  margin-top: 4px;
+  padding-top: 14px;
+  border-top: 1px solid var(--home-frame);
+  font-size: 17px;
+}
+.cart-summary__row--total span { color: var(--text); font-weight: 700; }
+.cart-summary__row--total b { color: var(--home-gold-text); font-size: 20px; font-weight: 900; }
+
+.cart-summary .primary-button--full { margin-top: 4px; }
+
+/* ── Empty state ── */
+.cart-empty {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 10px;
+  padding: 64px 20px;
+}
+.cart-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  color: var(--home-gold);
+  background: var(--home-motif);
+  margin-bottom: 6px;
+}
+.cart-empty h3 { margin: 0; font-size: 22px; color: var(--text); }
+.cart-empty p { margin: 0 0 8px; color: var(--muted); max-width: 40ch; }

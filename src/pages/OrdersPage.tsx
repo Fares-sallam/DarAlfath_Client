@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { CheckCircle2, Circle, CircleDot, ClipboardList, PackageCheck, ReceiptText, Truck } from 'lucide-react';
+import { OrnamentDivider } from '@/components/Ornament';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomerOrders } from '@/hooks/useCustomerOrders';
 import { formatMoney } from '@/hooks/useStorefront';
@@ -115,6 +116,7 @@ export default function OrdersPage() {
             {orders.length} طلب
           </div>
         </div>
+        <OrnamentDivider />
 
         {!user ? (
           <div className="empty-state">

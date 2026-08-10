@@ -1,4 +1,5 @@
 import PolicyAccordion from '@/components/PolicyAccordion';
+import { OrnamentDivider } from '@/components/Ornament';
 import { policySections } from '@/data/policies';
 
 export default function PoliciesPage() {
@@ -9,6 +10,7 @@ export default function PoliciesPage() {
           <span className="page-kicker">سياستنا</span>
           <h1>سياسات واضحة وتجربة موثوقة</h1>
           <p>كل ما تحتاج إلى معرفته عن الشحن، الإرجاع، الخصوصية، والشروط.</p>
+          <OrnamentDivider />
         </div>
       </section>
 

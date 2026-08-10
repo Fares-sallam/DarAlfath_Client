@@ -1,5 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react';
 import { CheckCircle2, Mail, MapPin, MessageSquareText, Phone } from 'lucide-react';
+import { OrnamentDivider } from '@/components/Ornament';
 import { useStoreSettings } from '@/hooks/useStorefront';
 
 const STORAGE_KEY = 'daralfath_client_contact_messages';
@@ -70,6 +71,7 @@ export default function ContactPage() {
             <p>أرسل رسالتك من نفس الصفحة، وسنحفظها محليًا لحين ربط نموذج البريد أو لوحة الإدارة.</p>
           </div>
         </div>
+        <OrnamentDivider />
 
         <div className="contact-layout">
           <form className="contact-card contact-form" onSubmit={handleSubmit}>

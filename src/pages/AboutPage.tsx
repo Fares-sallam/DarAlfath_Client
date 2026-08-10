@@ -1,3 +1,5 @@
+import { OrnamentDivider } from '@/components/Ornament';
+
 export default function AboutPage() {
   return (
     <div className="page-sections">
@@ -6,6 +8,7 @@ export default function AboutPage() {
           <span className="page-kicker">عنّا</span>
           <h1>دار الفتح للنشر والتوزيع</h1>
           <p>دار نشر عربية تهدف إلى تقديم محتوى أصيل، رصين، وقريب من القارئ، مع عناية خاصة بجمال العرض، واحترام المعرفة، وسهولة الوصول إلى الإصدارات.</p>
+          <OrnamentDivider />
         </div>
       </section>
 
