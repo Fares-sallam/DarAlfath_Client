@@ -682,10 +682,30 @@ html.dark .book-card:focus-visible .book-card__cover {
   display: block;
   width: 100%;
   overflow: hidden;
-  transition: transform 0.35s var(--ease-out-quint);
+  transition: transform 0.35s var(--ease-out-quint), box-shadow 0.35s var(--ease-out-quint);
 }
 a.home-hero-panel__viewport:hover {
   transform: scale(1.008);
+}
+
+/* Banner graphics are typically a bright, near-white background — on the
+   light theme that's close enough to the page's own cream that it just
+   sits there, but on navy it reads as a stark rectangle dropped onto the
+   page. A soft warm glow bleeding into the page above and below (this is
+   the viewport's own box-shadow, not a filter on the image, specifically
+   so overflow:hidden — needed to contain the breathing-zoom animation —
+   doesn't clip it) reads as the banner casting light rather than being
+   pasted on. Full width already runs the banner edge to edge, so the
+   glow's sides fall off-viewport on their own; only top/bottom show. */
+html.dark .home-hero-panel__viewport {
+  box-shadow: 0 0 110px 26px rgba(255, 246, 220, 0.22);
+}
+
+/* Softens the banner's own brightness a notch on navy — full-strength
+   near-white next to a dark page reads as a lit sign, not part of the
+   room. Kept mild so the banner's own colours and legibility don't shift. */
+html.dark .home-hero-panel__img {
+  filter: brightness(0.93) saturate(0.96);
 }
 
 /* Cross-fade between slides — the same <img> node stays mounted across
