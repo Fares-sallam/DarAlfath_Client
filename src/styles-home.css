@@ -132,18 +132,23 @@ html.dark .page-cursor-light {
    Used to be a whole framed title panel (ruled border, arabesque wall
    texture, house emblem, headline) with the banner nested inside it as
    one element among several. That's gone now — the admin's banner IS
-   the hero, full width, with nothing around it but page margins. */
+   the hero, edge to edge, with nothing around it at all — not even page
+   margins. First a 1520px cap, then genuinely full-bleed: on a wide
+   monitor 1520px still left visible cream on both sides, and that empty
+   margin was exactly what was asked to go. */
 
 .home-hero-section {
   padding: 0;
 }
 
-/* Deliberately wider than the site's standard 1240px .container — this
-   is the one section on the page meant to feel bigger than the content
-   column everything else sits in. */
+/* The classic full-bleed break-out: 100vw sized from the viewport, then
+   pulled back into place with a matching negative margin, so it ignores
+   .page-shell's padding and .container's max-width entirely regardless
+   of how deep this section sits in the layout. Symmetric either way, so
+   it needs no RTL-specific handling. */
 .home-hero-section__container {
-  width: min(calc(100% - 32px), 1520px);
-  margin-inline: auto;
+  width: 100vw;
+  margin-inline: calc(50% - 50vw);
 }
 
 /* ── Ornament divider ─────────────────────────────────────────────── */

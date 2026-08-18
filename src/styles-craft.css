@@ -178,15 +178,21 @@
    ────────────────────────────────────────────────────────────────────────── */
 .book-card {
   background: transparent;
-  border: none;
+  /* This layer moved the card's depth onto the cover's own shadow and
+     dropped the card border on purpose — but against the page background
+     that leaves the card with no legible edge at all. Gold at real
+     opacity gives it one back without reintroducing the old flat card
+     look (no fill, no box-shadow on the card itself — just an outline). */
+  border: 1.5px solid rgba(216, 177, 91, 0.45);
   box-shadow: none;
   border-radius: 16px;
   overflow: visible; /* let the cover's depth shadow + tilt breathe */
-  transition: transform var(--dur-state) var(--ease-out-quart);
+  transition: transform var(--dur-state) var(--ease-out-quart), border-color var(--dur-state) var(--ease-out-quart);
 }
 .book-card:hover {
   transform: none; /* lift moves to the cover, not the whole card */
   box-shadow: none;
+  border-color: rgba(216, 177, 91, 0.8);
 }
 
 .book-card__cover {

@@ -26,6 +26,11 @@ body,
 
 html {
   scroll-behavior: smooth;
+  /* The hero banner breaks out to full viewport width (100vw + a negative-
+     margin trick) — 100vw runs slightly past the real viewport when a
+     vertical scrollbar is present, which would otherwise add a sliver of
+     horizontal scroll. This is the standard guard for that. */
+  overflow-x: hidden;
 }
 
 body {
