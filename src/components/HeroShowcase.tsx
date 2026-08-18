@@ -59,13 +59,20 @@ export default function HeroShowcase() {
   // slide changes so the opacity transition below can animate smoothly
   // in *both* directions — fading the old src out, then the new one in —
   // instead of the incoming image just popping in on a freshly-mounted node.
+  // <picture> is just a source-picking wrapper; the transition/animation
+  // classes stay on the <img>, since that's the element they target.
   const img = (
-    <img
-      className={`home-hero-panel__img${visible ? '' : ' home-hero-panel__img--fading'}`}
-      src={slide.image_url}
-      alt={slide.title ?? ''}
-      loading="eager"
-    />
+    <picture>
+      {slide.image_url_mobile && (
+        <source media="(max-width: 640px)" srcSet={slide.image_url_mobile} />
+      )}
+      <img
+        className={`home-hero-panel__img${visible ? '' : ' home-hero-panel__img--fading'}`}
+        src={slide.image_url}
+        alt={slide.title ?? ''}
+        loading="eager"
+      />
+    </picture>
   );
 
   return (

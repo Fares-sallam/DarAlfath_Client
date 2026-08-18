@@ -437,6 +437,10 @@ export function usePaymentMethods() {
 export interface HeroSlideItem {
   id: string;
   image_url: string;
+  /** Optional phone-shaped variant of the same slide — the storefront
+   *  swaps to it under ~640px via a <picture> element. Falls back to
+   *  image_url on every screen when the admin hasn't uploaded one. */
+  image_url_mobile: string | null;
   title: string | null;
   link_url: string | null;
   sort_order: number;
@@ -450,7 +454,7 @@ export function useHomeHeroSlides() {
 
       const { data, error } = await supabase
         .from('home_hero_slides')
-        .select('id, image_url, title, link_url, sort_order')
+        .select('id, image_url, image_url_mobile, title, link_url, sort_order')
         .order('sort_order', { ascending: true });
 
       if (error) throw error;
