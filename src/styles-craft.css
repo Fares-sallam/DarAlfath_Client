@@ -196,7 +196,9 @@
 }
 
 .book-card__cover {
-  aspect-ratio: 0.66;
+  /* aspect-ratio lives in styles.css now — single source of truth for
+     the cover's shape, so it can't drift out of sync with object-fit
+     again the way the old @media(max-width:640px) overrides did. */
   border-radius: 14px;
   box-shadow: 0 14px 30px rgba(16, 37, 66, 0.18), 0 2px 6px rgba(16, 37, 66, 0.12);
   transform: perspective(820px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(0);

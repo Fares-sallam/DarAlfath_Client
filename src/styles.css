@@ -662,8 +662,16 @@ button {
   color: #c98a24;
 }
 
+/* Single source of truth for the cover's shape and fit — aspect-ratio
+   0.66 to match styles-craft.css's box (which owns the tilt/shadow/
+   radius on top of this), and object-fit: cover so the frame is always
+   filled exactly, at any card width, with no empty margin around the
+   image. Two separate @media(max-width:640px) overrides used to fight
+   this with aspect-ratio:3/4 and then aspect-ratio:auto+height:206px,
+   both paired with object-fit:contain — that's what left visible gaps
+   around the cover on narrow screens. Removed rather than patched. */
 .book-card__cover {
-  aspect-ratio: 0.67;
+  aspect-ratio: 0.66;
   background: linear-gradient(180deg, #f0ece5, #e6dfd1);
   overflow: hidden;
 }
@@ -2507,19 +2515,6 @@ h3,
   background: linear-gradient(180deg, #fff, #fdf8ef);
 }
 
-.book-card__cover {
-  aspect-ratio: 3 / 4;
-  max-height: 310px;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(181, 134, 63, 0.18), transparent 32%),
-    linear-gradient(180deg, #f4efe4, #e7dece);
-}
-
-.book-card__cover img {
-  object-fit: contain;
-  padding: 14px;
-}
-
 .book-card__body {
   padding: 14px;
   gap: 9px;
@@ -2873,30 +2868,6 @@ h3,
   max-width: 218px;
   border-radius: 20px;
   background: linear-gradient(180deg, #fff, #fdf8ef);
-}
-
-.book-card__cover,
-.book-card--compact .book-card__cover {
-  height: 206px;
-  aspect-ratio: auto;
-  display: grid;
-  place-items: center;
-  padding: 12px;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(181, 134, 63, 0.18), transparent 32%),
-    linear-gradient(180deg, #f4efe4, #e7dece);
-}
-
-.book-card__cover img {
-  width: 100%;
-  max-width: 160px;
-  height: 100%;
-  max-height: 182px;
-  object-fit: contain;
-  padding: 0;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 12px 22px rgba(16, 37, 66, 0.14);
 }
 
 .book-card__cover-fallback img {
