@@ -47,26 +47,23 @@ export function OrnamentCorner({ position }: { position: 'tl' | 'tr' | 'bl' | 'b
 /**
  * A headpiece medallion — the illuminated roundel manuscripts open a page
  * with. Sits centered above the eyebrow, the frame's one vertical accent.
+ *
+ * The house emblem ships as a square with its own blue field, which would
+ * read as a pasted sticker on the cream surface. Clipped to a disc inside a
+ * gold ring, that blue becomes the medallion's own ground instead — and the
+ * same disc sits naturally on the navy surface too. The art is inset well
+ * past the ring because the source file carries wide empty margins.
  */
 export function OrnamentMedallion() {
   return (
-    <svg className="ornament-medallion" viewBox="0 0 64 64" aria-hidden="true" focusable="false">
-      <g fill="none" stroke="currentColor" strokeLinejoin="round">
-        <circle cx="32" cy="32" r="22" strokeWidth="1" opacity="0.5" />
-        <rect x="21" y="21" width="22" height="22" strokeWidth="1.1" />
-        <rect x="21" y="21" width="22" height="22" strokeWidth="1.1" transform="rotate(45 32 32)" />
-        <circle cx="32" cy="32" r="3" fill="currentColor" stroke="none" />
-        <g strokeWidth="1" strokeLinecap="round" opacity="0.65">
-          <path d="M32 4v8M32 52v8M4 32h8M52 32h8" />
-        </g>
-        <g fill="currentColor" stroke="none" opacity="0.8">
-          <circle cx="32" cy="8" r="1.2" />
-          <circle cx="32" cy="56" r="1.2" />
-          <circle cx="8" cy="32" r="1.2" />
-          <circle cx="56" cy="32" r="1.2" />
-        </g>
-      </g>
-    </svg>
+    <span className="ornament-medallion" aria-hidden="true">
+      <img
+        className="ornament-medallion__art"
+        src="/branding/dar-alfath-emblem.png"
+        alt=""
+        draggable={false}
+      />
+    </span>
   );
 }
 

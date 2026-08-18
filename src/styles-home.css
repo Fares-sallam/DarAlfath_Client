@@ -18,8 +18,23 @@
   --home-frame: rgba(181, 134, 63, 0.42);
   --home-ink: #102542;
   --home-ink-soft: #5b6b84;
-  --home-surface: linear-gradient(168deg, #fffdf9, #fbf6ec);
-  --home-motif: rgba(181, 134, 63, 0.055);
+  /* Warm centre falling off to a deeper cream at the edges — a flat fill
+     read as empty space no matter what was layered on top of it. */
+  --home-surface:
+    radial-gradient(ellipse 90% 70% at 50% 32%, #fffefb 0%, transparent 62%),
+    linear-gradient(168deg, #fdf9f0, #f4ead6);
+  /* Was 0.055 — effectively invisible. The lattice is meant to be seen. */
+  --home-motif: rgba(181, 134, 63, 0.16);
+  /* The arabesque photograph is a light beige wall: on cream it only needs
+     multiply to sink into the surface as carved relief. */
+  --home-wall-opacity: 0.36;
+  --home-wall-blend: multiply;
+  --home-page-wall-opacity: 0.17;
+  --home-frame-shadow:
+    0 18px 44px rgba(70, 50, 20, 0.13),
+    0 2px 6px rgba(70, 50, 20, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(140, 100, 40, 0.10);
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -32,12 +47,45 @@ html.dark {
   --home-frame: rgba(212, 165, 32, 0.34);
   --home-ink: #F0EDFF;
   --home-ink-soft: #9AA3C4;
-  --home-surface: linear-gradient(168deg, #0D1847, #070E32);
-  --home-motif: rgba(212, 165, 32, 0.05);
+  --home-surface:
+    radial-gradient(ellipse 90% 70% at 50% 32%, #16225c 0%, transparent 62%),
+    linear-gradient(168deg, #0D1847, #060B28);
+  --home-motif: rgba(212, 165, 32, 0.14);
+  /* On navy the same beige wall would blow the panel out, so it goes through
+     luminosity at a much lower opacity: the carving's light and shade survive
+     as texture while the surface keeps its own colour. */
+  --home-wall-opacity: 0.24;
+  --home-wall-blend: luminosity;
+  --home-page-wall-opacity: 0.09;
+  --home-frame-shadow:
+    0 18px 46px rgba(0, 0, 0, 0.46),
+    0 2px 8px rgba(0, 0, 0, 0.30),
+    inset 0 1px 0 rgba(212, 165, 32, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.35);
 }
 
 .page-sections--home {
   gap: clamp(28px, 5vw, 56px);
+  position: relative;
+}
+
+/* The same carved wall behind the whole homepage, at roughly half the
+   frontispiece's strength — enough to give the page a room to sit in, weak
+   enough that the book cards keep all the contrast. Fixed so it behaves like
+   a wall the content scrolls past rather than a texture glued to the page,
+   and pinned behind everything (z-index -1) with pointer-events off. */
+.page-sections--home::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: url('/branding/arabesque-wall.jpg');
+  background-size: cover;
+  background-position: center;
+  opacity: var(--home-page-wall-opacity);
+  mix-blend-mode: var(--home-wall-blend);
+  mask-image: radial-gradient(ellipse 120% 90% at 50% 40%, transparent 30%, #000 100%);
 }
 
 /* ── Page-wide cursor light ───────────────────────────────────────────
@@ -96,6 +144,10 @@ html.dark .page-cursor-light {
   padding: clamp(30px, 6vw, 68px) clamp(20px, 5vw, 64px);
   overflow: hidden;
   isolation: isolate;
+  /* The panel read flat because it had no depth at all — no shadow, no edge
+     light, just a border. These three layers give it the mass of a thick
+     sheet: a cast shadow below, a lit top edge, and a darkened bottom edge. */
+  box-shadow: var(--home-frame-shadow);
 }
 
 /* Inner hairline: the double rule of a manuscript title page. */
@@ -118,10 +170,23 @@ html.dark .page-cursor-light {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-image:
-    repeating-linear-gradient(45deg, var(--home-motif) 0 1px, transparent 1px 22px),
-    repeating-linear-gradient(-45deg, var(--home-motif) 0 1px, transparent 1px 22px);
-  mask-image: radial-gradient(ellipse 78% 68% at 50% 45%, #000 12%, transparent 76%);
+  background-image: url('/branding/arabesque-wall.jpg');
+  background-size: cover;
+  background-position: center 38%;
+  opacity: var(--home-wall-opacity);
+  mix-blend-mode: var(--home-wall-blend);
+  /* The photograph is far too busy to sit raw behind Arabic text, so it is
+     masked to fade out through the middle — present along the top and bottom
+     edges, effectively gone where the headline and lede actually sit. */
+  mask-image: linear-gradient(
+    to bottom,
+    #000 0%,
+    rgba(0, 0, 0, 0.38) 24%,
+    transparent 44%,
+    transparent 62%,
+    rgba(0, 0, 0, 0.42) 84%,
+    #000 100%
+  );
 }
 
 /* ── Watermark ─────────────────────────────────────────────────────
@@ -204,13 +269,43 @@ html.dark .frontispiece__glow {
 
 /* Headpiece medallion — sits in normal flow above the eyebrow, so it just
    pushes the title block down rather than needing its own positioning. */
+/* The house emblem as a struck disc: gold ring, the artwork's own blue field
+   as the ground, a soft gold halo so it reads as an object with weight on
+   both surfaces rather than a flat square pasted onto the page. */
 .ornament-medallion {
   display: block;
-  width: clamp(30px, 4vw, 40px);
-  height: clamp(30px, 4vw, 40px);
-  margin: 0 auto clamp(14px, 2.4vw, 20px);
-  color: var(--home-gold);
-  opacity: 0.8;
+  width: clamp(64px, 8.5vw, 96px);
+  height: clamp(64px, 8.5vw, 96px);
+  margin: 0 auto clamp(18px, 3vw, 26px);
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  box-shadow:
+    0 0 0 1px var(--home-gold),
+    0 0 0 4px rgba(181, 134, 63, 0.16),
+    0 6px 18px rgba(70, 50, 20, 0.22),
+    0 0 22px rgba(181, 134, 63, 0.30);
+}
+
+/* The source art is centred in a wide empty margin, so it has to be scaled
+   up inside the disc or the emblem shrinks to a speck in a blue circle. */
+.ornament-medallion__art {
+  width: 148%;
+  height: 148%;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  object-fit: cover;
+  user-select: none;
+}
+
+html.dark .ornament-medallion {
+  box-shadow:
+    0 0 0 1px var(--home-gold),
+    0 0 0 4px rgba(212, 165, 32, 0.18),
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    0 0 26px rgba(212, 165, 32, 0.38);
 }
 
 /* Margin ticks — the frame's side gutters read empty at wide widths, so
