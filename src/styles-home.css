@@ -363,7 +363,7 @@ html.dark .ornament-medallion {
   margin-bottom: clamp(20px, 3vw, 32px);
 }
 
-/* Wider than the 62ch text column so three pedestals have room to breathe. */
+/* Wider than the 62ch text column so the banner has room to breathe. */
 .frontispiece__inner--showcase {
   max-width: min(100%, 78ch);
 }
@@ -887,84 +887,44 @@ html.dark .book-card:focus-visible .book-card__cover {
 .cart-empty p { margin: 0 0 8px; color: var(--muted); max-width: 40ch; }
 
 /* ══════════════════════════════════════════════════════════════════════
-   HERO SHOWCASE — admin-curated images on lit pedestals, replacing the
-   old text-only headline as the frontispiece's focal content.
+   HERO SHOWCASE — an admin-uploaded banner image (or a small rotation of
+   a few), replacing the old text-only headline as the frontispiece's
+   focal content. Slides are ready-made graphics the admin designs
+   elsewhere and uploads as-is, so they're shown at their own natural
+   width rather than composed into a fixed box.
    ══════════════════════════════════════════════════════════════════════ */
 
-.book-pedestal-showcase {
+.home-hero-panel {
   margin: clamp(4px, 1vw, 10px) 0 clamp(20px, 3vw, 32px);
 }
 
-.book-pedestal-showcase__stage {
+.home-hero-panel__stage {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.book-pedestal-showcase__pedestals {
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  gap: clamp(14px, 3vw, 32px);
+.home-hero-panel__frame {
+  display: block;
   width: 100%;
-  padding: 0 clamp(4px, 6vw, 56px);
+  border-radius: clamp(10px, 1.6vw, 16px);
+  overflow: hidden;
+  box-shadow: 0 14px 34px rgba(20, 15, 5, 0.16), 0 2px 8px rgba(20, 15, 5, 0.08);
+  transition: transform 0.35s var(--ease-out-quint), box-shadow 0.35s var(--ease-out-quint);
+}
+a.home-hero-panel__frame:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 42px rgba(20, 15, 5, 0.2), 0 4px 10px rgba(20, 15, 5, 0.1);
 }
 
-.book-pedestal-showcase__pedestal {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 0 1 clamp(96px, 22vw, 190px);
-  text-decoration: none;
-  transition: transform 0.35s var(--ease-out-quint);
-}
-
-.book-pedestal-showcase__pedestal img {
-  position: relative;
-  z-index: 1;
+.home-hero-panel__img {
+  display: block;
   width: 100%;
   height: auto;
-  max-height: clamp(120px, 24vw, 240px);
-  object-fit: contain;
-  filter: drop-shadow(0 18px 20px rgba(20, 15, 5, 0.28));
-  transition: filter 0.35s var(--ease-out-quint);
 }
 
-/* The lit ground each cover appears to rest on — a soft ellipse, not a
-   literal platform graphic, so it works at any image aspect ratio. */
-.book-pedestal-showcase__platform {
-  position: absolute;
-  bottom: -4px;
-  width: 82%;
-  height: clamp(14px, 2.4vw, 22px);
-  border-radius: 50%;
-  background: radial-gradient(ellipse, var(--home-gold) 0%, transparent 72%);
-  opacity: 0.22;
-  z-index: 0;
-  transition: opacity 0.35s var(--ease-out-quint);
-}
-
-.book-pedestal-showcase__pedestal:hover {
-  transform: translateY(-4px);
-}
-.book-pedestal-showcase__pedestal:hover .book-pedestal-showcase__platform {
-  opacity: 0.38;
-}
-
-/* Only elevated when exactly three sit side by side — the reference
-   composition this is drawn from. At 1-2 slides everything stays level. */
-.book-pedestal-showcase__pedestal--center {
-  flex-basis: clamp(120px, 27vw, 230px);
-  z-index: 2;
-}
-.book-pedestal-showcase__pedestal--center img {
-  max-height: clamp(150px, 30vw, 300px);
-}
-
-.book-pedestal-showcase__nav {
+.home-hero-panel__nav {
   position: absolute;
   top: 50%;
   translate: 0 -50%;
@@ -982,22 +942,22 @@ html.dark .book-card:focus-visible .book-card__cover {
   box-shadow: 0 6px 18px rgba(9, 20, 48, 0.16);
   transition: transform 0.2s var(--ease-out-quint);
 }
-.book-pedestal-showcase__nav:hover { transform: translateY(-50%) scale(1.06); }
-.book-pedestal-showcase__nav--prev { inset-inline-start: -4px; }
-.book-pedestal-showcase__nav--next { inset-inline-end: -4px; }
+.home-hero-panel__nav:hover { transform: translateY(-50%) scale(1.06); }
+.home-hero-panel__nav--prev { inset-inline-start: -14px; }
+.home-hero-panel__nav--next { inset-inline-end: -14px; }
 
 @media (hover: hover) and (pointer: fine) {
-  .book-pedestal-showcase__nav { display: flex; }
+  .home-hero-panel__nav { display: flex; }
 }
 
-.book-pedestal-showcase__dots {
+.home-hero-panel__dots {
   display: flex;
   justify-content: center;
   gap: 8px;
   margin-top: clamp(14px, 2vw, 20px);
 }
 
-.book-pedestal-showcase__dot {
+.home-hero-panel__dot {
   width: 7px;
   height: 7px;
   padding: 0;
@@ -1007,14 +967,9 @@ html.dark .book-card:focus-visible .book-card__cover {
   cursor: pointer;
   transition: background 0.2s var(--ease-out-quint), transform 0.2s var(--ease-out-quint);
 }
-.book-pedestal-showcase__dot--active {
+.home-hero-panel__dot--active {
   background: var(--home-gold);
   transform: scale(1.3);
-}
-
-@media (max-width: 560px) {
-  .book-pedestal-showcase__pedestal--center { flex-basis: clamp(120px, 34vw, 180px); }
-  .book-pedestal-showcase__pedestal--center img { max-height: clamp(140px, 34vw, 220px); }
 }
 
 /* ══════════════════════════════════════════════════════════════════════

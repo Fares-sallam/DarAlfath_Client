@@ -3,13 +3,18 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useHomeHeroSlides } from '@/hooks/useStorefront';
 
-const VISIBLE = 3;
-
 /**
- * The homepage hero's focal content: admin-curated images on lit pedestals,
- * replacing the old all-text title panel. Renders inside Frontispiece's
- * frame (ornaments, wall texture, glow all still apply — only what fills
- * .frontispiece__inner has changed).
+ * The homepage hero's focal content: an admin-uploaded banner image (or a
+ * rotation of a few), replacing the old all-text title panel. Renders
+ * inside Frontispiece's frame (ornaments, wall texture, glow all still
+ * apply — only what fills .frontispiece__inner has changed).
+ *
+ * Each slide is shown at its own natural width — full-bleed inside the
+ * frame, no cropping into a fixed box — because slides are meant to be
+ * ready-made banner graphics the admin designs elsewhere (Canva, etc.)
+ * and uploads as-is, not raw book-cover photos this component composes
+ * itself. One slide shows plainly; more than one adds arrows + dots to
+ * page between them, one at a time.
  *
  * Slides come from home_hero_slides (see useHomeHeroSlides), fully
  * independent of the products table so the dashboard can curate this
@@ -18,57 +23,50 @@ const VISIBLE = 3;
  */
 export default function HeroShowcase() {
   const { data: slides = [] } = useHomeHeroSlides();
-  const [page, setPage] = useState(0);
+  const [index, setIndex] = useState(0);
 
   if (slides.length === 0) return null;
 
-  const pageCount = Math.ceil(slides.length / VISIBLE);
-  const start = page * VISIBLE;
-  const shown = slides.slice(start, start + VISIBLE);
-  const canPage = pageCount > 1;
-  const centerIdx = shown.length === VISIBLE ? 1 : -1; // only elevate the middle one at full capacity
+  const canPage = slides.length > 1;
+  const slide = slides[index % slides.length];
+
+  const banner = (
+    <img
+      className="home-hero-panel__img"
+      src={slide.image_url}
+      alt={slide.title ?? ''}
+      loading="lazy"
+    />
+  );
 
   return (
-    <div className="book-pedestal-showcase">
-      <div className="book-pedestal-showcase__stage">
+    <div className="home-hero-panel">
+      <div className="home-hero-panel__stage">
         {canPage && (
           <button
             type="button"
-            className="book-pedestal-showcase__nav book-pedestal-showcase__nav--prev"
-            onClick={() => setPage((p) => (p - 1 + pageCount) % pageCount)}
-            aria-label="الإصدارات السابقة"
+            className="home-hero-panel__nav home-hero-panel__nav--prev"
+            onClick={() => setIndex((i) => (i - 1 + slides.length) % slides.length)}
+            aria-label="الإصدار السابق"
           >
             <ChevronRight size={18} />
           </button>
         )}
 
-        <div className="book-pedestal-showcase__pedestals" data-count={shown.length}>
-          {shown.map((slide, i) => {
-            const card = (
-              <>
-                <span className="book-pedestal-showcase__platform" aria-hidden="true" />
-                <img src={slide.image_url} alt={slide.title ?? ''} loading="lazy" />
-              </>
-            );
-            const className = `book-pedestal-showcase__pedestal${i === centerIdx ? ' book-pedestal-showcase__pedestal--center' : ''}`;
-            return slide.link_url ? (
-              <Link to={slide.link_url} className={className} key={slide.id}>
-                {card}
-              </Link>
-            ) : (
-              <div className={className} key={slide.id}>
-                {card}
-              </div>
-            );
-          })}
-        </div>
+        {slide.link_url ? (
+          <Link to={slide.link_url} className="home-hero-panel__frame">
+            {banner}
+          </Link>
+        ) : (
+          <div className="home-hero-panel__frame">{banner}</div>
+        )}
 
         {canPage && (
           <button
             type="button"
-            className="book-pedestal-showcase__nav book-pedestal-showcase__nav--next"
-            onClick={() => setPage((p) => (p + 1) % pageCount)}
-            aria-label="الإصدارات التالية"
+            className="home-hero-panel__nav home-hero-panel__nav--next"
+            onClick={() => setIndex((i) => (i + 1) % slides.length)}
+            aria-label="الإصدار التالي"
           >
             <ChevronLeft size={18} />
           </button>
@@ -76,16 +74,16 @@ export default function HeroShowcase() {
       </div>
 
       {canPage && (
-        <div className="book-pedestal-showcase__dots" role="tablist" aria-label="صفحات العرض">
-          {Array.from({ length: pageCount }).map((_, i) => (
+        <div className="home-hero-panel__dots" role="tablist" aria-label="صور الواجهة">
+          {slides.map((s, i) => (
             <button
-              key={i}
+              key={s.id}
               type="button"
               role="tab"
-              aria-selected={i === page}
-              aria-label={`الصفحة ${i + 1}`}
-              className={`book-pedestal-showcase__dot${i === page ? ' book-pedestal-showcase__dot--active' : ''}`}
-              onClick={() => setPage(i)}
+              aria-selected={i === index}
+              aria-label={`الصورة ${i + 1}`}
+              className={`home-hero-panel__dot${i === index ? ' home-hero-panel__dot--active' : ''}`}
+              onClick={() => setIndex(i)}
             />
           ))}
         </div>
