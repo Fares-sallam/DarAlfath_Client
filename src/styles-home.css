@@ -138,6 +138,14 @@ html.dark .page-cursor-light {
   padding: 0;
 }
 
+/* Deliberately wider than the site's standard 1240px .container — this
+   is the one section on the page meant to feel bigger than the content
+   column everything else sits in. */
+.home-hero-section__container {
+  width: min(calc(100% - 32px), 1520px);
+  margin-inline: auto;
+}
+
 /* ── Ornament divider ─────────────────────────────────────────────── */
 
 .ornament-divider {

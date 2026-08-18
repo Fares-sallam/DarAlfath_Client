@@ -38,7 +38,7 @@ export default function HomePage() {
              framing it. Renders nothing (and drops no space) until at least
              one slide exists in the dashboard. ── */}
       <section className="home-hero-section">
-        <div className="container">
+        <div className="home-hero-section__container">
           <HeroShowcase />
         </div>
       </section>
