@@ -890,8 +890,9 @@ html.dark .book-card:focus-visible .book-card__cover {
    HERO SHOWCASE — an admin-uploaded banner image (or a small rotation of
    a few), replacing the old text-only headline as the frontispiece's
    focal content. Slides are ready-made graphics the admin designs
-   elsewhere and uploads as-is, so they're shown at their own natural
-   width rather than composed into a fixed box.
+   elsewhere and uploads as-is: no card, no shadow, no rounded box around
+   them — the banner itself sits directly in the frame, full width, with
+   nothing but the frontispiece's own frame around it.
    ══════════════════════════════════════════════════════════════════════ */
 
 .home-hero-panel {
@@ -905,23 +906,46 @@ html.dark .book-card:focus-visible .book-card__cover {
   justify-content: center;
 }
 
-.home-hero-panel__frame {
+/* Not a card — no background, no shadow, no border. Just clips the
+   breathing zoom below so it never bleeds past the banner's own edges.
+   The hover nudge lives here (not on the img) because the img's own
+   transform is already owned by the breathing animation below — a CSS
+   animation always wins over a plain rule on the same property, so a
+   hover scale on the img itself would silently never show. */
+.home-hero-panel__viewport {
   display: block;
   width: 100%;
-  border-radius: clamp(10px, 1.6vw, 16px);
   overflow: hidden;
-  box-shadow: 0 14px 34px rgba(20, 15, 5, 0.16), 0 2px 8px rgba(20, 15, 5, 0.08);
-  transition: transform 0.35s var(--ease-out-quint), box-shadow 0.35s var(--ease-out-quint);
+  transition: transform 0.35s var(--ease-out-quint);
 }
-a.home-hero-panel__frame:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 20px 42px rgba(20, 15, 5, 0.2), 0 4px 10px rgba(20, 15, 5, 0.1);
+a.home-hero-panel__viewport:hover {
+  transform: scale(1.008);
 }
 
+/* Cross-fade between slides — the same <img> node stays mounted across
+   the whole rotation (see the component) so this opacity transition
+   plays symmetrically both out and back in, not just a fade-out
+   followed by the next image popping in. A slow, independent breathing
+   zoom runs underneath the whole time for a touch of life on screen. */
 .home-hero-panel__img {
   display: block;
   width: 100%;
   height: auto;
+  opacity: 1;
+  transition: opacity 0.42s var(--ease-out-quint);
+  animation: home-hero-panel-breathe 24s ease-in-out infinite alternate;
+}
+.home-hero-panel__img--fading {
+  opacity: 0;
+}
+
+@keyframes home-hero-panel-breathe {
+  from { transform: scale(1); }
+  to { transform: scale(1.025); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-panel__img { animation: none; }
 }
 
 .home-hero-panel__nav {
