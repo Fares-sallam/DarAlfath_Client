@@ -428,3 +428,33 @@ export function usePaymentMethods() {
     },
   });
 }
+
+/* ── Homepage hero showcase ──────────────────────────────────────────
+ * Admin-managed slides (home_hero_slides table), independent of the
+ * products table — the hero can be curated before the catalog is full.
+ * Only active rows are visible: RLS already filters this server-side,
+ * so no client-side is_active check is needed here. */
+export interface HeroSlideItem {
+  id: string;
+  image_url: string;
+  title: string | null;
+  link_url: string | null;
+  sort_order: number;
+}
+
+export function useHomeHeroSlides() {
+  return useQuery({
+    queryKey: ['home-hero-slides'],
+    queryFn: async (): Promise<HeroSlideItem[]> => {
+      if (!isSupabaseConfigured) return [];
+
+      const { data, error } = await supabase
+        .from('home_hero_slides')
+        .select('id, image_url, title, link_url, sort_order')
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as HeroSlideItem[];
+    },
+  });
+}

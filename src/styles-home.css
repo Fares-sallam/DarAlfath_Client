@@ -354,6 +354,20 @@ html.dark .ornament-medallion {
   letter-spacing: -0.015em;
 }
 
+/* Used once the pedestal showcase became the hero's actual focal point —
+   the title steps down to a caption under the eyebrow instead of the
+   two-line headline that used to carry the whole panel. */
+.frontispiece__title--compact {
+  font-size: clamp(18px, 2.4vw, 24px);
+  line-height: 1.3;
+  margin-bottom: clamp(20px, 3vw, 32px);
+}
+
+/* Wider than the 62ch text column so three pedestals have room to breathe. */
+.frontispiece__inner--showcase {
+  max-width: min(100%, 78ch);
+}
+
 .frontispiece__lede {
   margin: 0 auto;
   max-width: 46ch;
@@ -871,3 +885,196 @@ html.dark .book-card:focus-visible .book-card__cover {
 }
 .cart-empty h3 { margin: 0; font-size: 22px; color: var(--text); }
 .cart-empty p { margin: 0 0 8px; color: var(--muted); max-width: 40ch; }
+
+/* ══════════════════════════════════════════════════════════════════════
+   HERO SHOWCASE — admin-curated images on lit pedestals, replacing the
+   old text-only headline as the frontispiece's focal content.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.book-pedestal-showcase {
+  margin: clamp(4px, 1vw, 10px) 0 clamp(20px, 3vw, 32px);
+}
+
+.book-pedestal-showcase__stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.book-pedestal-showcase__pedestals {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: clamp(14px, 3vw, 32px);
+  width: 100%;
+  padding: 0 clamp(4px, 6vw, 56px);
+}
+
+.book-pedestal-showcase__pedestal {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 1 clamp(96px, 22vw, 190px);
+  text-decoration: none;
+  transition: transform 0.35s var(--ease-out-quint);
+}
+
+.book-pedestal-showcase__pedestal img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: auto;
+  max-height: clamp(120px, 24vw, 240px);
+  object-fit: contain;
+  filter: drop-shadow(0 18px 20px rgba(20, 15, 5, 0.28));
+  transition: filter 0.35s var(--ease-out-quint);
+}
+
+/* The lit ground each cover appears to rest on — a soft ellipse, not a
+   literal platform graphic, so it works at any image aspect ratio. */
+.book-pedestal-showcase__platform {
+  position: absolute;
+  bottom: -4px;
+  width: 82%;
+  height: clamp(14px, 2.4vw, 22px);
+  border-radius: 50%;
+  background: radial-gradient(ellipse, var(--home-gold) 0%, transparent 72%);
+  opacity: 0.22;
+  z-index: 0;
+  transition: opacity 0.35s var(--ease-out-quint);
+}
+
+.book-pedestal-showcase__pedestal:hover {
+  transform: translateY(-4px);
+}
+.book-pedestal-showcase__pedestal:hover .book-pedestal-showcase__platform {
+  opacity: 0.38;
+}
+
+/* Only elevated when exactly three sit side by side — the reference
+   composition this is drawn from. At 1-2 slides everything stays level. */
+.book-pedestal-showcase__pedestal--center {
+  flex-basis: clamp(120px, 27vw, 230px);
+  z-index: 2;
+}
+.book-pedestal-showcase__pedestal--center img {
+  max-height: clamp(150px, 30vw, 300px);
+}
+
+.book-pedestal-showcase__nav {
+  position: absolute;
+  top: 50%;
+  translate: 0 -50%;
+  z-index: 4;
+  display: none;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--home-frame);
+  background: var(--home-surface);
+  color: var(--home-gold);
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(9, 20, 48, 0.16);
+  transition: transform 0.2s var(--ease-out-quint);
+}
+.book-pedestal-showcase__nav:hover { transform: translateY(-50%) scale(1.06); }
+.book-pedestal-showcase__nav--prev { inset-inline-start: -4px; }
+.book-pedestal-showcase__nav--next { inset-inline-end: -4px; }
+
+@media (hover: hover) and (pointer: fine) {
+  .book-pedestal-showcase__nav { display: flex; }
+}
+
+.book-pedestal-showcase__dots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: clamp(14px, 2vw, 20px);
+}
+
+.book-pedestal-showcase__dot {
+  width: 7px;
+  height: 7px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--home-frame);
+  cursor: pointer;
+  transition: background 0.2s var(--ease-out-quint), transform 0.2s var(--ease-out-quint);
+}
+.book-pedestal-showcase__dot--active {
+  background: var(--home-gold);
+  transform: scale(1.3);
+}
+
+@media (max-width: 560px) {
+  .book-pedestal-showcase__pedestal--center { flex-basis: clamp(120px, 34vw, 180px); }
+  .book-pedestal-showcase__pedestal--center img { max-height: clamp(140px, 34vw, 220px); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   CATEGORY BAR — persistent, explicit category strip under the header,
+   on every page. Separate from Header's own hover dropdown (which keeps
+   the fuller per-category product preview); this is the one-click list.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.category-bar {
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+html.dark .category-bar {
+  border-bottom-color: #1E2D6B;
+  background: #0A1440;
+}
+
+.category-bar__track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-block: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.category-bar__track::-webkit-scrollbar { display: none; }
+
+.category-bar__pill {
+  flex: 0 0 auto;
+  padding: 6px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: color 0.2s var(--ease-out-quint), border-color 0.2s var(--ease-out-quint),
+              background 0.2s var(--ease-out-quint);
+}
+.category-bar__pill:hover {
+  color: var(--home-gold-text);
+  border-color: var(--home-frame);
+}
+.category-bar__pill.active {
+  color: var(--home-ink);
+  background: var(--home-motif);
+  border-color: var(--home-frame);
+}
+
+html.dark .category-bar__pill {
+  color: #8A93B8;
+  border-color: #1E2D6B;
+}
+html.dark .category-bar__pill:hover {
+  color: #D4A520;
+  border-color: rgba(212, 165, 32, 0.35);
+}
+html.dark .category-bar__pill.active {
+  color: #F0EDFF;
+  background: rgba(212, 165, 32, 0.12);
+  border-color: rgba(212, 165, 32, 0.35);
+}

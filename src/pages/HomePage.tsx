@@ -6,6 +6,7 @@ import SectionHeader from '@/components/SectionHeader';
 import ScrollRail from '@/components/ScrollRail';
 import VideoCard from '@/components/VideoCard';
 import Frontispiece from '@/components/Frontispiece';
+import HeroShowcase from '@/components/HeroShowcase';
 import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentCorner, OrnamentDivider, OrnamentMedallion, OrnamentSideMark } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
@@ -45,15 +46,18 @@ export default function HomePage() {
           <OrnamentSideMark side="start" />
           <OrnamentSideMark side="end" />
 
-          <div className="frontispiece__inner">
+          <div className="frontispiece__inner frontispiece__inner--showcase">
             <OrnamentMedallion />
             <p className="frontispiece__eyebrow">دار الفتح للنشر والتوزيع</p>
 
-            <h1 className="frontispiece__title">
-              كتبٌ تُقتنى،
-              <br />
-              لا تُتصفّح فقط
+            <h1 className="frontispiece__title frontispiece__title--compact">
+              كتبٌ تُقتنى، لا تُتصفّح فقط
             </h1>
+
+            {/* The hero's actual focal point — admin-curated slides on
+                pedestals. Renders nothing (and drops no space) until at
+                least one slide exists in the dashboard. */}
+            <HeroShowcase />
 
             <OrnamentDivider label="فاصل زخرفي" />
 

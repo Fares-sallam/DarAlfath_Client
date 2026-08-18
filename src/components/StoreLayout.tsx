@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Header from '@/components/Header';
+import CategoryBar from '@/components/CategoryBar';
 import Footer from '@/components/Footer';
 import { useStoreSettings } from '@/hooks/useStorefront';
 
@@ -16,6 +17,7 @@ export default function StoreLayout() {
   return (
     <div className="app-shell">
       <Header settings={safeSettings} />
+      <CategoryBar />
       <main className="container page-shell"><Outlet /></main>
       <Footer settings={safeSettings} />
     </div>
