@@ -1,17 +1,16 @@
-import { ArrowLeft, BookOpenText, CreditCard, Headphones, Truck } from 'lucide-react';
+import { BookOpenText, CreditCard, Headphones, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
 import ScrollRail from '@/components/ScrollRail';
 import VideoCard from '@/components/VideoCard';
-import Frontispiece from '@/components/Frontispiece';
 import HeroShowcase from '@/components/HeroShowcase';
 import PageCursorLight from '@/components/PageCursorLight';
-import { OrnamentCorner, OrnamentDivider, OrnamentMedallion, OrnamentSideMark } from '@/components/Ornament';
+import { OrnamentDivider } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
 import { introVideos } from '@/data/introVideos';
-import { useHomeCategorySections, useProducts, useStoreSettings } from '@/hooks/useStorefront';
+import { useHomeCategorySections, useProducts } from '@/hooks/useStorefront';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 /** Sections fade up as they arrive; the hook no-ops under reduced motion. */
@@ -26,7 +25,6 @@ function Reveal({ children, className = '' }: { children: React.ReactNode; class
 
 export default function HomePage() {
   usePageTitle();
-  const { data: settings } = useStoreSettings();
   const { data: products = [] } = useProducts();
   const { data: categorySections = [] } = useHomeCategorySections(4);
 
@@ -36,47 +34,14 @@ export default function HomePage() {
     <div className="page-sections page-sections--home">
       <PageCursorLight />
 
-      {/* ── Frontispiece: the title page of a manuscript, not a marketing hero.
-             A ruled gold frame, the house name, one line, one action. ── */}
-      <Frontispiece>
-          <OrnamentCorner position="tl" />
-          <OrnamentCorner position="tr" />
-          <OrnamentCorner position="bl" />
-          <OrnamentCorner position="br" />
-          <OrnamentSideMark side="start" />
-          <OrnamentSideMark side="end" />
-
-          <div className="frontispiece__inner frontispiece__inner--showcase">
-            <OrnamentMedallion />
-            <p className="frontispiece__eyebrow">دار الفتح للنشر والتوزيع</p>
-
-            <h1 className="frontispiece__title frontispiece__title--compact">
-              كتبٌ تُقتنى، لا تُتصفّح فقط
-            </h1>
-
-            {/* The hero's actual focal point — admin-curated slides on
-                pedestals. Renders nothing (and drops no space) until at
-                least one slide exists in the dashboard. */}
-            <HeroShowcase />
-
-            <OrnamentDivider label="فاصل زخرفي" />
-
-            <p className="frontispiece__lede">
-              {settings?.store_description ||
-                'إصدارات مختارة بعناية، تُعرض بوضوح: النسخة، السعر، والمتاح منها — قبل أن تقرر.'}
-            </p>
-
-            <div className="frontispiece__actions">
-              <Link to="/books" className="primary-button">
-                تصفّح الإصدارات
-                <ArrowLeft size={16} />
-              </Link>
-              <Link to="/about" className="ghost-button">
-                عن الدار
-              </Link>
-            </div>
-          </div>
-      </Frontispiece>
+      {/* ── The hero: just the admin-uploaded banner, full width, nothing
+             framing it. Renders nothing (and drops no space) until at least
+             one slide exists in the dashboard. ── */}
+      <section className="home-hero-section">
+        <div className="container">
+          <HeroShowcase />
+        </div>
+      </section>
 
       {/* ── The shelf: horizontal, because a shelf is horizontal. Also the
              pattern the per-book galleries will reuse once books carry

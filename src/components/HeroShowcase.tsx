@@ -7,11 +7,11 @@ const AUTO_ADVANCE_MS = 10000;
 const FADE_MS = 420;
 
 /**
- * The homepage hero's focal content: an admin-uploaded banner image (or a
- * rotation of a few), replacing the old all-text title panel — and now
- * the frame's actual centrepiece, not a card floating inside it. Renders
- * inside Frontispiece's frame (ornaments, wall texture, glow all still
- * apply — only what fills .frontispiece__inner has changed).
+ * The homepage's entire hero: an admin-uploaded banner image (or a
+ * rotation of a few), on its own — no frame, no logo, no title, no lede
+ * text around it. What used to be a framed title panel with the banner
+ * as one element inside it is gone; the banner itself is now the hero,
+ * rendered directly by HomePage inside a plain .container.
  *
  * Each slide is its own natural width, no card/shadow wrapper around it —
  * the banner graphics the admin uploads already carry their own framing.
