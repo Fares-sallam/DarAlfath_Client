@@ -162,44 +162,54 @@ html.dark .page-cursor-light {
 
 .store-departments__item {
   flex: 0 0 auto;
-  width: clamp(92px, 22vw, 118px);
+  width: clamp(100px, 24vw, 136px);
 }
 
 .department-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   text-decoration: none;
   text-align: center;
 }
 
+/* Bare on purpose when there's an uploaded image — badge graphics like the
+   reference this was designed against already carry their own frame,
+   corner ornaments, and title banner baked in. Adding our own border/
+   radius/shadow on top would compete with that (and round-clip their
+   corner art); this just gives the image room and a subtle lift on
+   hover. The fallback icon (no image yet) is the one case that still
+   needs a styled box of its own — see .department-card__fallback. */
 .department-card__visual {
-  display: grid;
-  place-items: center;
+  display: block;
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 18px;
   overflow: hidden;
-  background: var(--home-surface);
-  border: 1px solid var(--home-frame);
-  color: var(--home-gold);
-  box-shadow: 0 8px 20px rgba(16, 37, 66, 0.10);
-  transition: transform 0.3s var(--ease-out-quint), box-shadow 0.3s var(--ease-out-quint),
-              border-color 0.3s var(--ease-out-quint);
+  transition: transform 0.3s var(--ease-out-quint);
 }
 
 .department-card__visual img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+}
+
+.department-card__fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 18px;
+  background: var(--home-surface);
+  border: 1px solid var(--home-frame);
+  color: var(--home-gold);
+  box-shadow: 0 8px 20px rgba(16, 37, 66, 0.10);
 }
 
 .department-card:hover .department-card__visual,
 .department-card:focus-visible .department-card__visual {
-  transform: translateY(-3px);
-  border-color: var(--home-gold);
-  box-shadow: 0 16px 30px rgba(16, 37, 66, 0.16), 0 0 0 1px rgba(181, 134, 63, 0.25);
+  transform: translateY(-3px) scale(1.03);
 }
 
 .department-card__label {

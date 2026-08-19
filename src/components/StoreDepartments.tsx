@@ -20,9 +20,15 @@ function DepartmentCard({ series }: { series: SeriesItem }) {
     <Link to={`/books?series=${series.id}`} className="department-card">
       <span className="department-card__visual">
         {series.cover_url ? (
-          <img src={series.cover_url} alt="" loading="lazy" />
+          // Uploaded whole, badge-style — the admin's own graphics already
+          // carry their own frame/corners/title banner (see the reference
+          // image this was designed against), so this shows the image
+          // exactly as given: no crop, no competing border of ours.
+          <img src={series.cover_url} alt={series.name} loading="lazy" />
         ) : (
-          <LibraryBig size={26} />
+          <span className="department-card__fallback">
+            <LibraryBig size={26} />
+          </span>
         )}
       </span>
       <span className="department-card__label">{series.name}</span>
