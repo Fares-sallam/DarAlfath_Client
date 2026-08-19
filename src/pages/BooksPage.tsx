@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
 import { OrnamentDivider } from '@/components/Ornament';
-import { useCategories, useProducts } from '@/hooks/useStorefront';
+import { useCategories, useProducts, useSeries, useSeriesProductIds } from '@/hooks/useStorefront';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 export default function BooksPage() {
@@ -12,16 +12,28 @@ export default function BooksPage() {
 
   const { data: products = [], isLoading } = useProducts();
   const { data: categories = [] } = useCategories();
+  const { data: allSeries = [] } = useSeries();
 
   const q = searchParams.get('q') ?? '';
   const category = searchParams.get('category') ?? '';
   const type = searchParams.get('type') ?? '';
   const sort = searchParams.get('sort') ?? 'title';
+  const seriesId = searchParams.get('series') ?? '';
 
   const selectedCategory = useMemo(
     () => categories.find((item) => item.id === category) ?? null,
     [categories, category]
   );
+
+  const selectedSeries = useMemo(
+    () => allSeries.find((item) => item.id === seriesId) ?? null,
+    [allSeries, seriesId]
+  );
+
+  // The public catalog rows products come from don't carry series info
+  // themselves (see useSeries in useStorefront.ts) — a separate lookup of
+  // just this series' product ids, used to filter below.
+  const { data: seriesProductIds, isLoading: loadingSeriesIds } = useSeriesProductIds(seriesId || null);
 
   const productTypes = useMemo(() => {
     const values = new Set<string>();
@@ -60,6 +72,11 @@ export default function BooksPage() {
       rows = rows.filter((item) => item.category_slug === category);
     }
 
+    if (seriesId) {
+      const idSet = new Set(seriesProductIds ?? []);
+      rows = rows.filter((item) => idSet.has(item.product_id));
+    }
+
     if (type) {
       rows = rows.filter((item) => item.type === type);
     }
@@ -80,7 +97,7 @@ export default function BooksPage() {
     }
 
     return rows;
-  }, [products, q, category, type, sort]);
+  }, [products, q, category, seriesId, seriesProductIds, type, sort]);
 
   return (
     <div className="page-sections">
@@ -132,14 +149,14 @@ export default function BooksPage() {
         </select>
       </section>
 
-      {isLoading ? (
+      {isLoading || (seriesId && loadingSeriesIds) ? (
         <section className="page-card page-card--loading" />
       ) : null}
 
-      {!isLoading ? (
+      {!isLoading && !(seriesId && loadingSeriesIds) ? (
         <section>
           <SectionHeader
-            title={selectedCategory?.name || 'كل الكتب'}
+            title={selectedSeries?.name || selectedCategory?.name || 'كل الكتب'}
             subtitle={`${filtered.length} كتاب مطابق للعرض الحالي`}
           />
 
@@ -151,7 +168,7 @@ export default function BooksPage() {
         </section>
       ) : null}
 
-      {!isLoading && filtered.length === 0 ? (
+      {!isLoading && !(seriesId && loadingSeriesIds) && filtered.length === 0 ? (
         <section className="page-card">
           <div className="empty-state">
             <h3>لا توجد نتائج</h3>

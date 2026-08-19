@@ -6,6 +6,7 @@ import SectionHeader from '@/components/SectionHeader';
 import ScrollRail from '@/components/ScrollRail';
 import VideoCard from '@/components/VideoCard';
 import HeroShowcase from '@/components/HeroShowcase';
+import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
@@ -42,6 +43,13 @@ export default function HomePage() {
           <HeroShowcase />
         </div>
       </section>
+
+      {/* ── Quick-nav strip of department cards, right after the banner —
+             see StoreDepartments.tsx for why these are book_series rows.
+             Self-contains its own reveal-on-mount and empty state (renders
+             nothing, drops no grid gap, until at least one series exists) —
+             unlike the sections below, it isn't wrapped in <Reveal> here. ── */}
+      <StoreDepartments />
 
       {/* ── The shelf: horizontal, because a shelf is horizontal. Also the
              pattern the per-book galleries will reuse once books carry

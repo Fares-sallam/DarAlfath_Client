@@ -151,6 +151,68 @@ html.dark .page-cursor-light {
   margin-inline: calc(50% - 50vw);
 }
 
+/* ── Store departments ────────────────────────────────────────────────
+   A quick-nav strip right under the hero: one compact icon-card per
+   book_series row (see StoreDepartments.tsx). Deliberately smaller than
+   the shelf's book covers below — these are a directory, not products. */
+
+.store-departments {
+  margin-bottom: clamp(4px, 1vw, 10px);
+}
+
+.store-departments__item {
+  flex: 0 0 auto;
+  width: clamp(92px, 22vw, 118px);
+}
+
+.department-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+  text-align: center;
+}
+
+.department-card__visual {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 18px;
+  overflow: hidden;
+  background: var(--home-surface);
+  border: 1px solid var(--home-frame);
+  color: var(--home-gold);
+  box-shadow: 0 8px 20px rgba(16, 37, 66, 0.10);
+  transition: transform 0.3s var(--ease-out-quint), box-shadow 0.3s var(--ease-out-quint),
+              border-color 0.3s var(--ease-out-quint);
+}
+
+.department-card__visual img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.department-card:hover .department-card__visual,
+.department-card:focus-visible .department-card__visual {
+  transform: translateY(-3px);
+  border-color: var(--home-gold);
+  box-shadow: 0 16px 30px rgba(16, 37, 66, 0.16), 0 0 0 1px rgba(181, 134, 63, 0.25);
+}
+
+.department-card__label {
+  font-size: clamp(12px, 1.4vw, 13.5px);
+  font-weight: 700;
+  color: var(--home-ink);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ── Ornament divider ─────────────────────────────────────────────── */
 
 .ornament-divider {

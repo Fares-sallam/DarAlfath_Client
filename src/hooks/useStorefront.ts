@@ -253,25 +253,52 @@ export function useCategories() {
   return { ...productsQuery, data: categories };
 }
 
+/** Real book_series rows (what the dashboard's "إدارة السلاسل" manages) —
+ *  not to be confused with the category-derived groupings below. RLS
+ *  (series_anon_select) already scopes this to is_active=true for anon. */
 export function useSeries() {
-  const productsQuery = useProducts();
+  return useQuery({
+    queryKey: ['book-series'],
+    queryFn: async (): Promise<SeriesItem[]> => {
+      if (!isSupabaseConfigured) return [];
 
-  const series = useMemo(() => {
-    const map = new Map<string, SeriesItem>();
-    for (const product of productsQuery.data ?? []) {
-      if (!product.category_slug || !product.category_name) continue;
-      const current = map.get(product.category_slug);
-      map.set(product.category_slug, {
-        id: product.category_slug,
-        name: product.category_name,
-        slug: product.category_slug,
-        products_count: (current?.products_count ?? 0) + 1,
-      });
-    }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'ar'));
-  }, [productsQuery.data]);
+      const { data, error } = await supabase
+        .from('book_series')
+        .select('id, name, description, cover_url, sort_order, product_series(product_id)')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: false });
 
-  return { ...productsQuery, data: series };
+      if (error) throw error;
+
+      return ((data ?? []) as { id: string; name: string; description: string | null; cover_url: string | null; product_series: { product_id: string }[] }[])
+        .map((row) => ({
+          id: row.id,
+          name: row.name,
+          description: row.description,
+          cover_url: row.cover_url,
+          products_count: (row.product_series ?? []).length,
+        }));
+    },
+  });
+}
+
+/** Product ids belonging to one series — used to filter the books page
+ *  when arriving via a series/department card, since the public catalog
+ *  view products come from doesn't carry series info on the row itself. */
+export function useSeriesProductIds(seriesId: string | null) {
+  return useQuery({
+    queryKey: ['series-product-ids', seriesId],
+    enabled: !!seriesId && isSupabaseConfigured,
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase
+        .from('product_series')
+        .select('product_id')
+        .eq('series_id', seriesId!);
+
+      if (error) throw error;
+      return ((data ?? []) as { product_id: string }[]).map((row) => row.product_id);
+    },
+  });
 }
 
 export function useProductDetails(productId?: string) {
@@ -338,24 +365,6 @@ export function useHomeCategorySections(limitPerCategory = 4) {
   return { ...productsQuery, data: sections };
 }
 
-export function useHomeSeriesSections(limitPerSeries = 4) {
-  const sectionsQuery = useHomeCategorySections(limitPerSeries);
-  const sections = useMemo(
-    () =>
-      sectionsQuery.data.map((entry) => ({
-        series: {
-          id: entry.category.id,
-          name: entry.category.name,
-          slug: entry.category.slug,
-          products_count: entry.products.length,
-        } as SeriesItem,
-        products: entry.products,
-      })),
-    [sectionsQuery.data]
-  );
-
-  return { ...sectionsQuery, data: sections };
-}
 
 export function useRelatedProducts(categorySlug?: string | null, excludedId?: string) {
   const productsQuery = useProducts();
