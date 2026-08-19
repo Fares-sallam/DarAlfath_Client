@@ -101,9 +101,15 @@ export interface VideoItem {
   duration: string;
 }
 
+export interface PolicySubsection {
+  heading: string;
+  paragraphs?: string[];
+  points?: string[];
+}
+
 export interface PolicySection {
   id: string;
   title: string;
   description: string;
-  points: string[];
+  subsections: PolicySubsection[];
 }

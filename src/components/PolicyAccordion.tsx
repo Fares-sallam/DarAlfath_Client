@@ -18,7 +18,17 @@ export default function PolicyAccordion({ section }: { section: PolicySection })
 
       {open ? (
         <div className="policy-card__body">
-          <ul>{section.points.map((point) => <li key={point}>{point}</li>)}</ul>
+          {section.subsections.map((sub) => (
+            <div className="policy-card__section" key={sub.heading}>
+              <h4>{sub.heading}</h4>
+              {sub.paragraphs?.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+              {sub.points ? (
+                <ul>
+                  {sub.points.map((point) => <li key={point}>{point}</li>)}
+                </ul>
+              ) : null}
+            </div>
+          ))}
         </div>
       ) : null}
     </article>

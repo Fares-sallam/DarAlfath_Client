@@ -1,6 +1,6 @@
 import PolicyAccordion from '@/components/PolicyAccordion';
 import { OrnamentDivider } from '@/components/Ornament';
-import { policySections } from '@/data/policies';
+import { policySections, POLICIES_LAST_UPDATED } from '@/data/policies';
 
 export default function PoliciesPage() {
   return (
@@ -10,6 +10,7 @@ export default function PoliciesPage() {
           <span className="page-kicker">سياستنا</span>
           <h1>سياسات واضحة وتجربة موثوقة</h1>
           <p>كل ما تحتاج إلى معرفته عن الشحن، الإرجاع، الخصوصية، والشروط.</p>
+          <p className="policies-updated">آخر تحديث: {POLICIES_LAST_UPDATED}</p>
           <OrnamentDivider />
         </div>
       </section>
