@@ -281,14 +281,12 @@ Deno.serve(async (req) => {
     }
 
     // ── Re-fetch real prices from DB (don't trust client-supplied price) ───
-    // The product_variants table in this project only has: id, product_id,
-    // variant_name, variant_type, sku, price, base_price, sale_price, cost_price.
     // `is_digital` is NOT a column — it's derived from variant_type elsewhere.
     // So we read price columns from DB and derive is_digital from variant_type.
     const variantIds = items.map((i) => i.variant_id).filter(Boolean);
     const { data: variantRows, error: vErr } = await supabase
       .from('product_variants')
-      .select('id, product_id, price, sale_price, variant_type')
+      .select('id, product_id, price, sale_price, variant_type, weight_kg')
       .in('id', variantIds);
 
     if (vErr) {
@@ -335,19 +333,52 @@ Deno.serve(async (req) => {
     if (hasPhysicalItems) {
       const { data: settings } = await supabase
         .from('store_settings')
-        .select('default_shipping_cost, free_shipping_threshold')
+        .select('default_shipping_cost, free_shipping_threshold, default_shipping_company_id')
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       const flatRate = Number(settings?.default_shipping_cost) || 45;
       const freeThreshold = Number(settings?.free_shipping_threshold) || 0;
+      const defaultCompanyId = settings?.default_shipping_company_id as string | null | undefined;
+
+      // ── Weight + governorate rate lookup — same fallback contract as
+      //    create-storefront-order: missing company/governorate/rate just
+      //    means the flat rate above applies, never blocks checkout. ──────
+      let calculatedRate = flatRate;
+      const customerGovernorate = String(customer?.governorate ?? '').trim();
+      if (defaultCompanyId && customerGovernorate) {
+        const cartWeightKg = items.reduce((sum, it) => {
+          const v = variantMap.get(it.variant_id);
+          if (!v) return sum;
+          const isDigital = v.variant_type === 'رقمي' || v.variant_type === 'digital';
+          if (isDigital) return sum;
+          const qty = Math.min(99, Math.max(1, Math.floor(Number(it.quantity) || 1)));
+          return sum + (Number(v.weight_kg) || 0.3) * qty;
+        }, 0);
+
+        const { data: rateRow } = await supabase
+          .from('shipping_rates')
+          .select('price')
+          .eq('shipping_company_id', defaultCompanyId)
+          .eq('governorate', customerGovernorate)
+          .eq('is_active', true)
+          .lte('weight_from_kg', cartWeightKg)
+          .or(`weight_to_kg.is.null,weight_to_kg.gte.${cartWeightKg}`)
+          .order('weight_from_kg', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (rateRow?.price != null) {
+          calculatedRate = Number(rateRow.price);
+        }
+      }
 
       // Free shipping threshold only applies to Egypt (matches frontend logic)
       const isEgypt = !countryCode || countryCode === 'EG';
       const qualifiesFreeShipping = isEgypt && freeThreshold > 0 && subtotal >= freeThreshold;
 
-      serverShipping = qualifiesFreeShipping ? 0 : flatRate;
+      serverShipping = qualifiesFreeShipping ? 0 : calculatedRate;
     }
 
     // ── تطبيق الكوبون على المبلغ قبل إرساله لـ Paymob ─────────────

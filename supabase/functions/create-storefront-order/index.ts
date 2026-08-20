@@ -230,7 +230,7 @@ Deno.serve(async (req) => {
 
     const { data: variantRows, error: vErr } = await supabase
       .from('product_variants')
-      .select('id, product_id, price, sale_price, variant_type')
+      .select('id, product_id, price, sale_price, variant_type, weight_kg')
       .in('id', variantIds);
 
     if (vErr || !variantRows || variantRows.length === 0) {
@@ -291,19 +291,56 @@ Deno.serve(async (req) => {
     if (hasPhysicalItems) {
       const { data: settings } = await supabase
         .from('store_settings')
-        .select('default_shipping_cost, free_shipping_threshold')
+        .select('default_shipping_cost, free_shipping_threshold, default_shipping_company_id')
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       const flatRate = Number(settings?.default_shipping_cost) || 45;
       const freeThreshold = Number(settings?.free_shipping_threshold) || 0;
+      const defaultCompanyId = settings?.default_shipping_company_id as string | null | undefined;
+
+      // ── Weight + governorate rate lookup ──────────────────────────────
+      // Falls back to the flat rate above whenever there's no default
+      // shipping company configured, no governorate on the order, or no
+      // shipping_rates row covers this exact (company, governorate, weight)
+      // combination — this system only ever narrows the flat rate, it never
+      // removes it as a safety net, so an incomplete rate table can't block
+      // checkout.
+      let calculatedRate = flatRate;
+      const customerGovernorate = String(customer?.governorate ?? '').trim();
+      if (defaultCompanyId && customerGovernorate) {
+        const cartWeightKg = (items as Record<string, unknown>[]).reduce((sum, item) => {
+          const v = variantMap.get(item.variant_id as string) as Record<string, unknown> | undefined;
+          if (!v) return sum;
+          const isDigital = v.variant_type === 'رقمي' || v.variant_type === 'digital';
+          if (isDigital) return sum;
+          const qty = Math.min(99, Math.max(1, Math.floor(Number(item.quantity) || 1)));
+          return sum + (Number(v.weight_kg) || 0.3) * qty;
+        }, 0);
+
+        const { data: rateRow } = await supabase
+          .from('shipping_rates')
+          .select('price')
+          .eq('shipping_company_id', defaultCompanyId)
+          .eq('governorate', customerGovernorate)
+          .eq('is_active', true)
+          .lte('weight_from_kg', cartWeightKg)
+          .or(`weight_to_kg.is.null,weight_to_kg.gte.${cartWeightKg}`)
+          .order('weight_from_kg', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (rateRow?.price != null) {
+          calculatedRate = Number(rateRow.price);
+        }
+      }
 
       // Free shipping threshold only applies to Egypt (matches frontend logic)
       const isEgypt = !country?.code || (country.code ?? '').toUpperCase() === 'EG';
       const qualifiesFreeShipping = isEgypt && freeThreshold > 0 && verifiedSubtotal >= freeThreshold;
 
-      serverShipping = qualifiesFreeShipping ? 0 : flatRate;
+      serverShipping = qualifiesFreeShipping ? 0 : calculatedRate;
     }
 
     // ── إنشاء الطلب + خصم المخزون فوراً لطرق الدفع غير Paymob ─────────────
