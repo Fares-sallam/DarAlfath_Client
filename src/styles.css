@@ -4936,6 +4936,152 @@ html.dark .auth-input--readonly {
   font-weight: 800;
 }
 
+/* ── Danger zone (account deletion) ────────────────────────────
+   Deliberately plain/red rather than matching the card language above —
+   this section should read as "different from the rest of the page",
+   not blend in. */
+.danger-zone {
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  background: rgba(220, 38, 38, 0.04);
+  border-radius: 24px;
+  padding: 20px 24px;
+}
+
+.danger-zone__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.danger-zone__header svg { color: #dc2626; }
+.danger-zone__header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 900;
+  color: #991b1b;
+}
+
+.danger-zone__copy {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.9;
+  max-width: 62ch;
+}
+.danger-zone__copy a { color: var(--blue-800); font-weight: 700; }
+
+.danger-zone__trigger {
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  background: #fff;
+  color: #dc2626;
+  font-weight: 800;
+  font-size: 13.5px;
+  padding: 10px 20px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.danger-zone__trigger:hover { background: #dc2626; color: #fff; }
+
+/* ── Delete-account confirmation modal ──────────────────────── */
+.delete-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.delete-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(9, 15, 33, 0.55);
+}
+
+.delete-modal__panel {
+  position: relative;
+  width: min(100%, 420px);
+  background: #fff;
+  border-radius: 22px;
+  padding: 28px 26px 24px;
+  box-shadow: 0 30px 70px rgba(9, 15, 33, 0.35);
+  text-align: center;
+}
+
+.delete-modal__close {
+  position: absolute;
+  top: 14px;
+  inset-inline-end: 14px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 8px;
+}
+.delete-modal__close:hover { background: rgba(9,15,33,0.06); }
+.delete-modal__close:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.delete-modal__icon { color: #dc2626; margin-bottom: 10px; }
+
+.delete-modal__panel h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.delete-modal__panel p {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.8;
+}
+.delete-modal__panel p b { color: #dc2626; }
+
+.delete-modal__input {
+  width: 100%;
+  text-align: center;
+  padding: 11px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+.delete-modal__input:focus { outline: 2px solid rgba(220,38,38,0.35); outline-offset: 2px; }
+
+.delete-modal__actions {
+  display: flex;
+  gap: 10px;
+}
+.delete-modal__actions .ghost-button { flex: 1; }
+
+.delete-modal__confirm {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  border-radius: 12px;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 800;
+  font-size: 13.5px;
+  padding: 11px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease, opacity 0.2s ease;
+}
+.delete-modal__confirm:hover:not(:disabled) { background: #b91c1c; }
+.delete-modal__confirm:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.delete-modal__confirm .spin { animation: delete-modal-spin 0.9s linear infinite; }
+@keyframes delete-modal-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .profile-nav { grid-template-columns: 1fr; }

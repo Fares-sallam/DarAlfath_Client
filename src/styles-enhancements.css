@@ -1530,6 +1530,40 @@ html.dark .profile-details__verified   {
   color: #86efac;
 }
 
+/* Danger zone + its confirmation modal — same navy/gold card language as
+   .profile-details above, red kept as the one accent since it's the whole
+   point of this section reading as "different". */
+html.dark .danger-zone {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.32);
+}
+html.dark .danger-zone__header h2 { color: #F0EDFF; }
+html.dark .danger-zone__copy { color: #8A93B8; }
+html.dark .danger-zone__copy a { color: #D4A520; }
+html.dark .danger-zone__trigger {
+  background: #0D1847;
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #f87171;
+}
+html.dark .danger-zone__trigger:hover { background: #dc2626; color: #fff; }
+
+html.dark .delete-modal__backdrop { background: rgba(4, 9, 25, 0.85); backdrop-filter: blur(6px); }
+html.dark .delete-modal__panel {
+  background: #0D1847;
+  border: 1px solid #1E2D6B;
+  border-top: 3px solid #dc2626;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+}
+html.dark .delete-modal__panel h3 { color: #F0EDFF; }
+html.dark .delete-modal__panel p  { color: #8A93B8; }
+html.dark .delete-modal__close    { color: #8A93B8; }
+html.dark .delete-modal__close:hover { background: rgba(255,255,255,0.06); }
+html.dark .delete-modal__input {
+  background: #0A1440;
+  border-color: #1E2D6B;
+  color: #F0EDFF;
+}
+
 /* Auth layout — align-items: start so each card keeps its natural height
    (prevents form card from stretching to match taller info panel) */
 .auth-layout {

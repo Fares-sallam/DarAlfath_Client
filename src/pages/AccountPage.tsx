@@ -1,8 +1,16 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { BookOpen, ChevronLeft, CheckCircle2, Download, Heart, LogOut, PackageCheck, ShieldCheck, UserRound } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  BookOpen, ChevronLeft, CheckCircle2, Download, Heart, LogOut, PackageCheck,
+  ShieldCheck, UserRound, AlertTriangle, Loader2, X,
+} from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
 import OtpInput from '@/components/OtpInput';
+
+/** Typed exactly (not just "any text") before the delete button enables —
+ *  the standard "type to confirm" pattern for an action this irreversible. */
+const DELETE_CONFIRM_WORD = 'حذف';
 
 type AuthMode = 'login' | 'signup' | 'verify' | 'forgot' | 'forgot-verify' | 'reset';
 
@@ -52,6 +60,13 @@ export default function AccountPage() {
   const [notice, setNotice] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const navigate = useNavigate();
+
+  // ── Account deletion ────────────────────────────────
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // ── Resend cooldown timer ──────────────────────────
   const startCooldown = useCallback(() => {
@@ -307,6 +322,42 @@ export default function AccountPage() {
     if (result.error) setError(result.error);
   };
 
+  const closeDeleteModal = () => {
+    if (deletingAccount) return; // don't let a stray click cancel mid-request
+    setShowDeleteModal(false);
+    setDeleteConfirmText('');
+    setDeleteError('');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (deleteConfirmText !== DELETE_CONFIRM_WORD) return;
+
+    setDeletingAccount(true);
+    setDeleteError('');
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('delete-account', {
+        body: {},
+      });
+
+      if (fnError || data?.error) {
+        setDeleteError(data?.error || 'تعذر حذف الحساب. حاول مرة أخرى أو تواصل معنا.');
+        setDeletingAccount(false);
+        return;
+      }
+
+      // The account is gone server-side — drop the local session too, then
+      // leave the page entirely rather than re-render a now-meaningless
+      // "logged in" view. The server-side call inside signOut() naturally
+      // 403s (there's no user left to invalidate a session for); that's
+      // expected here, not a real failure, so it's never surfaced.
+      await supabase.auth.signOut().catch(() => {});
+      navigate('/', { replace: true, state: { accountDeleted: true } });
+    } catch {
+      setDeleteError('تعذر الاتصال بالخادم. تحقق من الاتصال وحاول مرة أخرى.');
+      setDeletingAccount(false);
+    }
+  };
+
   const handleResendConfirmation = async () => {
     setError('');
     setNotice('');
@@ -373,6 +424,7 @@ export default function AccountPage() {
       .join('');
 
     return (
+      <>
       <div className="page-sections">
 
         {/* ── Profile Banner ─────────────────────────────── */}
@@ -487,7 +539,89 @@ export default function AccountPage() {
           </div>
         </section>
 
+        {/* ── Danger zone ──────────────────────────────────
+               Required by Apple (§5.1.1(v)) and Google Play: account
+               creation must be matched by in-app, self-service deletion —
+               not an email-to-support flow. ── */}
+        <section className="danger-zone">
+          <div className="danger-zone__header">
+            <AlertTriangle size={18} />
+            <h2>حذف الحساب</h2>
+          </div>
+          <p className="danger-zone__copy">
+            حذف حسابك نهائي ولا يمكن التراجع عنه. سيُحذف اسمك وبريدك الإلكتروني وبيانات
+            حسابك فورًا، وتفقد الوصول لكتبك الرقمية داخل التطبيق. تبقى طلباتك السابقة
+            كسجلّ محاسبي دون أي بيانات تعرّف عليك، كما هو موضّح في{' '}
+            <Link to="/policies#privacy">سياسة الخصوصية</Link>.
+          </p>
+          <button
+            type="button"
+            className="danger-zone__trigger"
+            onClick={() => setShowDeleteModal(true)}
+          >
+            حذف الحساب نهائيًا
+          </button>
+        </section>
+
       </div>
+
+      {showDeleteModal ? (
+        <div className="delete-modal" role="dialog" aria-modal="true" aria-label="تأكيد حذف الحساب">
+          <div className="delete-modal__backdrop" onClick={closeDeleteModal} />
+          <div className="delete-modal__panel">
+            <button
+              type="button"
+              className="delete-modal__close"
+              onClick={closeDeleteModal}
+              aria-label="إغلاق"
+              disabled={deletingAccount}
+            >
+              <X size={18} />
+            </button>
+
+            <AlertTriangle size={28} className="delete-modal__icon" />
+            <h3>تأكيد حذف الحساب</h3>
+            <p>
+              هذا الإجراء نهائي. لتأكيد الحذف، اكتب كلمة "<b>{DELETE_CONFIRM_WORD}</b>" في
+              الحقل بالأسفل.
+            </p>
+
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={DELETE_CONFIRM_WORD}
+              disabled={deletingAccount}
+              className="delete-modal__input"
+              autoFocus
+            />
+
+            {deleteError ? <div className="auth-alert auth-alert--error">{deleteError}</div> : null}
+
+            <div className="delete-modal__actions">
+              <button type="button" className="ghost-button" onClick={closeDeleteModal} disabled={deletingAccount}>
+                إلغاء
+              </button>
+              <button
+                type="button"
+                className="delete-modal__confirm"
+                onClick={handleDeleteAccount}
+                disabled={deletingAccount || deleteConfirmText !== DELETE_CONFIRM_WORD}
+              >
+                {deletingAccount ? (
+                  <>
+                    <Loader2 size={15} className="spin" />
+                    جارٍ الحذف...
+                  </>
+                ) : (
+                  'حذف الحساب نهائيًا'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
     );
   }
 
