@@ -60,15 +60,15 @@ const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 // Intention API takes integration ids directly in `payment_methods`; the
 // legacy per-method iframe ids are no longer used (unified checkout renders
 // every enabled method from the single intention).
+//
+// The integration id for a given payment_methods row now lives in that row's
+// own `config.integration_id` (set from the dashboard, no redeploy needed) —
+// see the DB lookup below, which is the primary source. This env-var map is
+// kept only as a fallback for older rows (card/fawry) that predate that
+// column and haven't been migrated into the DB yet.
 const INTEGRATION_IDS: Record<string, number> = {
-  paymob_card:      Number(Deno.env.get('PAYMOB_CARD_INTEGRATION_ID')      ?? '0'),
-  paymob_fawry:     Number(Deno.env.get('PAYMOB_FAWRY_INTEGRATION_ID')     ?? '0'),
-  paymob_wallet:    Number(Deno.env.get('PAYMOB_WALLET_INTEGRATION_ID')    ?? '0'),
-  // Apple Pay renders inside Paymob's own hosted checkout, so Apple's merchant
-  // domain verification is Paymob's responsibility, not ours — nothing to
-  // register on our domain. It only appears for buyers on Apple devices; the
-  // storefront/app hide the option elsewhere (see isApplePayAvailable).
-  paymob_apple_pay: Number(Deno.env.get('PAYMOB_APPLE_PAY_INTEGRATION_ID') ?? '0'),
+  paymob_card:  Number(Deno.env.get('PAYMOB_CARD_INTEGRATION_ID')  ?? '0'),
+  paymob_fawry: Number(Deno.env.get('PAYMOB_FAWRY_INTEGRATION_ID') ?? '0'),
 };
 
 function getClientIp(req: Request): string {
@@ -209,7 +209,7 @@ Deno.serve(async (req) => {
     }
 
     const normalizedProvider = String(provider ?? '').toLowerCase().trim();
-    if (!normalizedProvider || !INTEGRATION_IDS[normalizedProvider]) {
+    if (!normalizedProvider || !normalizedProvider.startsWith('paymob')) {
       return jsonError(`بيانات Paymob غير مضبوطة للطريقة: ${provider}`, 500);
     }
     if (!Array.isArray(items) || items.length === 0) {
@@ -236,14 +236,19 @@ Deno.serve(async (req) => {
     }
 
     // ── Validate the chosen payment method: exists, active, and a Paymob
-    //    provider (so a non-Paymob / inactive method can't be forced here) ──
+    //    provider (so a non-Paymob / inactive method can't be forced here).
+    //    Also resolves the actual Paymob integration id to charge against —
+    //    from this row's own config.integration_id first (dashboard-managed,
+    //    no redeploy needed), falling back to the legacy env-var map above
+    //    only for rows that haven't been migrated into the DB yet. ──────────
     if (!paymentMethodId) {
       return jsonError('طريقة الدفع مطلوبة.', 400);
     }
+    let integrationId = 0;
     {
       const { data: pm, error: pmError } = await supabase
         .from('payment_methods')
-        .select('provider, is_active')
+        .select('provider, is_active, config')
         .eq('id', paymentMethodId)
         .maybeSingle();
       if (pmError) {
@@ -253,6 +258,12 @@ Deno.serve(async (req) => {
       const pmProvider = String(pm?.provider ?? '').toLowerCase().trim();
       if (!pm || pm.is_active === false || pmProvider !== normalizedProvider || !pmProvider.startsWith('paymob')) {
         return jsonError('طريقة الدفع غير صالحة أو غير متاحة.', 400);
+      }
+      const configId = Number((pm.config as Record<string, unknown> | null)?.integration_id ?? 0);
+      integrationId = configId > 0 ? configId : (INTEGRATION_IDS[normalizedProvider] ?? 0);
+      if (!integrationId) {
+        console.error('[paymob] no integration id configured for provider:', normalizedProvider);
+        return jsonError(`بيانات Paymob غير مضبوطة للطريقة: ${provider}`, 500);
       }
     }
 
@@ -499,7 +510,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         amount:           totalCents,
         currency:         'EGP',
-        payment_methods:  [INTEGRATION_IDS[normalizedProvider]],
+        payment_methods:  [integrationId],
         special_reference: merchantOrderId,
         notification_url: WEBHOOK_URL,
         ...(REDIRECT_URL ? { redirection_url: REDIRECT_URL } : {}),

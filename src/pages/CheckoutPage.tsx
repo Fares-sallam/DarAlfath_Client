@@ -32,6 +32,26 @@ declare global {
       reset: (widgetId?: string) => void;
       remove?: (widgetId: string) => void;
     };
+    // Only ever defined by Safari on an Apple device — used purely as a
+    // presence/capability check, never actually invoked (Paymob's own hosted
+    // checkout page drives the real Apple Pay sheet).
+    ApplePaySession?: {
+      canMakePayments: () => boolean;
+    };
+  }
+}
+
+/** True only in a browser that can plausibly complete an Apple Pay sheet
+ *  (Safari on macOS/iOS/iPadOS with Apple Pay set up). Every other browser —
+ *  Chrome, Firefox, Edge, Android/desktop anything — never defines
+ *  `window.ApplePaySession`, so the option stays hidden there instead of
+ *  leading to a checkout page with no way to actually pay. */
+function isApplePaySupported(): boolean {
+  if (typeof window === 'undefined' || !window.ApplePaySession) return false;
+  try {
+    return window.ApplePaySession.canMakePayments();
+  } catch {
+    return false;
   }
 }
 
@@ -103,17 +123,25 @@ export default function CheckoutPage() {
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
 
+  // Computed once per page load — Apple Pay support doesn't change mid-session.
+  const [applePaySupported] = useState(isApplePaySupported);
+
   // الكتب الرقمية تتطلب دفعًا إلكترونيًا مؤكدًا فقط — الدفع عند الاستلام لا معنى
   // له لملف لا يُسلَّم فعليًا، وقد يمنح وصولاً مجانيًا لو أكّد الأدمن الطلب لاحقًا
   // كإجراء روتيني (نفس القاعدة المطبّقة في التطبيق).
   const hasDigitalItem = items.some((i) => i.is_digital);
-  const availablePaymentMethods = useMemo(
-    () =>
-      hasDigitalItem
-        ? paymentMethods.filter((m) => m.provider.toLowerCase().startsWith('paymob'))
-        : paymentMethods,
-    [paymentMethods, hasDigitalItem]
-  );
+  const availablePaymentMethods = useMemo(() => {
+    let list = hasDigitalItem
+      ? paymentMethods.filter((m) => m.provider.toLowerCase().startsWith('paymob'))
+      : paymentMethods;
+    // Apple Pay only ever works in a Safari session on an Apple device — hide
+    // it everywhere else so a customer never lands on a button that can't
+    // possibly complete.
+    if (!applePaySupported) {
+      list = list.filter((m) => m.provider.toLowerCase().trim() !== 'paymob_apple_pay');
+    }
+    return list;
+  }, [paymentMethods, hasDigitalItem, applePaySupported]);
 
   useEffect(() => {
     // أعد الاختيار لو مفيش طريقة مختارة، أو لو المختارة لم تعد متاحة (مثلاً كانت
