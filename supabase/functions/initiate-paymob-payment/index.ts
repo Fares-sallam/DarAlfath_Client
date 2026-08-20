@@ -26,6 +26,11 @@
 //  Turnstile. Any other caller (the website included) still goes through it.
 //  Rate limiting and every price/payment verification below still apply
 //  regardless of this exemption.
+//
+//  App-only login requirement (2026-08-10): the mobile app must not allow
+//  guest checkout — a signed-in account is required to purchase. This is
+//  enforced below ONLY for trusted-app callers (isTrustedApp); the website
+//  is untouched and may still allow guest checkout as before.
 // ════════════════════════════════════════════════════════════════════════
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -56,9 +61,14 @@ const rateBuckets = new Map<string, { count: number; resetAt: number }>();
 // legacy per-method iframe ids are no longer used (unified checkout renders
 // every enabled method from the single intention).
 const INTEGRATION_IDS: Record<string, number> = {
-  paymob_card:   Number(Deno.env.get('PAYMOB_CARD_INTEGRATION_ID')   ?? '0'),
-  paymob_fawry:  Number(Deno.env.get('PAYMOB_FAWRY_INTEGRATION_ID')  ?? '0'),
-  paymob_wallet: Number(Deno.env.get('PAYMOB_WALLET_INTEGRATION_ID') ?? '0'),
+  paymob_card:      Number(Deno.env.get('PAYMOB_CARD_INTEGRATION_ID')      ?? '0'),
+  paymob_fawry:     Number(Deno.env.get('PAYMOB_FAWRY_INTEGRATION_ID')     ?? '0'),
+  paymob_wallet:    Number(Deno.env.get('PAYMOB_WALLET_INTEGRATION_ID')    ?? '0'),
+  // Apple Pay renders inside Paymob's own hosted checkout, so Apple's merchant
+  // domain verification is Paymob's responsibility, not ours — nothing to
+  // register on our domain. It only appears for buyers on Apple devices; the
+  // storefront/app hide the option elsewhere (see isApplePayAvailable).
+  paymob_apple_pay: Number(Deno.env.get('PAYMOB_APPLE_PAY_INTEGRATION_ID') ?? '0'),
 };
 
 function getClientIp(req: Request): string {
@@ -246,13 +256,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Auth user (optional, for guest checkout) ────────────────────
+    // ── Auth user ─────────────────────────────────────────────────────
+    // Resolved from the Bearer token when present. The website may still omit
+    // it (guest checkout); the app may NOT — enforced right below.
     let userId: string | null = null;
     const authHeader = req.headers.get('Authorization');
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.replace('Bearer ', '');
       const { data: userData } = await supabase.auth.getUser(token);
       userId = userData?.user?.id ?? null;
+    }
+    // APP-ONLY: a signed-in account is required to purchase from the mobile
+    // app (product decision, 2026-08-10). Scoped to isTrustedApp so the
+    // website's guest checkout is completely unaffected.
+    if (isTrustedApp && !userId) {
+      return jsonError('يجب تسجيل الدخول لإتمام عملية الشراء من التطبيق.', 401);
     }
 
     // ── Re-fetch real prices from DB (don't trust client-supplied price) ───
