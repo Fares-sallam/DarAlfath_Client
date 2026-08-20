@@ -2484,6 +2484,15 @@ html.dark .auth-card input:focus {
   outline: none;
 }
 
+html.dark .auth-password-toggle { color: #8A93B8; }
+html.dark .auth-password-toggle:hover {
+  color: #D4A520;
+  background: rgba(212, 165, 32, 0.12);
+}
+html.dark .auth-password-toggle:focus-visible {
+  box-shadow: 0 0 0 3px rgba(212, 165, 32, 0.25);
+}
+
 /* OTP code input */
 html.dark .auth-card .auth-code-input {
   background: #0D1847;

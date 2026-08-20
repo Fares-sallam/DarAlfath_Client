@@ -3497,6 +3497,43 @@ h3,
   box-shadow: 0 0 0 4px rgba(46, 100, 178, 0.14);
 }
 
+.auth-password-field {
+  position: relative;
+  display: flex;
+}
+
+.auth-password-field input {
+  width: 100%;
+  padding-inline-end: 42px;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  inset-inline-end: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #8a7658;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.auth-password-toggle:hover {
+  color: #2e64b2;
+  background: rgba(46, 100, 178, 0.08);
+}
+
+.auth-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(46, 100, 178, 0.25);
+}
+
 .auth-alert {
   padding: 12px 14px;
   border-radius: 15px;
@@ -3684,6 +3721,16 @@ h3,
   border-radius: 11px;
   padding: 0 10px;
   font-size: 12.5px;
+}
+
+.auth-password-field input {
+  padding-inline-end: 36px;
+}
+
+.auth-password-toggle {
+  width: 28px;
+  height: 28px;
+  inset-inline-end: 3px;
 }
 
 .auth-card .auth-code-input {

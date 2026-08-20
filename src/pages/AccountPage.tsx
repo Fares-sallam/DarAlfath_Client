@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 're
 import { Link, useNavigate } from 'react-router-dom';
 import {
   BookOpen, ChevronLeft, CheckCircle2, Download, Heart, LogOut, PackageCheck,
-  ShieldCheck, UserRound, AlertTriangle, Loader2, X,
+  ShieldCheck, UserRound, AlertTriangle, Loader2, X, Eye, EyeOff,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -61,6 +61,8 @@ export default function AccountPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // ── Account deletion ────────────────────────────────
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -127,6 +129,9 @@ export default function AccountPage() {
     setNotice('');
     // Clear sensitive data when switching away from signup/verify flow
     if (nextMode !== 'verify') setPendingSignupPassword('');
+    // Don't carry a revealed password over into a different form context
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
   const handleSubmit = async (event: FormEvent) => {
@@ -756,26 +761,48 @@ export default function AccountPage() {
           {mode !== 'forgot' && mode !== 'forgot-verify' && mode !== 'verify' ? (
             <label>
               {mode === 'reset' ? 'كلمة المرور الجديدة' : 'كلمة المرور'}
-              <input
-                type="password"
-                value={form.password}
-                onChange={(event) => updateField('password', event.target.value)}
-                placeholder="••••••••"
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              />
+              <div className="auth-password-field">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={(event) => updateField('password', event.target.value)}
+                  placeholder="••••••••"
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={showPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
             </label>
           ) : null}
 
           {mode === 'signup' || mode === 'reset' ? (
             <label>
               تأكيد كلمة المرور
-              <input
-                type="password"
-                value={form.confirmPassword}
-                onChange={(event) => updateField('confirmPassword', event.target.value)}
-                placeholder="أعد كتابة كلمة المرور"
-                autoComplete="new-password"
-              />
+              <div className="auth-password-field">
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  value={form.confirmPassword}
+                  onChange={(event) => updateField('confirmPassword', event.target.value)}
+                  placeholder="أعد كتابة كلمة المرور"
+                  autoComplete="new-password"
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowConfirmPassword((prev) => !prev)}
+                  aria-label={showConfirmPassword ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                  tabIndex={-1}
+                >
+                  {showConfirmPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                </button>
+              </div>
             </label>
           ) : null}
 
