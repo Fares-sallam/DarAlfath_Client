@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, CreditCard, ExternalLink, Loader2, PackageCheck, Tag, Truck, X } from 'lucide-react';
+import { CheckCircle2, CreditCard, ExternalLink, LogIn, Loader2, PackageCheck, Tag, Truck, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OrnamentDivider } from '@/components/Ornament';
 import { usePageTitle } from '@/hooks/usePageTitle';
@@ -637,6 +637,23 @@ export default function CheckoutPage() {
             <h3>لا يوجد شيء لإتمامه</h3>
             <p>السلة فارغة حاليًا. أضف كتبًا أولًا ثم ارجع إلى صفحة الدفع.</p>
             <Link to="/books" className="primary-button">الذهاب إلى الكتب</Link>
+          </div>
+        ) : !user ? (
+          // Purchasing now requires an account — so every order has an owner who
+          // can see it in "طلباتي" and get status-update emails. Enforced for
+          // real server-side too (create-storefront-order / initiate-paymob-payment
+          // both reject an anonymous caller); this is just the friendly front door.
+          <div className="empty-state">
+            <LogIn size={24} />
+            <h3>سجّل الدخول لإتمام الطلب</h3>
+            <p>
+              عشان يبقى ليك سجلّ بمشترياتك وتقدر تتابع حالة طلبك وتستلم إشعارات كل
+              مرحلة، لازم تسجّل الدخول أو تنشئ حساب أولًا.
+            </p>
+            <Link to="/account" className="primary-button">
+              <LogIn size={16} />
+              تسجيل الدخول
+            </Link>
           </div>
         ) : (
           <div className="cart-layout">

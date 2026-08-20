@@ -2,13 +2,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
 const TURNSTILE_SECRET_KEY = Deno.env.get('TURNSTILE_SECRET_KEY') ?? '';
 const REQUIRE_TURNSTILE = (Deno.env.get('REQUIRE_TURNSTILE') ?? '').toLowerCase() === 'true';
+// Same app-only secret initiate-paymob-payment and create-digital-download-link
+// already check. Lets the mobile app (no browser, can't solve Turnstile) skip
+// the challenge; the website still goes through it. Also used below to require
+// a signed-in account for app-originated orders only (2026-08-10).
+const APP_KEY_SECRET = Deno.env.get('APP_DOWNLOAD_SECRET') ?? '';
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX = 12;
 const rateBuckets = new Map<string, { count: number; resetAt: number }>();
@@ -105,6 +110,10 @@ Deno.serve(async (req) => {
     const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items, paymentType, couponCode, turnstileToken } = body;
     // Paymob/online payments must go through initiate-paymob-payment.
 
+    // Trusted app callers (mobile) skip Turnstile — they cannot render the
+    // widget. Everyone else (the website) still must pass it.
+    const isTrustedApp = !!APP_KEY_SECRET && req.headers.get('x-app-key') === APP_KEY_SECRET;
+
     // ── Basic validation ──────────────────────────────────────────────────────
     if (!Array.isArray(items) || items.length === 0) {
       return jsonError('لا توجد منتجات في الطلب.');
@@ -120,20 +129,28 @@ Deno.serve(async (req) => {
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
       return jsonError('البريد الإلكتروني غير صالح.');
     }
-    if (!(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
+    if (!isTrustedApp && !(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
       return jsonError('تعذر التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.', 403);
     }
     if (paymentType === 'online') {
       return jsonError('الدفع الإلكتروني يجب أن يبدأ عبر بوابة Paymob فقط.');
     }
 
-    // ── Resolve authenticated user (optional) ────────────────────────────────
+    // ── Resolve authenticated user ────────────────────────────────────────
+    // A signed-in account is required to purchase — on the website and the
+    // app alike (product decision, 2026-08-20: every order needs an owner
+    // who can see it in "طلباتي" and get the order-status emails). This is
+    // the real enforcement; the storefront/app UI gating a logged-out
+    // checkout is just the friendly front door.
     let userId: string | null = null;
     const authHeader = req.headers.get('Authorization');
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.replace('Bearer ', '');
       const { data: userData } = await supabase.auth.getUser(token);
       userId = userData?.user?.id ?? null;
+    }
+    if (!userId) {
+      return jsonError('يجب تسجيل الدخول لإتمام عملية الشراء.', 401);
     }
 
     // ── Upsert profile so admin sees the customer's real name/phone/email ────

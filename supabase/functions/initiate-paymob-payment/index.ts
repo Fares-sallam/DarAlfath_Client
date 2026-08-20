@@ -27,10 +27,10 @@
 //  Rate limiting and every price/payment verification below still apply
 //  regardless of this exemption.
 //
-//  App-only login requirement (2026-08-10): the mobile app must not allow
-//  guest checkout — a signed-in account is required to purchase. This is
-//  enforced below ONLY for trusted-app callers (isTrustedApp); the website
-//  is untouched and may still allow guest checkout as before.
+//  Login requirement (2026-08-10, widened 2026-08-20): guest checkout is
+//  gone everywhere — a signed-in account is required to purchase, on the
+//  website and the app alike, so every order has an owner who can see it
+//  in "طلباتي" and get the order-status emails.
 // ════════════════════════════════════════════════════════════════════════
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -268,8 +268,7 @@ Deno.serve(async (req) => {
     }
 
     // ── Auth user ─────────────────────────────────────────────────────
-    // Resolved from the Bearer token when present. The website may still omit
-    // it (guest checkout); the app may NOT — enforced right below.
+    // Required on every caller now — website and app alike (see header note).
     let userId: string | null = null;
     const authHeader = req.headers.get('Authorization');
     if (authHeader?.startsWith('Bearer ')) {
@@ -277,11 +276,8 @@ Deno.serve(async (req) => {
       const { data: userData } = await supabase.auth.getUser(token);
       userId = userData?.user?.id ?? null;
     }
-    // APP-ONLY: a signed-in account is required to purchase from the mobile
-    // app (product decision, 2026-08-10). Scoped to isTrustedApp so the
-    // website's guest checkout is completely unaffected.
-    if (isTrustedApp && !userId) {
-      return jsonError('يجب تسجيل الدخول لإتمام عملية الشراء من التطبيق.', 401);
+    if (!userId) {
+      return jsonError('يجب تسجيل الدخول لإتمام عملية الشراء.', 401);
     }
 
     // ── Re-fetch real prices from DB (don't trust client-supplied price) ───
