@@ -216,7 +216,9 @@ async function sendViaSmtp(to: string, subject: string, html: string) {
 
   try {
     await client.send({
-      from:    `دار الفتح <${GMAIL_USER}>`,
+      // ASCII-only display name — see the subjectCustomer/subjectAdmin note
+      // above for why (denomailer mis-folds non-ASCII headers).
+      from:    `Dar Alfath <${GMAIL_USER}>`,
       to,
       subject,
       content: 'text/html',
@@ -315,10 +317,17 @@ Deno.serve(async (req) => {
       is_paid:  orderRow.payment_status === 'مدفوع',
     };
 
+    // ASCII-only subjects — denomailer's header encoder mis-folds long
+    // non-ASCII Subject/From values (confirmed live: an Arabic subject
+    // arrived as raw undecoded quoted-printable, corrupting the whole
+    // message). The Arabic copy lives in the HTML body instead, which isn't
+    // subject to this header-folding bug. subjectAdmin in particular used to
+    // interpolate the customer's (Arabic) name directly into the subject,
+    // which made it especially likely to trip this.
     const subjectCustomer = orderData.is_paid
-      ? `تم تأكيد طلبك #${orderData.id} - دار الفتح`
-      : `تم استلام طلبك #${orderData.id} - دار الفتح`;
-    const subjectAdmin = `طلب جديد #${orderData.id} - ${orderData.customer_name}`;
+      ? `Dar Alfath - Order #${orderData.id} confirmed`
+      : `Dar Alfath - Order #${orderData.id} received`;
+    const subjectAdmin = `Dar Alfath - New order #${orderData.id}`;
 
     const results = { customer: false, admin: false, errors: [] as string[] };
 
