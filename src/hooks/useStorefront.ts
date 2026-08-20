@@ -55,6 +55,7 @@ type PublicVariantRow = {
   is_digital?: boolean | null;
   is_available?: boolean | null;
   available_stock?: number | string | null;
+  weight_kg?: number | string | null;
 };
 
 function toNumber(value: number | string | null | undefined, fallback = 0) {
@@ -167,6 +168,7 @@ function normalizeVariant(row: PublicVariantRow): ProductVariantItem {
       : isAvailable
         ? `متوفر ${stock ?? 0} نسخة`
         : 'غير متوفر',
+    weight_kg: row.weight_kg == null ? null : toNumber(row.weight_kg),
   };
 }
 

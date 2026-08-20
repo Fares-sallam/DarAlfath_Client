@@ -415,6 +415,12 @@ export default function BookDetailsPage() {
                   <dd>{selectedVariant.variant_name}</dd>
                 </div>
               )}
+              {selectedVariant && !selectedVariant.is_digital && selectedVariant.weight_kg != null && (
+                <div className="bk3-specs__r">
+                  <dt>الوزن</dt>
+                  <dd>{selectedVariant.weight_kg} كجم</dd>
+                </div>
+              )}
             </dl>
           )}
         </div>

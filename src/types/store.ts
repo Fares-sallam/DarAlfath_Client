@@ -57,6 +57,9 @@ export interface ProductVariantItem {
   currency?: string | null;
   currency_symbol: string;
   availability_text?: string;
+  /** Shipping weight in kg — null only for the rare pre-migration row that
+   *  slipped past the DB default. */
+  weight_kg?: number | null;
 }
 
 export interface ProductItem {
