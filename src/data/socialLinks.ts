@@ -6,10 +6,9 @@ export interface SocialLinkItem {
   icon: any;
 }
 
-export const socialLinks: SocialLinkItem[] = [
-  { name: 'الموقع الرسمي', url: 'https://example.com', icon: Globe },
-  { name: 'فيسبوك', url: 'https://facebook.com/your-page', icon: Facebook },
-  { name: 'إنستجرام', url: 'https://instagram.com/your-page', icon: Instagram },
-  { name: 'واتساب', url: 'https://wa.me/201000000000', icon: MessageCircle },
-  { name: 'يوتيوب', url: 'https://youtube.com/@your-channel', icon: Youtube },
-];
+// Empty on purpose (2026-08-23): every entry here used to be an unfilled
+// placeholder (example.com, /your-page, a fake WhatsApp number) rendered
+// live in the site footer on every page. Add real accounts back in as they
+// exist — icons available: Globe, Facebook, Instagram, MessageCircle
+// (WhatsApp), Youtube.
+export const socialLinks: SocialLinkItem[] = [];
