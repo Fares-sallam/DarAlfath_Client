@@ -9,18 +9,30 @@ import type { PolicySection } from '@/types/store';
  *    non-PDF policy URL that comprehensively discloses collection, use,
  *    and sharing of personal data, matching the app's Data Safety form).
  *
- * Content reflects what the storefront + account flows actually do today
- * (checked against AuthContext.tsx, CheckoutPage.tsx, and the Paymob
- * integration) — no analytics/ad SDKs, no social login, no push
- * notifications are in place, so none are claimed here. Placeholders in
- * [ضع هنا: ...] mark real-world details (support email, phone, legal
- * address) this file cannot know — see the handoff note wherever this is
- * edited next.
+ * THIS IS THE ONLY COPY. The mobile app (app_daralfath) has no policy text
+ * of its own — app/privacy-policy.tsx and app/terms.tsx are thin WebViews
+ * pointing at /policies#privacy and /policies#terms on this site. Edit
+ * only here; the app picks up changes automatically on next load. (An
+ * earlier version of those two app screens had separate hardcoded text —
+ * replaced 2026-08-23 because it had silently drifted: contradicted this
+ * policy on marketing use of data, quoted a flat shipping fee instead of
+ * the real weight+governorate pricing, and didn't disclose Apple/Google
+ * sign-in or push notifications at all.)
+ *
+ * Content reflects what the storefront + app + account flows actually do
+ * today (checked against AuthContext.tsx, CheckoutPage.tsx, the Paymob
+ * integration, and — for the app specifically — app/login.tsx's Sign in
+ * with Apple/Google and services/pushNotificationService.ts): no
+ * analytics/ad SDKs and no precise-location tracking, but Sign in with
+ * Apple, Sign in with Google, and push notifications (order-status only)
+ * ARE in place and are disclosed below. Support contact is info@daralfath.com
+ * (confirmed by the site owner 2026-08-23) — no physical address is
+ * published by choice; not required for Apple/Google acceptance.
  */
 /** Shown on the policies page and referenced from within the policy text
  *  itself ("سيظهر تاريخ آخر تحديث في أعلى هذه الصفحة") — bump this on any
  *  substantive edit to privacy/terms content, not on typo fixes. */
-export const POLICIES_LAST_UPDATED = '19 أغسطس 2026';
+export const POLICIES_LAST_UPDATED = '23 أغسطس 2026';
 
 export const policySections: PolicySection[] = [
   {
@@ -94,14 +106,16 @@ export const policySections: PolicySection[] = [
           'بيانات الدفع: لا نجمع ولا نخزّن بيانات بطاقتك البنكية على خوادمنا؛ تتم معالجة الدفع الإلكتروني بالكامل عبر مزوّد دفع مرخّص (Paymob) طبقًا لمعايير الأمان الدولية (PCI DSS). نحتفظ فقط بحالة العملية ورقمها المرجعي.',
           'بيانات الحساب: كلمة المرور (مخزَّنة بصيغة مشفَّرة لا يمكن لأحد قراءتها)، ورمز التحقق المرسَل لتأكيد البريد الإلكتروني عند التسجيل أو تسجيل الدخول.',
           'بيانات المحتوى الرقمي: قائمة الكتب الإلكترونية التي اشتريتها وربطها بحسابك داخل التطبيق، لأغراض حماية المحتوى وإتاحته لك عند إعادة تسجيل الدخول.',
+          'بيانات تسجيل الدخول عبر أبل أو جوجل: إن اخترت تسجيل الدخول بواسطة Sign in with Apple أو حساب جوجل بدلًا من البريد وكلمة المرور، نستقبل من أبل أو جوجل اسمك وبريدك الإلكتروني فقط (وهو ما توافق عليه صراحةً في شاشة الدخول الخاصة بهما)، لإنشاء حسابك أو التعرّف عليه. لا نستقبل أو نخزّن كلمة مرور حساب أبل أو جوجل الخاص بك في أي وقت.',
+          'بيانات الإشعارات الفورية داخل التطبيق: إذا فعّلت الإشعارات، نخزّن معرّف جهاز الإشعارات (Push Token) الصادر عن نظام التشغيل ونربطه بحسابك، فقط لإرسال إشعارات حالة طلبك (تم التأكيد، جاري الشحن، تم التوصيل، إلغاء). يمكنك إيقافه في أي وقت من إعدادات جهازك أو إعدادات التطبيق.',
           'بيانات تلقائية محدودة: نوع الجهاز ونظام التشغيل والدولة المختارة، لأغراض عرض الأسعار الصحيحة وتحسين الأداء وأمان الحساب — لا نستخدم أدوات تتبّع أو إعلانات من أطراف ثالثة، ولا نجمع بيانات الموقع الجغرافي الدقيق.',
         ],
       },
       {
         heading: 'كيف نستخدم بياناتك',
         points: [
-          'تنفيذ طلباتك وتوصيلها والتواصل معك بشأنها (تأكيد الطلب، تحديثات الشحن، إشعار المشكلات).',
-          'إنشاء حسابك وتأمين الدخول إليه، وإتاحة الكتب الرقمية التي اشتريتها داخل التطبيق فقط.',
+          'تنفيذ طلباتك وتوصيلها والتواصل معك بشأنها (تأكيد الطلب، تحديثات الشحن، إشعار المشكلات) عبر البريد الإلكتروني، وعبر إشعار فوري داخل تطبيق الهاتف إذا فعّلته.',
+          'إنشاء حسابك وتأمين الدخول إليه — بما في ذلك عبر Sign in with Apple أو جوجل إن اخترت ذلك — وإتاحة الكتب الرقمية التي اشتريتها داخل التطبيق فقط.',
           'الرد على استفساراتك وتقديم الدعم الفني وخدمة العملاء.',
           'حماية الخدمة من الاحتيال أو إساءة الاستخدام أو محاولات الوصول غير المصرح بها.',
           'الالتزام بالمتطلبات القانونية والمحاسبية (مثل حفظ سجلات الفواتير للمدة التي يفرضها القانون المصري).',
@@ -112,9 +126,11 @@ export const policySections: PolicySection[] = [
         heading: 'مشاركة البيانات مع أطراف ثالثة',
         paragraphs: ['لا نبيع بيانات عملائنا لأي جهة. نشارك أقل قدر ممكن من البيانات، وفقط مع:'],
         points: [
-          'مزوّد الدفع الإلكتروني (Paymob) — لإتمام عملية الدفع بأمان.',
+          'مزوّد الدفع الإلكتروني (Paymob) — لإتمام عملية الدفع بأمان، سواء ببطاقة بنكية أو Apple Pay أو محفظة إلكترونية.',
           'شركات الشحن — الاسم والعنوان ورقم الهاتف فقط، وذلك لتوصيل الطلب.',
           'مزوّد الاستضافة والبنية التقنية لقاعدة البيانات (Supabase) — بصفته معالج بيانات يخزّن المعلومات نيابة عنّا بموجب ضوابط أمان وسرية، ولا يستخدمها لأي غرض آخر.',
+          'أبل أو جوجل — فقط إن اخترت تسجيل الدخول عبر أحدهما، وفي حدود عملية تسجيل الدخول نفسها (Sign in with Apple / Google)؛ هما من يزوّدنا بالاسم والبريد الإلكتروني في هذه الحالة، ولسنا من يشارك بياناتك معهما.',
+          'خدمة الإشعارات الفورية للتطبيق (Expo Push Notifications) — تستقبل فقط معرّف جهاز الإشعارات (Push Token) لتوصيل الإشعار إلى جهازك، دون أي بيانات شخصية أخرى.',
           'الجهات الرسمية، فقط إذا طُلب ذلك بموجب أمر قانوني أو للامتثال لالتزام قانوني واجب النفاذ.',
         ],
       },
@@ -139,7 +155,7 @@ export const policySections: PolicySection[] = [
       {
         heading: 'حذف الحساب والبيانات',
         paragraphs: [
-          'يمكنك طلب حذف حسابك وكل بياناتك الشخصية المرتبطة به في أي وقت، من داخل التطبيق والموقع عبر صفحة "معلومات الحساب" ثم "حذف الحساب"، أو بمراسلتنا مباشرة على [ضع هنا: البريد الإلكتروني الرسمي للدعم].',
+          'يمكنك طلب حذف حسابك وكل بياناتك الشخصية المرتبطة به في أي وقت، من داخل التطبيق والموقع عبر صفحة "معلومات الحساب" ثم "حذف الحساب"، أو بمراسلتنا مباشرة على info@daralfath.com.',
           'عند تأكيد الطلب، يُحذف حسابك وبياناتك الشخصية خلال ٣٠ يومًا كحد أقصى، باستثناء ما يلزم قانونًا الاحتفاظ به لفترة محدودة (مثل سجلات الفواتير والمعاملات المالية لأغراض محاسبية وضريبية)، والذي يُحفظ بمعزل عن استخدامه لأي غرض آخر ثم يُحذف بعد انتهاء المدة القانونية.',
         ],
       },
@@ -165,7 +181,7 @@ export const policySections: PolicySection[] = [
       {
         heading: 'تواصل معنا بخصوص الخصوصية',
         paragraphs: [
-          'لأي استفسار عن هذه السياسة، أو لممارسة أي من حقوقك المذكورة أعلاه، راسلنا على [ضع هنا: البريد الإلكتروني الرسمي للدعم] أو عبر صفحة "تواصل معنا".',
+          'لأي استفسار عن هذه السياسة، أو لممارسة أي من حقوقك المذكورة أعلاه، راسلنا على info@daralfath.com أو عبر صفحة "تواصل معنا".',
         ],
       },
     ],
@@ -207,7 +223,7 @@ export const policySections: PolicySection[] = [
       {
         heading: 'الطلبات والدفع',
         points: [
-          'يمكن الدفع عند الاستلام (للطلبات التي تشمل منتجات ورقية داخل الدول المتاحة لهذه الخدمة)، أو إلكترونيًا عبر بطاقة بنكية من خلال مزوّد الدفع Paymob.',
+          'يمكن الدفع عند الاستلام (للطلبات التي تشمل منتجات ورقية داخل الدول المتاحة لهذه الخدمة)، أو إلكترونيًا ببطاقة بنكية أو Apple Pay أو محفظة إلكترونية، عبر مزوّد الدفع Paymob.',
           'تأكيد الطلب لا يعني بالضرورة توفر جميع المنتجات؛ في حال عدم التوفر، سيتم إخطارك واسترداد المبلغ المدفوع عن الجزء غير المتاح.',
           'نحتفظ بحق رفض أو إلغاء أي طلب يُشتبه في كونه احتياليًا أو مخالفًا لهذه الشروط، مع إخطارك ورد أي مبلغ مدفوع.',
         ],
@@ -271,7 +287,7 @@ export const policySections: PolicySection[] = [
       {
         heading: 'تواصل معنا',
         paragraphs: [
-          'لأي استفسار عن هذه الشروط، راسلنا على [ضع هنا: البريد الإلكتروني الرسمي للدعم] أو عبر صفحة "تواصل معنا".',
+          'لأي استفسار عن هذه الشروط، راسلنا على info@daralfath.com أو عبر صفحة "تواصل معنا".',
         ],
       },
     ],
