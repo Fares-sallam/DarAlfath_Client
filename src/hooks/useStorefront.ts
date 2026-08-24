@@ -478,3 +478,34 @@ export function useHomeHeroSlides() {
     },
   });
 }
+
+/* ── Homepage "من الدار" intro videos ─────────────────────────────────
+ * Admin-managed (intro_videos table) — used to be 3 hardcoded entries in
+ * src/data/introVideos.ts, all pointing at the same Rickroll placeholder
+ * link nobody ever replaced. Only active rows are visible: RLS already
+ * filters this server-side, so no client-side is_active check needed. */
+export interface VideoItemRow {
+  id: string;
+  title: string;
+  description: string | null;
+  youtube_url: string;
+  duration: string | null;
+  sort_order: number;
+}
+
+export function useIntroVideos() {
+  return useQuery({
+    queryKey: ['intro-videos'],
+    queryFn: async (): Promise<VideoItemRow[]> => {
+      if (!isSupabaseConfigured) return [];
+
+      const { data, error } = await supabase
+        .from('intro_videos')
+        .select('id, title, description, youtube_url, duration, sort_order')
+        .order('sort_order', { ascending: true });
+
+      if (error) throw error;
+      return (data ?? []) as VideoItemRow[];
+    },
+  });
+}

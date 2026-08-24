@@ -10,8 +10,7 @@ import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
-import { introVideos } from '@/data/introVideos';
-import { useHomeCategorySections, useProducts } from '@/hooks/useStorefront';
+import { useHomeCategorySections, useIntroVideos, useProducts } from '@/hooks/useStorefront';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 /** Sections fade up as they arrive; the hook no-ops under reduced motion. */
@@ -28,8 +27,16 @@ export default function HomePage() {
   usePageTitle();
   const { data: products = [] } = useProducts();
   const { data: categorySections = [] } = useHomeCategorySections(4);
+  const { data: introVideoRows = [] } = useIntroVideos();
 
   const railProducts = products.slice(0, 12);
+  const introVideos = introVideoRows.map((v) => ({
+    id: v.id,
+    title: v.title,
+    description: v.description ?? '',
+    youtubeUrl: v.youtube_url,
+    duration: v.duration ?? '',
+  }));
 
   return (
     <div className="page-sections page-sections--home">
