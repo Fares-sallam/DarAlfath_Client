@@ -9,6 +9,11 @@ export interface StoreSettings {
   seo_keywords?: string | null;
   default_shipping_cost?: number | null;
   free_shipping_threshold?: number | null;
+  facebook_url?: string | null;
+  instagram_url?: string | null;
+  whatsapp_url?: string | null;
+  youtube_url?: string | null;
+  website_url?: string | null;
 }
 
 export interface CountryItem {

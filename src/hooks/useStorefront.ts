@@ -16,6 +16,11 @@ const fallbackSettings: StoreSettings = {
   seo_keywords: '',
   default_shipping_cost: 45,
   free_shipping_threshold: 499,
+  facebook_url: null,
+  instagram_url: null,
+  whatsapp_url: null,
+  youtube_url: null,
+  website_url: null,
 };
 
 type PublicCatalogRow = {
@@ -192,7 +197,7 @@ export function useStoreSettings() {
       try {
         const { data, error } = await supabase
           .from('store_settings')
-          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold')
+          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url')
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
