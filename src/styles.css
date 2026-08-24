@@ -1916,6 +1916,25 @@ button {
   line-height: 1.8;
 }
 
+/* Video carousel — one card at a time, auto-advancing (see VideoCarousel.tsx).
+   Reuses .home-hero-panel__nav/__dots/__dot for the arrows/dots so the two
+   carousels on the homepage share one visual language. */
+.video-carousel__stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+}
+
+.video-carousel__slide {
+  width: 100%;
+  max-width: 640px;
+  opacity: 1;
+  transition: opacity 0.42s var(--ease-out-quint);
+}
+.video-carousel__slide--fading {
+  opacity: 0;
+}
+
 /* Footer */
 .site-footer {
   margin-top: auto;

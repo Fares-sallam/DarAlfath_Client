@@ -4,7 +4,7 @@ import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
 import ScrollRail from '@/components/ScrollRail';
-import VideoCard from '@/components/VideoCard';
+import VideoCarousel from '@/components/VideoCarousel';
 import HeroShowcase from '@/components/HeroShowcase';
 import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
@@ -120,11 +120,7 @@ export default function HomePage() {
       {introVideos.length > 0 && (
         <Reveal>
           <SectionHeader title="من الدار" subtitle="مقاطع تعريفية مختارة" />
-          <div className="video-grid">
-            {introVideos.map((video) => (
-              <VideoCard key={video.id} video={video} />
-            ))}
-          </div>
+          <VideoCarousel videos={introVideos} />
         </Reveal>
       )}
 
