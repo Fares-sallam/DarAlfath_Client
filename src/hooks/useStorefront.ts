@@ -260,7 +260,13 @@ export function useProductExtraCategorySlugs() {
       if (error || !data) return new Map();
 
       const map = new Map<string, Set<string>>();
-      for (const row of data as { product_id: string; categories: { slug: string | null } | null }[]) {
+      // The untyped supabase client (no generated Database type) infers
+      // every embedded relation as an array by default, regardless of
+      // actual FK cardinality — but product_categories.category_id is a
+      // plain belongs-to FK, so PostgREST embeds `categories` as a single
+      // object per row at runtime. `as unknown as` bridges that gap (TS's
+      // own suggested escape hatch for a type it can't verify).
+      for (const row of data as unknown as { product_id: string; categories: { slug: string | null } | null }[]) {
         const slug = row.categories?.slug;
         if (!slug) continue;
         if (!map.has(row.product_id)) map.set(row.product_id, new Set());
