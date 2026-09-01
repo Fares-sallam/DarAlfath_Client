@@ -153,11 +153,17 @@ html.dark .nav-dropdown__menu {
   border: 1px solid #1E2D6B;
   box-shadow: 0 16px 48px rgba(0,0,0,0.50);
 }
-html.dark .nav-dropdown__all {
-  color: #D4A520;
-  border-bottom-color: #1E2D6B;
+/* Extra `.nav-dropdown__menu` qualifier bumps specificity past the
+   generic `html.dark .site-header__nav a` rule (same class-count, but
+   that one has an extra element selector and would otherwise win the
+   tie-break) — same trick already used below for `.nav-dropdown__view`. */
+html.dark .nav-dropdown__menu .nav-dropdown__all {
+  color: #fff;
 }
-html.dark .nav-dropdown__all:hover { color: #F0C842; background: rgba(212,165,32,0.06); }
+html.dark .nav-dropdown__menu .nav-dropdown__all:hover {
+  color: #fff;
+  background: linear-gradient(180deg, #2a6bc9, #123a82);
+}
 html.dark .nav-dropdown__row { color: #C8D0F0; }
 html.dark .nav-dropdown__row:hover { color: #F0C842; background: rgba(212,165,32,0.06); }
 html.dark .nav-dropdown__row small { color: #8A93B8; }
