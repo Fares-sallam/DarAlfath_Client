@@ -1,4 +1,4 @@
-import { Heart } from 'lucide-react';
+import { Heart, Star } from 'lucide-react';
 import { useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWishlist } from '@/contexts/WishlistContext';
@@ -129,8 +129,18 @@ export default function ProductCard({
         <p title={product.author}>{product.author}</p>
 
         <div className="book-card__rating">
-          <span>{product.rating}</span>
-          <span className="stars">★★★★★</span>
+          {product.rating != null ? (
+            <>
+              <span>{product.rating}</span>
+              <span className="stars">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Star key={i} size={11} fill={i <= Math.round(product.rating!) ? 'currentColor' : 'none'} />
+                ))}
+              </span>
+            </>
+          ) : (
+            <span className="book-card__no-rating">لا يوجد تقييم بعد</span>
+          )}
           <small className="book-card__variants-count">{variantLabel}</small>
         </div>
 

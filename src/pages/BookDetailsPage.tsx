@@ -2,6 +2,7 @@ import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
+import ProductReviews from '@/components/ProductReviews';
 import QuantitySelector from '@/components/QuantitySelector';
 import {
   formatCatalogPrice,
@@ -18,7 +19,7 @@ import BookCover from '@/components/BookCover';
 import ScrollRail from '@/components/ScrollRail';
 import type { ProductVariantItem } from '@/types/store';
 
-type DetailsTab = 'about' | 'specs';
+type DetailsTab = 'about' | 'specs' | 'reviews';
 
 /* ────────────────────────────────────────────────────────────
    3D Book tilt — tracks mouse position over the gallery area
@@ -276,16 +277,31 @@ export default function BookDetailsPage() {
             {product.author}
           </p>
 
-          {/* Rating */}
-          <div className="bk3-rating" style={{ '--i': 5 } as React.CSSProperties}>
-            <div className="bk3-stars">
-              {[1,2,3,4,5].map(i => (
-                <Star key={i} size={13} fill="currentColor" />
-              ))}
-            </div>
-            <span className="bk3-rating__val">{product.rating ?? '4.8'}</span>
-            <span className="bk3-rating__lbl">تقييم القرّاء</span>
-          </div>
+          {/* Rating — real average from product_reviews, not a fabricated
+              number. No reviews yet is a real, expected state: shown as
+              a plain prompt instead of a fake star row. */}
+          <button
+            type="button"
+            className="bk3-rating"
+            style={{ '--i': 5 } as React.CSSProperties}
+            onClick={() => setActiveTab('reviews')}
+          >
+            {product.rating != null ? (
+              <>
+                <div className="bk3-stars">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star key={i} size={13} fill={i <= Math.round(product.rating!) ? 'currentColor' : 'none'} />
+                  ))}
+                </div>
+                <span className="bk3-rating__val">{product.rating}</span>
+                <span className="bk3-rating__lbl">
+                  ({product.reviews_count} تقييم)
+                </span>
+              </>
+            ) : (
+              <span className="bk3-rating__lbl">كن أول من يقيّم هذا الكتاب</span>
+            )}
+          </button>
 
           {/* Price */}
           <div className="bk3-price" style={{ '--i': 6 } as React.CSSProperties}>
@@ -387,14 +403,15 @@ export default function BookDetailsPage() {
       {/* ── Tabs ─── */}
       <section className="bk3-details" style={{ '--i': 11 } as React.CSSProperties}>
         <div className="bk3-tab-nav">
-          {(['about', 'specs'] as DetailsTab[]).map((tab) => (
+          {(['about', 'specs', 'reviews'] as DetailsTab[]).map((tab) => (
             <button
               key={tab}
               type="button"
               className={`bk3-tab ${activeTab === tab ? 'bk3-tab--on' : ''}`}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === 'about' ? 'نبذة عن الكتاب' : 'المواصفات'}
+              {tab === 'about' ? 'نبذة عن الكتاب' : tab === 'specs' ? 'المواصفات' : 'التقييمات'}
+              {tab === 'reviews' && product.reviews_count > 0 && ` (${product.reviews_count})`}
             </button>
           ))}
         </div>
@@ -423,6 +440,7 @@ export default function BookDetailsPage() {
               )}
             </dl>
           )}
+          {activeTab === 'reviews' && <ProductReviews productId={product.product_id} />}
         </div>
       </section>
 

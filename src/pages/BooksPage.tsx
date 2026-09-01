@@ -94,7 +94,10 @@ export default function BooksPage() {
         rows.sort((a, b) => b.starting_price - a.starting_price);
         break;
       case 'rating':
-        rows.sort((a, b) => b.rating - a.rating);
+        // Unrated books (rating === null) sort last, not first — treating
+        // "no reviews yet" as equivalent to a 0 rating would push them
+        // above genuinely low-rated books.
+        rows.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
         break;
       default:
         rows.sort((a, b) => a.title.localeCompare(b.title, 'ar'));

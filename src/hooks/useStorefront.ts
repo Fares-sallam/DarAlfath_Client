@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import { getPseudoRating } from '@/lib/utils';
 import { useCountry } from '@/contexts/CountryContext';
+import { useAuth } from '@/contexts/AuthContext';
 import type { CategoryItem, ProductItem, ProductVariantItem, SeriesItem, StoreSettings } from '@/types/store';
 
 const fallbackSettings: StoreSettings = {
@@ -91,7 +91,9 @@ function safeParseImages(value: string) {
   }
 }
 
-function normalizeProduct(row: PublicCatalogRow): ProductItem {
+type ReviewStats = { avg_rating: number; reviews_count: number };
+
+function normalizeProduct(row: PublicCatalogRow, stats?: ReviewStats): ProductItem {
   const productId = row.product_id;
   const startingPrice = toNumber(row.starting_price ?? row.min_price);
   const minPrice = toNumber(row.min_price ?? startingPrice);
@@ -130,8 +132,11 @@ function normalizeProduct(row: PublicCatalogRow): ProductItem {
     currency: row.currency ?? null,
     currency_symbol: row.currency_symbol || 'ج.م',
     country_id: row.country_code ?? null,
-    rating: getPseudoRating(productId),
-    reviews_count: 60 + (productId.length % 90),
+    // Real customer reviews (product_review_stats) — null/0 for a
+    // product nobody has reviewed yet. No fabricated placeholder value:
+    // the UI is responsible for a proper "no reviews yet" state.
+    rating: stats?.avg_rating ?? null,
+    reviews_count: stats?.reviews_count ?? 0,
     variant_count: Math.max(0, Math.floor(toNumber(row.variant_count))),
     variants: [],
   };
@@ -230,10 +235,20 @@ export function useProducts() {
           query = query.eq('country_code', countryCode);
         }
 
-        const { data, error } = await query;
+        const [{ data, error }, { data: statsRows }] = await Promise.all([
+          query,
+          supabase.from('product_review_stats').select('product_id, reviews_count, avg_rating'),
+        ]);
         if (error || !data) return [];
 
-        return (data as PublicCatalogRow[]).map(normalizeProduct);
+        const statsMap = new Map<string, ReviewStats>(
+          (statsRows ?? []).map((s: { product_id: string; reviews_count: number; avg_rating: number }) => [
+            s.product_id,
+            { avg_rating: s.avg_rating, reviews_count: s.reviews_count },
+          ])
+        );
+
+        return (data as PublicCatalogRow[]).map((row) => normalizeProduct(row, statsMap.get(row.product_id)));
       } catch {
         return [];
       }
@@ -352,6 +367,115 @@ export function useProductDetails(productId?: string) {
   );
 
   return { ...productsQuery, data: product };
+}
+
+/* ── Product reviews (real, verified-purchase-gated) ───────────────────
+ * Replaces the old fake rating/reviews_count (see normalizeProduct
+ * above). A review can only be inserted for a product the reviewing
+ * customer actually received — enforced server-side by product_reviews'
+ * own RLS policy (order.status = تم التوصيل), one review per customer
+ * per product (unique constraint; a resubmit is an update, not a dupe). */
+export interface ProductReview {
+  id: string;
+  product_id: string;
+  user_id: string;
+  reviewer_name: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useProductReviews(productId?: string) {
+  return useQuery({
+    queryKey: ['product-reviews', productId ?? 'missing'],
+    enabled: Boolean(productId),
+    queryFn: async (): Promise<ProductReview[]> => {
+      if (!isSupabaseConfigured || !productId) return [];
+      const { data, error } = await supabase
+        .from('product_reviews')
+        .select('id, product_id, user_id, reviewer_name, rating, comment, created_at, updated_at')
+        .eq('product_id', productId)
+        .order('created_at', { ascending: false });
+      if (error || !data) return [];
+      return data as ProductReview[];
+    },
+  });
+}
+
+/** Whether the signed-in customer has a delivered order containing this
+ *  product — gates showing the "write a review" form so the UI doesn't
+ *  invite a submission that the server-side RLS check would just reject.
+ *  Mirrors that check exactly (same status string, same join). */
+export function useCanReviewProduct(productId?: string) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['can-review-product', productId ?? 'missing', user?.id ?? 'anon'],
+    enabled: Boolean(productId && user),
+    queryFn: async (): Promise<boolean> => {
+      if (!isSupabaseConfigured || !productId || !user) return false;
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id, order_items!inner(product_id)')
+        .eq('user_id', user.id)
+        .eq('status', 'تم التوصيل')
+        .eq('order_items.product_id', productId)
+        .limit(1);
+      if (error) return false;
+      return (data?.length ?? 0) > 0;
+    },
+  });
+}
+
+export interface SubmitReviewInput {
+  productId: string;
+  userId: string;
+  reviewerName: string;
+  rating: number;
+  comment: string | null;
+}
+
+/** Insert or update — a customer can only ever have one review per
+ *  product (unique(product_id, user_id)), so re-submitting after already
+ *  reviewing edits the existing row rather than erroring. */
+export function useSubmitProductReview() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: SubmitReviewInput) => {
+      const { error } = await supabase.from('product_reviews').upsert(
+        {
+          product_id: input.productId,
+          user_id: input.userId,
+          reviewer_name: input.reviewerName.trim() || 'قارئ',
+          rating: input.rating,
+          comment: input.comment?.trim() || null,
+        },
+        { onConflict: 'product_id,user_id' }
+      );
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['product-reviews', vars.productId] });
+      qc.invalidateQueries({ queryKey: ['products-public-catalog'] });
+    },
+  });
+}
+
+export function useDeleteProductReview() {
+  const qc = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (input: { id: string; productId: string }) => {
+      const { error } = await supabase.from('product_reviews').delete().eq('id', input.id);
+      if (error) throw error;
+    },
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['product-reviews', vars.productId] });
+      qc.invalidateQueries({ queryKey: ['products-public-catalog'] });
+    },
+  });
 }
 
 export function useProductVariants(productId?: string) {

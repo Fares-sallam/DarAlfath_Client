@@ -95,7 +95,9 @@ export interface ProductItem {
   currency?: string | null;
   currency_symbol: string;
   country_id?: string | null;
-  rating: number;
+  /** Real average rating from product_reviews (via product_review_stats).
+   *  null when the product has no reviews yet — never fabricate a value. */
+  rating: number | null;
   reviews_count: number;
   variant_count: number;
   variants: ProductVariantItem[];
