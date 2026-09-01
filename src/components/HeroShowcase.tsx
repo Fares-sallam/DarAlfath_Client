@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useHomeHeroSlides } from '@/hooks/useStorefront';
+import { useTheme } from '@/contexts/ThemeContext';
 
 const AUTO_ADVANCE_MS = 10000;
 const FADE_MS = 420;
@@ -25,6 +26,7 @@ const FADE_MS = 420;
  */
 export default function HeroShowcase() {
   const { data: slides = [] } = useHomeHeroSlides();
+  const { isDark } = useTheme();
   const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState(true);
   const [paused, setPaused] = useState(false);
@@ -55,6 +57,19 @@ export default function HeroShowcase() {
   if (count === 0) return null;
 
   const slide = slides[index];
+
+  // Dark mode is a manual/localStorage toggle, not a media query, so the
+  // theme pick has to happen here in JS rather than via a
+  // prefers-color-scheme <source> — unlike the mobile/desktop pick below,
+  // which stays CSS-driven since that one genuinely is viewport-based.
+  // Both dark fields are optional: fall back to the light desktop image
+  // when the admin hasn't uploaded a dark variant for this slide.
+  const desktopSrc = (isDark && slide.image_url_dark) || slide.image_url;
+  const mobileSrc =
+    (isDark && (slide.image_url_mobile_dark || slide.image_url_dark)) ||
+    slide.image_url_mobile ||
+    null;
+
   // No `key` here on purpose: this must stay the same DOM node across
   // slide changes so the opacity transition below can animate smoothly
   // in *both* directions — fading the old src out, then the new one in —
@@ -63,12 +78,12 @@ export default function HeroShowcase() {
   // classes stay on the <img>, since that's the element they target.
   const img = (
     <picture>
-      {slide.image_url_mobile && (
-        <source media="(max-width: 640px)" srcSet={slide.image_url_mobile} />
+      {mobileSrc && mobileSrc !== desktopSrc && (
+        <source media="(max-width: 640px)" srcSet={mobileSrc} />
       )}
       <img
         className={`home-hero-panel__img${visible ? '' : ' home-hero-panel__img--fading'}`}
-        src={slide.image_url}
+        src={desktopSrc}
         alt={slide.title ?? ''}
         loading="eager"
       />

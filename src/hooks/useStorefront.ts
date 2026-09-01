@@ -493,6 +493,13 @@ export interface HeroSlideItem {
    *  swaps to it under ~640px via a <picture> element. Falls back to
    *  image_url on every screen when the admin hasn't uploaded one. */
   image_url_mobile: string | null;
+  /** Optional dark-mode variant of image_url — design can differ enough
+   *  between themes that one image can't serve both. Falls back to
+   *  image_url when the admin hasn't uploaded one (see HeroShowcase). */
+  image_url_dark: string | null;
+  /** Optional dark-mode variant of image_url_mobile. Falls back to
+   *  image_url_dark, then image_url_mobile, when not set. */
+  image_url_mobile_dark: string | null;
   title: string | null;
   link_url: string | null;
   sort_order: number;
@@ -506,7 +513,7 @@ export function useHomeHeroSlides() {
 
       const { data, error } = await supabase
         .from('home_hero_slides')
-        .select('id, image_url, image_url_mobile, title, link_url, sort_order')
+        .select('id, image_url, image_url_mobile, image_url_dark, image_url_mobile_dark, title, link_url, sort_order')
         .order('sort_order', { ascending: true });
 
       if (error) throw error;
