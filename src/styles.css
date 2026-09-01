@@ -2833,8 +2833,16 @@ h3,
   justify-content: center;
   margin-bottom: 8px;
   background: linear-gradient(180deg, #1d5ab0, #0b2f6b);
-  color: #fff;
   font-weight: 900;
+}
+
+/* Extra `.nav-dropdown__menu` qualifier bumps specificity past
+   `.site-header__nav a { color: var(--text); }` above, which was
+   otherwise winning the tie-break (same class-count, one more element
+   selector) and rendering this button's text as dark navy-on-navy —
+   unreadable against its own blue gradient background. */
+.nav-dropdown__menu .nav-dropdown__all {
+  color: #fff;
 }
 
 .nav-dropdown__item {
