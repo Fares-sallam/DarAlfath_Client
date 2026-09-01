@@ -84,6 +84,21 @@ button {
   gap: 22px;
 }
 
+/* Grid items default to min-width:auto, not 0 — a descendant with enough
+   unconstrained natural width (a scroll-rail's row of cards, before it
+   even needs to overflow) forces the grid item, and so the whole single-
+   column track, wider than the viewport. .scroll-rail already guards
+   itself with min-width:0/max-width:100%, but that only bounds it
+   relative to ITS parent — if the grid item one level up never got the
+   same guard, the blowout still happens there instead. This is the fix
+   at the actual boundary: every direct child of the grid can now shrink
+   to the track's real width, full stop. Found live: home page measured
+   2250px wide inside a 1280px viewport, hero banner shifted ~500px
+   off-screen left as a result. */
+.page-sections > * {
+  min-width: 0;
+}
+
 /* Header */
 .site-header {
   position: sticky;
