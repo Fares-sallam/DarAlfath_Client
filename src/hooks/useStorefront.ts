@@ -585,6 +585,15 @@ export type PaymentMethodItem = {
   method_name: string;
 };
 
+// apple_iap / google_iap are native-app-only checkout methods (they invoke
+// StoreKit / Google Play Billing's own purchase sheet) — structurally
+// impossible to complete from a website, no matter how "active" the row
+// is. They exist in payment_methods for the mobile app's in-app-purchase
+// flow (still unbuilt — see IAP planning notes), not the website. Excluded
+// at the source so the website checkout can never offer a payment option
+// that can't work there.
+const WEB_UNSUPPORTED_PROVIDERS = ['apple_iap', 'google_iap'];
+
 export function usePaymentMethods() {
   return useQuery({
     queryKey: ['payment-methods'],
@@ -595,6 +604,7 @@ export function usePaymentMethods() {
           .from('payment_methods')
           .select('id, provider, method_name')
           .eq('is_active', true)
+          .not('provider', 'in', `(${WEB_UNSUPPORTED_PROVIDERS.join(',')})`)
           .order('method_name');
         if (error || !data) return [];
         return data as PaymentMethodItem[];
