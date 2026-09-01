@@ -41,6 +41,9 @@ export interface SeriesItem {
   description?: string | null;
   cover_url?: string | null;
   products_count?: number;
+  /** Member product ids — lets a consumer derive per-series groupings
+   *  (e.g. Header's series→category nav) without a second query. */
+  product_ids?: string[];
 }
 
 export interface ProductVariantItem {

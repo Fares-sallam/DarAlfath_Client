@@ -3984,6 +3984,13 @@ html.dark .auth-input--readonly {
 .site-header__nav {
   gap: 9px;
   padding-bottom: 8px;
+  /* Safety net for the now-5-series-wide row: nothing upstream sets
+     flex-wrap, so the default nowrap + this section's own overflow:visible
+     (see the 2026-04 refresh above) would let excess items bleed past the
+     container edge instead of dropping to a second line — same class of
+     bug as the page-wide overflow fixed earlier (.page-sections > *). This
+     is a no-op whenever everything already fits on one row. */
+  flex-wrap: wrap;
 }
 
 .site-header__nav a {

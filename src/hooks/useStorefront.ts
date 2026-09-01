@@ -332,6 +332,32 @@ export function useProductExtraCategorySlugs() {
   });
 }
 
+/** Every real category's display name, keyed by slug — a direct read of
+ *  the categories table itself, unlike useCategories() above (which only
+ *  ever sees a category through some product's PRIMARY category_id). A
+ *  category that's only ever used as an ADDITIONAL category — never
+ *  anyone's primary — is invisible to that derivation entirely, which
+ *  showed up as a raw slug instead of a name in Header's series↷category
+ *  nav (e.g. "سلسلة علم بالقلم", never a primary category for any product
+ *  yet, only reachable via product_categories). */
+export function useAllCategoryNames() {
+  return useQuery({
+    queryKey: ['all-category-names'],
+    queryFn: async (): Promise<Map<string, string>> => {
+      if (!isSupabaseConfigured) return new Map();
+
+      const { data, error } = await supabase.from('categories').select('slug, name');
+      if (error || !data) return new Map();
+
+      return new Map(
+        (data as { slug: string | null; name: string }[])
+          .filter((row): row is { slug: string; name: string } => !!row.slug)
+          .map((row) => [row.slug, row.name])
+      );
+    },
+  });
+}
+
 export function useCategories() {
   const productsQuery = useProducts();
 
@@ -375,6 +401,7 @@ export function useSeries() {
           description: row.description,
           cover_url: row.cover_url,
           products_count: (row.product_series ?? []).length,
+          product_ids: (row.product_series ?? []).map((ps) => ps.product_id),
         }));
     },
   });

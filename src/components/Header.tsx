@@ -7,7 +7,7 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useCategories, useProductExtraCategorySlugs, useProducts } from '@/hooks/useStorefront';
+import { useAllCategoryNames, useProductExtraCategorySlugs, useProducts, useSeries } from '@/hooks/useStorefront';
 import type { StoreSettings } from '@/types/store';
 
 const navItems = [
@@ -26,9 +26,10 @@ export default function Header({ settings }: { settings: StoreSettings }) {
   const { count: cartCount } = useCart();
   const { user } = useAuth();
   const { isDark, toggleTheme } = useTheme();
-  const { data: categories = [] } = useCategories();
   const { data: products = [] } = useProducts();
   const { data: extraCategorySlugs } = useProductExtraCategorySlugs();
+  const { data: allSeries = [] } = useSeries();
+  const { data: allCategoryNames } = useAllCategoryNames();
   const [query, setQuery] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -46,20 +47,57 @@ export default function Header({ settings }: { settings: StoreSettings }) {
     [selectedCountry]
   );
 
-  const categoryMenu = useMemo(() => {
-    return categories.slice(0, 8).map((category) => {
-      const matchedProducts = products.filter(
-        (product) =>
-          product.category_slug === category.id ||
-          extraCategorySlugs?.get(product.product_id)?.has(category.id)
-      );
-      return {
-        ...category,
-        count: matchedProducts.length,
-        products: matchedProducts.slice(0, 5),
-      };
-    });
-  }, [categories, products, extraCategorySlugs]);
+  // Top nav = the real book_series rows (سلسلة الفتح الرباني، قصص وموسوعات...),
+  // each expanding to the categories its own member products fall under (primary
+  // category or any additional one — same multi-category matching used
+  // everywhere else). Mirrors a reference layout the user pointed at: series
+  // as the top level, categories nested under each, books nested under those
+  // (the existing .nav-dropdown__submenu flyout, unchanged). A series with no
+  // categorized products yet just doesn't render — nothing to show under it.
+  const seriesMenu = useMemo(() => {
+    return allSeries
+      .map((series) => {
+        const memberIds = new Set(series.product_ids ?? []);
+        const memberProducts = products.filter((p) => memberIds.has(p.product_id));
+
+        const catMap = new Map<string, { slug: string; name: string; products: typeof products }>();
+        for (const product of memberProducts) {
+          const slugs = new Set<string>();
+          if (product.category_slug) slugs.add(product.category_slug);
+          const extra = extraCategorySlugs?.get(product.product_id);
+          if (extra) for (const slug of extra) slugs.add(slug);
+
+          for (const slug of slugs) {
+            if (!catMap.has(slug)) {
+              // A product's own category_name only describes its PRIMARY
+              // category — for a slug reached via its additional categories,
+              // resolve the display name from the real categories table
+              // (allCategoryNames), not the primary-derived `categories`
+              // list below, which never sees a category that's only ever
+              // used as someone's ADDITIONAL category.
+              const name = (product.category_slug === slug
+                ? product.category_name
+                : allCategoryNames?.get(slug)) ?? slug;
+              catMap.set(slug, { slug, name, products: [] });
+            }
+            catMap.get(slug)!.products.push(product);
+          }
+        }
+
+        const categoryList = Array.from(catMap.values())
+          .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
+          .slice(0, 8)
+          .map((c) => ({
+            slug: c.slug,
+            name: c.name,
+            count: c.products.length,
+            preview: c.products.slice(0, 5),
+          }));
+
+        return { id: series.id, name: series.name, categories: categoryList };
+      })
+      .filter((series) => series.categories.length > 0);
+  }, [allSeries, products, extraCategorySlugs, allCategoryNames]);
 
   const onSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -120,45 +158,59 @@ export default function Header({ settings }: { settings: StoreSettings }) {
         </div>
       </div>
 
-      {/* Desktop nav */}
+      {/* Desktop nav — الرئيسية/الكتب/كل التصنيفات as plain links, then one
+          dropdown per series (سلسلة الفتح الرباني، قصص وموسوعات...), each
+          expanding to its own categories → books. عنّا/سياستنا/تواصل معنا
+          moved out of this row (still reachable from the footer and the
+          mobile drawer) — with 5 series dropdowns already filling the row,
+          keeping them here risked the exact page-width overflow fixed
+          earlier (.page-sections > * { min-width: 0 }), and the reference
+          layout this follows doesn't carry them in its top row either. */}
       <div className="container site-header__nav">
         {navItems.slice(0, 2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
+        <NavLink to="/categories">كل التصنيفات</NavLink>
 
-        <div className="nav-dropdown">
-          <NavLink to="/categories" className="nav-dropdown__trigger">
-            <span>التصنيفات</span>
-            <ChevronDown size={16} />
-          </NavLink>
+        {seriesMenu.map((series) => (
+          <div className="nav-dropdown" key={series.id}>
+            <NavLink to={`/books?series=${series.id}`} className="nav-dropdown__trigger">
+              <span>{series.name}</span>
+              <ChevronDown size={16} />
+            </NavLink>
 
-          <div className="nav-dropdown__menu" aria-label="قائمة التصنيفات">
-            <Link to="/categories" className="nav-dropdown__all">
-              عرض كل التصنيفات والسلاسل
-            </Link>
+            <div className="nav-dropdown__menu" aria-label={`قائمة ${series.name}`}>
+              <Link to={`/books?series=${series.id}`} className="nav-dropdown__all">
+                عرض كل كتب {series.name}
+              </Link>
 
-            {categoryMenu.map((category) => (
-              <div className="nav-dropdown__item" key={category.id}>
-                <Link to={`/books?category=${category.id}`} className="nav-dropdown__row">
-                  <ChevronLeft size={14} />
-                  <span>{category.name}</span>
-                  <small>{category.count} كتب</small>
-                </Link>
-
-                <div className="nav-dropdown__submenu">
-                  {category.products.map((product) => (
-                    <Link to={`/book/${product.product_id}`} key={product.product_id}>
-                      {product.title}
-                    </Link>
-                  ))}
-                  <Link to={`/books?category=${category.id}`} className="nav-dropdown__view">
-                    عرض التصنيف كاملًا
+              {series.categories.map((category) => (
+                <div className="nav-dropdown__item" key={category.slug}>
+                  <Link
+                    to={`/books?series=${series.id}&category=${category.slug}`}
+                    className="nav-dropdown__row"
+                  >
+                    <ChevronLeft size={14} />
+                    <span>{category.name}</span>
+                    <small>{category.count} كتب</small>
                   </Link>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
-        {navItems.slice(2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
+                  <div className="nav-dropdown__submenu">
+                    {category.preview.map((product) => (
+                      <Link to={`/book/${product.product_id}`} key={product.product_id}>
+                        {product.title}
+                      </Link>
+                    ))}
+                    <Link
+                      to={`/books?series=${series.id}&category=${category.slug}`}
+                      className="nav-dropdown__view"
+                    >
+                      عرض التصنيف كاملًا
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* ── Mobile drawer overlay ── */}
