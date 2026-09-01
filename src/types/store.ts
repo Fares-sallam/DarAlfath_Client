@@ -9,6 +9,9 @@ export interface StoreSettings {
   seo_keywords?: string | null;
   default_shipping_cost?: number | null;
   free_shipping_threshold?: number | null;
+  /** Which shipping company's rate table (shipping_rates) drives the real
+   *  governorate+weight shipping quote — see useShippingRate. */
+  default_shipping_company_id?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
   whatsapp_url?: string | null;

@@ -7,7 +7,7 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCountry } from '@/contexts/CountryContext';
-import { formatMoney, usePaymentMethods } from '@/hooks/useStorefront';
+import { formatMoney, usePaymentMethods, useStoreSettings, useShippingRate } from '@/hooks/useStorefront';
 import { supabase } from '@/lib/supabase';
 import {
   createStorefrontOrder,
@@ -106,10 +106,14 @@ type CheckoutForm = {
 export default function CheckoutPage() {
   usePageTitle('إتمام الطلب');
   const queryClient = useQueryClient();
-  const { items, subtotal, shipping, total, currencySymbol, clearCart, unavailableRemoved } = useCart();
+  const {
+    items, subtotal, shipping: flatShipping, currencySymbol,
+    clearCart, unavailableRemoved, cartWeightKg,
+  } = useCart();
   const { user } = useAuth();
   const { selectedCountry } = useCountry();
   const { data: paymentMethods = [] } = usePaymentMethods();
+  const { data: storeSettings } = useStoreSettings();
 
   const [form, setForm] = useState<CheckoutForm>({
     fullName: '',
@@ -120,6 +124,21 @@ export default function CheckoutPage() {
     address: '',
     notes: '',
   });
+
+  // The real governorate+weight shipping quote — same lookup the server
+  // runs right before actually charging (see useShippingRate). flatShipping
+  // above is only ever an estimate shown before a governorate is picked, or
+  // the safety-net fallback the server itself uses when no rate row covers
+  // this exact (company, governorate, weight) combination. shipping/total
+  // below are what the rest of this page (and the order it submits) uses —
+  // everything reads the real number the moment it's known, never the flat
+  // estimate silently left on screen through to payment.
+  const { data: realShippingRate } = useShippingRate(
+    storeSettings?.default_shipping_company_id,
+    form.governorate,
+    cartWeightKg
+  );
+  const shipping = flatShipping === 0 ? 0 : (realShippingRate ?? flatShipping);
 
   const [selectedPaymentId, setSelectedPaymentId] = useState<string | null>(null);
 

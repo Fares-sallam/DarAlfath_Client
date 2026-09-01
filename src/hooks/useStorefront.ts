@@ -16,6 +16,7 @@ const fallbackSettings: StoreSettings = {
   seo_keywords: '',
   default_shipping_cost: 45,
   free_shipping_threshold: 499,
+  default_shipping_company_id: null,
   facebook_url: null,
   instagram_url: null,
   whatsapp_url: null,
@@ -202,7 +203,7 @@ export function useStoreSettings() {
       try {
         const { data, error } = await supabase
           .from('store_settings')
-          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url')
+          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, default_shipping_company_id, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url')
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -212,6 +213,45 @@ export function useStoreSettings() {
       } catch {
         return fallbackSettings;
       }
+    },
+  });
+}
+
+/** The real governorate+weight shipping quote — mirrors, field for field,
+ *  the same lookup create-storefront-order and initiate-paymob-payment run
+ *  server-side right before charging the customer (see the comment there:
+ *  "لا نثق بقيمة العميل"). Checkout was showing a flat estimate the whole
+ *  time regardless of which governorate the customer picked, then charging
+ *  a different, governorate-real amount at payment time — this hook is
+ *  what lets the displayed number match the charged one. Returns null
+ *  (not 0) when no rate row covers this exact combination, so the caller
+ *  can fall back to the flat rate exactly like the server does — this is
+ *  a display quote only, never trusted for the actual charge either. */
+export function useShippingRate(
+  companyId: string | null | undefined,
+  governorate: string | null | undefined,
+  weightKg: number
+) {
+  const gov = (governorate ?? '').trim();
+
+  return useQuery({
+    queryKey: ['shipping-rate', companyId ?? 'none', gov || 'none', weightKg],
+    enabled: Boolean(isSupabaseConfigured && companyId && gov),
+    queryFn: async (): Promise<number | null> => {
+      if (!companyId || !gov) return null;
+      const { data, error } = await supabase
+        .from('shipping_rates')
+        .select('price')
+        .eq('shipping_company_id', companyId)
+        .eq('governorate', gov)
+        .eq('is_active', true)
+        .lte('weight_from_kg', weightKg)
+        .or(`weight_to_kg.is.null,weight_to_kg.gte.${weightKg}`)
+        .order('weight_from_kg', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error || !data || data.price == null) return null;
+      return Number(data.price);
     },
   });
 }

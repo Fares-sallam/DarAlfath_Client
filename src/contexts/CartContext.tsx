@@ -17,6 +17,11 @@ export interface CartItem {
   is_digital: boolean;
   available_stock?: number | null;
   currency_symbol: string;
+  /** Per-unit weight — feeds the real governorate+weight shipping quote
+   *  (useShippingRate). null for a cart item added before this field
+   *  existed; falls back to the same 0.3kg default the server itself
+   *  uses for a variant with no recorded weight. */
+  weight_kg?: number | null;
 }
 
 interface CartContextValue {
@@ -28,6 +33,10 @@ interface CartContextValue {
   currencySymbol: string;
   freeShippingThreshold: number;
   remainingForFreeShipping: number;
+  /** Total physical weight of the cart in kg (digital items excluded,
+   *  0.3kg default per item with no recorded weight) — feeds the real
+   *  governorate+weight shipping quote (useShippingRate) on checkout. */
+  cartWeightKg: number;
   addToCart: (product: ProductItem, variant: ProductVariantItem, quantity?: number) => void;
   updateQuantity: (key: string, quantity: number) => void;
   removeFromCart: (key: string) => void;
@@ -86,6 +95,7 @@ const normalizeStoredItem = (value: unknown): CartItem | null => {
     is_digital: isDigital,
     available_stock: isDigital ? null : stock,
     currency_symbol: currencySymbol,
+    weight_kg: raw.weight_kg != null && Number.isFinite(Number(raw.weight_kg)) ? Number(raw.weight_kg) : null,
   };
 };
 
@@ -186,6 +196,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               is_digital: variant.is_digital,
               available_stock: variant.available_stock,
               currency_symbol: currencySymbol,
+              weight_kg: variant.weight_kg ?? null,
               quantity: clampQuantity(item.quantity + requestedQuantity, variant.is_digital, variant.available_stock),
             }
             : item
@@ -206,6 +217,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           is_digital: variant.is_digital,
           available_stock: variant.available_stock,
           currency_symbol: currencySymbol,
+          weight_kg: variant.weight_kg ?? null,
         },
         ...prev,
       ];
@@ -241,6 +253,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const remainingForFreeShipping = isEgypt ? Math.max(0, freeShippingThresholdValue - subtotal) : 0;
     const total = subtotal + shipping;
     const currencySymbol = items[0]?.currency_symbol ?? 'ج.م';
+    // Same per-item 0.3kg fallback the server uses (create-storefront-order /
+    // initiate-paymob-payment) when a variant has no recorded weight — so
+    // the real governorate-rate lookup (useShippingRate) queries the exact
+    // weight the server will independently recompute and actually charge.
+    const cartWeightKg = items.reduce(
+      (acc, item) => (item.is_digital ? acc : acc + (item.weight_kg || 0.3) * item.quantity),
+      0
+    );
 
     return {
       items,
@@ -251,6 +271,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       currencySymbol,
       freeShippingThreshold,
       remainingForFreeShipping,
+      cartWeightKg,
       addToCart,
       updateQuantity,
       removeFromCart,
