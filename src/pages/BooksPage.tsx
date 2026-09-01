@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
 import { OrnamentDivider } from '@/components/Ornament';
-import { useCategories, useProducts, useSeries, useSeriesProductIds } from '@/hooks/useStorefront';
+import { useCategories, useProducts, useProductExtraCategorySlugs, useSeries, useSeriesProductIds } from '@/hooks/useStorefront';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
 export default function BooksPage() {
@@ -13,6 +13,7 @@ export default function BooksPage() {
   const { data: products = [], isLoading } = useProducts();
   const { data: categories = [] } = useCategories();
   const { data: allSeries = [] } = useSeries();
+  const { data: extraCategorySlugs } = useProductExtraCategorySlugs();
 
   const q = searchParams.get('q') ?? '';
   const category = searchParams.get('category') ?? '';
@@ -69,7 +70,11 @@ export default function BooksPage() {
     }
 
     if (category) {
-      rows = rows.filter((item) => item.category_slug === category);
+      rows = rows.filter(
+        (item) =>
+          item.category_slug === category ||
+          extraCategorySlugs?.get(item.product_id)?.has(category)
+      );
     }
 
     if (seriesId) {
@@ -97,7 +102,7 @@ export default function BooksPage() {
     }
 
     return rows;
-  }, [products, q, category, seriesId, seriesProductIds, type, sort]);
+  }, [products, q, category, extraCategorySlugs, seriesId, seriesProductIds, type, sort]);
 
   return (
     <div className="page-sections">

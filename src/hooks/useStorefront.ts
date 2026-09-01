@@ -241,6 +241,36 @@ export function useProducts() {
   });
 }
 
+/* ── Additional categories a product also shows under ────────────────
+ * Beyond each product's single required category_id (already covered
+ * by products_public_catalog's category_slug), a book can be tagged
+ * into extra categories too — same additive shape as product_series.
+ * product_categories has its own public SELECT policy, so this reads
+ * it directly rather than needing a view. */
+export function useProductExtraCategorySlugs() {
+  return useQuery({
+    queryKey: ['product-extra-category-slugs'],
+    queryFn: async (): Promise<Map<string, Set<string>>> => {
+      if (!isSupabaseConfigured) return new Map();
+
+      const { data, error } = await supabase
+        .from('product_categories')
+        .select('product_id, categories(slug)');
+
+      if (error || !data) return new Map();
+
+      const map = new Map<string, Set<string>>();
+      for (const row of data as { product_id: string; categories: { slug: string | null } | null }[]) {
+        const slug = row.categories?.slug;
+        if (!slug) continue;
+        if (!map.has(row.product_id)) map.set(row.product_id, new Set());
+        map.get(row.product_id)!.add(slug);
+      }
+      return map;
+    },
+  });
+}
+
 export function useCategories() {
   const productsQuery = useProducts();
 

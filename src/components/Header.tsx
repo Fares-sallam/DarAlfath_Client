@@ -7,7 +7,7 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useCategories, useProducts } from '@/hooks/useStorefront';
+import { useCategories, useProductExtraCategorySlugs, useProducts } from '@/hooks/useStorefront';
 import type { StoreSettings } from '@/types/store';
 
 const navItems = [
@@ -28,6 +28,7 @@ export default function Header({ settings }: { settings: StoreSettings }) {
   const { isDark, toggleTheme } = useTheme();
   const { data: categories = [] } = useCategories();
   const { data: products = [] } = useProducts();
+  const { data: extraCategorySlugs } = useProductExtraCategorySlugs();
   const [query, setQuery] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -47,14 +48,18 @@ export default function Header({ settings }: { settings: StoreSettings }) {
 
   const categoryMenu = useMemo(() => {
     return categories.slice(0, 8).map((category) => {
-      const matchedProducts = products.filter((product) => product.category_slug === category.id);
+      const matchedProducts = products.filter(
+        (product) =>
+          product.category_slug === category.id ||
+          extraCategorySlugs?.get(product.product_id)?.has(category.id)
+      );
       return {
         ...category,
         count: matchedProducts.length,
         products: matchedProducts.slice(0, 5),
       };
     });
-  }, [categories, products]);
+  }, [categories, products, extraCategorySlugs]);
 
   const onSearch = (event: FormEvent) => {
     event.preventDefault();

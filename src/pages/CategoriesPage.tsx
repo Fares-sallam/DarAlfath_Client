@@ -2,15 +2,20 @@ import { useMemo } from 'react';
 import { ArrowLeft, ChevronDown, Layers3, LibraryBig } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { OrnamentDivider } from '@/components/Ornament';
-import { useCategories, useProducts } from '@/hooks/useStorefront';
+import { useCategories, useProductExtraCategorySlugs, useProducts } from '@/hooks/useStorefront';
 
 export default function CategoriesPage() {
   const { data: categories = [], isLoading } = useCategories();
   const { data: products = [] } = useProducts();
+  const { data: extraCategorySlugs } = useProductExtraCategorySlugs();
 
   const categoryGroups = useMemo(() => {
     return categories.map((category) => {
-      const items = products.filter((product) => product.category_slug === category.id);
+      const items = products.filter(
+        (product) =>
+          product.category_slug === category.id ||
+          extraCategorySlugs?.get(product.product_id)?.has(category.id)
+      );
       const types = Array.from(new Set(items.map((product) => product.type).filter(Boolean)));
 
       return {
@@ -19,7 +24,7 @@ export default function CategoriesPage() {
         types,
       };
     });
-  }, [categories, products]);
+  }, [categories, products, extraCategorySlugs]);
 
   const seriesGroups = useMemo(() => {
     const map = new Map<string, typeof products>();
