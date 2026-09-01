@@ -848,7 +848,14 @@ export default function CheckoutPage() {
 
               {items.map((item) => (
                 <div key={item.key}>
-                  <span>{item.title} - {item.variant_name} × {item.quantity}</span>
+                  <span>
+                    {item.title} - {item.variant_name} × {item.quantity}
+                    {!item.is_digital && item.weight_kg != null && (
+                      <small className="order-summary__item-weight">
+                        {' '}({(item.weight_kg * item.quantity).toFixed(2)} كجم)
+                      </small>
+                    )}
+                  </span>
                   <b>{formatMoney(item.price * item.quantity, item.currency_symbol)}</b>
                 </div>
               ))}
@@ -864,6 +871,18 @@ export default function CheckoutPage() {
                   <b>- {formatMoney(discountAmount, currencySymbol)}</b>
                 </div>
               ) : null}
+
+              {/* Weight drives the shipping row right below it (governorate
+                  + weight rate table) — shown together so the shipping cost
+                  is never a mystery number, and the sum is correct for any
+                  mix of books/copies since each item already carries its
+                  own weight (see CartContext.cartWeightKg). */}
+              {cartWeightKg > 0 && (
+                <div>
+                  <span>الوزن الإجمالي</span>
+                  <b>{cartWeightKg.toFixed(2)} كجم</b>
+                </div>
+              )}
 
               <div>
                 <span>الشحن</span>

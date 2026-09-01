@@ -432,12 +432,33 @@ export default function BookDetailsPage() {
                   <dd>{selectedVariant.variant_name}</dd>
                 </div>
               )}
-              {selectedVariant && !selectedVariant.is_digital && selectedVariant.weight_kg != null && (
-                <div className="bk3-specs__r">
-                  <dt>الوزن</dt>
-                  <dd>{selectedVariant.weight_kg} كجم</dd>
-                </div>
-              )}
+              {(() => {
+                // Weight drives the real shipping cost (governorate + weight
+                // rate table), so this needs to be visible even before the
+                // customer has clicked a specific copy — not gated behind
+                // "النسخة المختارة" above, which only ever shows post-pick.
+                if (selectedVariant && !selectedVariant.is_digital && selectedVariant.weight_kg != null) {
+                  return (
+                    <div className="bk3-specs__r">
+                      <dt>الوزن</dt>
+                      <dd>{selectedVariant.weight_kg} كجم</dd>
+                    </div>
+                  );
+                }
+                const physicalWeights = variants
+                  .filter((v) => !v.is_digital && v.weight_kg != null)
+                  .map((v) => v.weight_kg as number);
+                if (physicalWeights.length === 0) return null;
+                const min = Math.min(...physicalWeights);
+                const max = Math.max(...physicalWeights);
+                const label = min === max ? `${min} كجم` : `${min}–${max} كجم حسب النسخة`;
+                return (
+                  <div className="bk3-specs__r">
+                    <dt>الوزن</dt>
+                    <dd>{label}</dd>
+                  </div>
+                );
+              })()}
             </dl>
           )}
           {activeTab === 'reviews' && <ProductReviews productId={product.product_id} />}

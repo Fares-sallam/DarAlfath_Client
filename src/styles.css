@@ -1654,6 +1654,11 @@ button {
   font-size: 20px;
 }
 
+.order-summary__item-weight {
+  color: var(--muted);
+  font-size: 0.85em;
+}
+
 /* ── Coupon ────────────────────────────────────────────── */
 .coupon-input-row {
   display: flex;
