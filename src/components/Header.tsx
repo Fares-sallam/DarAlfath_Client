@@ -160,12 +160,11 @@ export default function Header({ settings }: { settings: StoreSettings }) {
 
       {/* Desktop nav — الرئيسية/الكتب/كل التصنيفات as plain links, then one
           dropdown per series (سلسلة الفتح الرباني، قصص وموسوعات...), each
-          expanding to its own categories → books. عنّا/سياستنا/تواصل معنا
-          moved out of this row (still reachable from the footer and the
-          mobile drawer) — with 5 series dropdowns already filling the row,
-          keeping them here risked the exact page-width overflow fixed
-          earlier (.page-sections > * { min-width: 0 }), and the reference
-          layout this follows doesn't carry them in its top row either. */}
+          expanding to its own categories → books, then تواصل معنا. عنّا/
+          سياستنا stay out of this row (still reachable from the footer and
+          the mobile drawer) — with up to 5 series dropdowns sharing the
+          row, flex-wrap on .site-header__nav is the safety net if it ever
+          doesn't fit on one line (see that rule's own comment). */}
       <div className="container site-header__nav">
         {navItems.slice(0, 2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
         <NavLink to="/categories">كل التصنيفات</NavLink>
@@ -211,6 +210,8 @@ export default function Header({ settings }: { settings: StoreSettings }) {
             </div>
           </div>
         ))}
+
+        <NavLink to="/contact">تواصل معنا</NavLink>
       </div>
 
       {/* ── Mobile drawer overlay ── */}
