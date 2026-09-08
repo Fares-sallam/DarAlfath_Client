@@ -12,6 +12,11 @@ export interface StoreSettings {
   /** Which shipping company's rate table (shipping_rates) drives the real
    *  governorate+weight shipping quote — see useShippingRate. */
   default_shipping_company_id?: string | null;
+  /** Admin-uploaded store logo (store_settings.logo_url via the dashboard's
+   *  Settings page) — already cache-busted with a `?v=` from updated_at by
+   *  the hook. Null means no custom logo uploaded; callers fall back to the
+   *  static bundled logo file. */
+  logo_url?: string | null;
   facebook_url?: string | null;
   instagram_url?: string | null;
   whatsapp_url?: string | null;

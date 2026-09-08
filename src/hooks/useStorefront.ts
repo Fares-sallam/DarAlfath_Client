@@ -17,6 +17,7 @@ const fallbackSettings: StoreSettings = {
   default_shipping_cost: 45,
   free_shipping_threshold: 499,
   default_shipping_company_id: null,
+  logo_url: null,
   facebook_url: null,
   instagram_url: null,
   whatsapp_url: null,
@@ -194,6 +195,19 @@ export function formatCatalogPrice(product: ProductItem) {
   return `يبدأ من ${formatMoney(product.starting_price, product.currency_symbol)}`;
 }
 
+// The dashboard uploads the logo to a fixed storage path (upsert, same
+// filename every time — see DarAlfath_Dash's LogoContext), so the URL
+// itself never changes when the admin replaces the image; only the file's
+// bytes do. Storage sets a 1h cacheControl on that path, so without a
+// cache-busting query param a customer whose browser (or a CDN) already
+// cached the old bytes would keep seeing the old logo for up to an hour
+// after an admin update. Same `?v=<updated_at>` trick the dashboard uses.
+function withLogoVersion(url: string | null | undefined, updatedAt: string | null | undefined) {
+  if (!url) return null;
+  const v = updatedAt ? new Date(updatedAt).getTime() : Date.now();
+  return `${url}${url.includes('?') ? '&' : '?'}v=${v}`;
+}
+
 export function useStoreSettings() {
   return useQuery({
     queryKey: ['store-settings'],
@@ -203,13 +217,14 @@ export function useStoreSettings() {
       try {
         const { data, error } = await supabase
           .from('store_settings')
-          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, default_shipping_company_id, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url')
+          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, default_shipping_company_id, logo_url, updated_at, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url')
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
         if (error || !data) return fallbackSettings;
-        return { ...fallbackSettings, ...data };
+        const { updated_at, ...rest } = data as typeof data & { updated_at?: string | null };
+        return { ...fallbackSettings, ...rest, logo_url: withLogoVersion(data.logo_url, updated_at) };
       } catch {
         return fallbackSettings;
       }
