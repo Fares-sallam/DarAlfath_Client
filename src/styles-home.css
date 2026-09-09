@@ -162,7 +162,7 @@ html.dark .page-cursor-light {
 
 .store-departments__item {
   flex: 0 0 auto;
-  width: clamp(100px, 24vw, 136px);
+  width: clamp(122px, 27vw, 172px);
 }
 
 .department-card {
@@ -213,7 +213,7 @@ html.dark .page-cursor-light {
 }
 
 .department-card__label {
-  font-size: clamp(12px, 1.4vw, 13.5px);
+  font-size: clamp(13px, 1.6vw, 15px);
   font-weight: 700;
   color: var(--home-ink);
   line-height: 1.35;
