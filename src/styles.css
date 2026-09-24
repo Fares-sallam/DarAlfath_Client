@@ -5706,6 +5706,60 @@ html.dark .auth-input--readonly {
 .bk3-var--on .bk3-var__name,
 .bk3-var--on .bk3-var__price { color: #a07530; }
 
+/* ── Bundle (مجموعة) ───────────────────────────
+   The saving uses the same gold as the card discount badge, not a
+   generic sale green: the store's deals speak navy + gold. */
+.bk3-save {
+  margin: -6px 0 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #a07530;
+}
+.bk3-bundle { display: grid; gap: 10px; }
+.bk3-bundle__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bk3-bundle__item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px 8px 10px;
+  border-radius: 14px;
+  border: 1.5px solid var(--line);
+  background: #fafbff;
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+a.bk3-bundle__item:hover { border-color: rgba(216,177,91,0.45); background: #fffdf8; }
+.bk3-bundle__cover {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 50px;
+  border-radius: 6px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  background: var(--line);
+  color: var(--muted);
+}
+.bk3-bundle__cover img { width: 100%; height: 100%; object-fit: cover; }
+.bk3-bundle__text { display: grid; gap: 2px; min-width: 0; }
+.bk3-bundle__text b {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bk3-bundle__text small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.bk3-bundle__qty {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 900;
+  color: #a07530;
+}
+
 /* ── Buybox ──────────────────────────────────── */
 .bk3-buy { display: grid; gap: 10px; }
 .bk3-buy__qty { display: flex; align-items: center; }
@@ -6015,6 +6069,14 @@ html.dark .bk3-var__avail  { color: #6A7398; }
 html.dark .bk3-var--on .bk3-var__name,
 html.dark .bk3-var--on .bk3-var__price { color: #F0C842; }
 html.dark .bk3-variants__empty { color: #8A93B8; }
+
+html.dark .bk3-save                { color: #F0C842; }
+html.dark .bk3-bundle__item        { background: #0D1847; border-color: #1E2D6B; }
+html.dark a.bk3-bundle__item:hover { border-color: rgba(212,165,32,0.50); background: rgba(212,165,32,0.08); }
+html.dark .bk3-bundle__cover       { background: #1E2D6B; color: #6A7398; }
+html.dark .bk3-bundle__text b      { color: #C8D0F0; }
+html.dark .bk3-bundle__text small  { color: #6A7398; }
+html.dark .bk3-bundle__qty         { color: #F0C842; }
 
 /* ── Buybox ─── */
 html.dark .bk3-chip--digital { background: rgba(212,165,32,0.10); color: #F0C842; border-color: rgba(212,165,32,0.20); }

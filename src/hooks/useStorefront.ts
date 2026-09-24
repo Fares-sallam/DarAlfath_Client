@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { useCountry } from '@/contexts/CountryContext';
 import { useAuth } from '@/contexts/AuthContext';
-import type { CategoryItem, ProductItem, ProductVariantItem, SeriesItem, StoreSettings } from '@/types/store';
+import type { BundleContentItem, CategoryItem, ProductItem, ProductVariantItem, SeriesItem, StoreSettings } from '@/types/store';
 
 const fallbackSettings: StoreSettings = {
   store_name: 'دار الفتح للنشر والتوزيع',
@@ -45,6 +45,7 @@ type PublicCatalogRow = {
   max_discount_pct?: number | string | null;
   variant_count?: number | string | null;
   images?: string[] | string | null;
+  is_bundle?: boolean | null;
 };
 
 type PublicVariantRow = {
@@ -59,6 +60,10 @@ type PublicVariantRow = {
   price?: number | string | null;
   sale_price?: number | string | null;
   base_price?: number | string | null;
+  /** What product_variants_public actually returns: the price before
+   *  discount, and the price paid. */
+  old_price?: number | string | null;
+  new_price?: number | string | null;
   is_digital?: boolean | null;
   is_available?: boolean | null;
   available_stock?: number | string | null;
@@ -141,12 +146,18 @@ function normalizeProduct(row: PublicCatalogRow, stats?: ReviewStats): ProductIt
     reviews_count: stats?.reviews_count ?? 0,
     variant_count: Math.max(0, Math.floor(toNumber(row.variant_count))),
     variants: [],
+    is_bundle: Boolean(row.is_bundle),
   };
 }
 
 function normalizeVariant(row: PublicVariantRow): ProductVariantItem {
-  const basePrice = toNumber(row.base_price ?? row.price);
-  const salePrice = row.sale_price == null ? null : toNumber(row.sale_price);
+  // The view exposes old_price/new_price, not base_price/sale_price, so
+  // reading only the latter meant compare_at_price was never set and a
+  // discounted copy showed no struck-through price (a bundle's سعر البناء
+  // included).
+  const basePrice = toNumber(row.base_price ?? row.old_price ?? row.price);
+  const rawSale = row.sale_price ?? row.new_price;
+  const salePrice = rawSale == null ? null : toNumber(rawSale);
   const displayPrice = salePrice ?? toNumber(row.price ?? row.base_price);
   const isDigital = Boolean(row.is_digital);
   const stock = row.available_stock == null ? null : Math.max(0, Math.floor(toNumber(row.available_stock)));
@@ -437,6 +448,26 @@ export function useSeriesProductIds(seriesId: string | null) {
 
       if (error) throw error;
       return ((data ?? []) as { product_id: string }[]).map((row) => row.product_id);
+    },
+  });
+}
+
+/** The books inside a bundle, for the bundle's own page. Read through the
+ *  curated bundle_contents_public view rather than the locked bundle_items
+ *  table. It also covers books hidden from sale on their own, which the
+ *  public catalog leaves out. */
+export function useBundleContents(bundleProductId?: string, enabled = true) {
+  return useQuery({
+    queryKey: ['bundle-contents', bundleProductId ?? 'missing'],
+    enabled: Boolean(isSupabaseConfigured && bundleProductId && enabled),
+    queryFn: async (): Promise<BundleContentItem[]> => {
+      const { data, error } = await supabase
+        .from('bundle_contents_public')
+        .select('product_id, variant_id, quantity, sort_order, title, author, cover_url, variant_name, is_active')
+        .eq('bundle_product_id', bundleProductId!)
+        .order('sort_order', { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as BundleContentItem[];
     },
   });
 }

@@ -117,7 +117,7 @@ export default function ProductCard({
       <div className="book-card__body">
         <div className="book-card__topline">
           <div className="book-card__badges">
-            <span>{product.type || 'كتاب'}</span>
+            <span>{product.is_bundle ? 'مجموعة' : product.type || 'كتاب'}</span>
           </div>
 
           {categoryLabel ? (

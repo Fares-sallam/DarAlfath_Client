@@ -6,6 +6,18 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/Users/user/Desktop/DarAlfath_Dash", "run", "dev"],
+      "port": 8080
+    },
+    {
+      "name": "dashboard-bundles-test",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "/private/tmp/claude-501/-Users-user-Library-Mobile-Documents-com-apple-CloudDocs-Desktop-daralfath-premium-execution-v2-sizes-fixed/c062b69b-7326-436c-a90d-cf11843576c8/scratchpad/work/dash", "run", "dev"],
+      "port": 8080
     }
   ]
 }

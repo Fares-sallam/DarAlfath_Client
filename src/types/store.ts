@@ -112,6 +112,23 @@ export interface ProductItem {
   reviews_count: number;
   variant_count: number;
   variants: ProductVariantItem[];
+  /** A bundle (مجموعة) of other books. Its single variant's price, stock
+   *  and weight are all derived from those books by the database. */
+  is_bundle?: boolean;
+}
+
+/** One book inside a bundle, as shown on the bundle's page. */
+export interface BundleContentItem {
+  product_id: string;
+  variant_id: string;
+  quantity: number;
+  sort_order: number;
+  title: string;
+  author?: string | null;
+  cover_url?: string | null;
+  variant_name?: string | null;
+  /** false = not sold on its own (only inside bundles) — no page to link to. */
+  is_active: boolean;
 }
 
 export interface VideoItem {
