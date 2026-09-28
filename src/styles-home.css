@@ -16,6 +16,12 @@
      rules and rosettes, short for an 11px label — this one lands at 5.28. */
   --home-gold-text: #8c6024;
   --home-frame: rgba(181, 134, 63, 0.42);
+  /* A plainly-visible frame for a lone image sitting on its own (the
+     department photos) — --home-frame is deliberately faint for tracing
+     a shape that already has other edges (the fallback icon's own box,
+     ornament rules); on a bare photo that faintness read as no frame
+     at all. */
+  --home-frame-strong: rgba(181, 134, 63, 0.75);
   --home-ink: #102542;
   --home-ink-soft: #5b6b84;
   /* Warm centre falling off to a deeper cream at the edges — a flat fill
@@ -45,6 +51,7 @@ html.dark {
      and ornament share one value here. */
   --home-gold-text: #D4A520;
   --home-frame: rgba(212, 165, 32, 0.34);
+  --home-frame-strong: rgba(212, 165, 32, 0.65);
   --home-ink: #F0EDFF;
   --home-ink-soft: #9AA3C4;
   --home-surface:
@@ -162,7 +169,7 @@ html.dark .page-cursor-light {
 
 .store-departments__item {
   flex: 0 0 auto;
-  width: clamp(145px, 31vw, 205px);
+  width: clamp(168px, 35vw, 235px);
 }
 
 .department-card {
@@ -187,7 +194,7 @@ html.dark .page-cursor-light {
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: 18px;
-  border: 1px solid var(--home-frame);
+  border: 2px solid var(--home-frame-strong);
   box-shadow: var(--home-frame-shadow);
   transition: transform 0.3s var(--ease-out-quint), border-color 0.3s var(--ease-out-quint), box-shadow 0.3s var(--ease-out-quint);
 }
@@ -217,7 +224,7 @@ html.dark .page-cursor-light {
 }
 
 .department-card__label {
-  font-size: clamp(14px, 1.8vw, 17px);
+  font-size: clamp(15px, 2vw, 19px);
   font-weight: 700;
   color: var(--home-ink);
   line-height: 1.35;
