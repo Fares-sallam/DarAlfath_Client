@@ -381,10 +381,11 @@ export default function CheckoutPage() {
     setTurnstileToken('');
   };
 
-  // Clear coupon when cart/country changes
+  // A changed cart/country invalidates an applied discount. The typed code
+  // stays: this also fires while prices and country load on arrival, and
+  // wiping the field then erased what the customer had just typed.
   useEffect(() => {
     setAppliedCoupon(null);
-    setCouponCode('');
     setCouponError('');
   }, [subtotal, items.length, selectedCountry?.id]);
 
