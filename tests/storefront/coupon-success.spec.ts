@@ -1,18 +1,16 @@
 import { test, expect } from '@playwright/test';
+import { addFirstBookToCart, signIn } from './helpers';
 
 test('كوبون خصم صحيح (DARALFATH20) يُطبَّق ويقلّل الإجمالي', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('button', { name: /^فتح صفحة/ }).first().click();
-  await page.waitForURL(/\/book\//);
-  await page.getByRole('button', { name: /متوفر \d+ نسخة/ }).first().click();
-  const addToCart = page.getByRole('button', { name: 'أضف إلى السلة' });
-  await expect(addToCart).toBeEnabled({ timeout: 10_000 });
-  await addToCart.click();
+  await signIn(page);
+  await addFirstBookToCart(page);
 
   await page.goto('/checkout');
+  // Prices and country settle right after arrival; an applied coupon made
+  // before that would be dropped (as it should be when the cart changes).
   await page.waitForLoadState('networkidle');
   const couponInput = page.getByPlaceholder('أدخل كود الخصم');
-  await expect(couponInput).toBeVisible({ timeout: 10_000 });
+  await expect(couponInput).toBeVisible({ timeout: 15_000 });
   await couponInput.fill('DARALFATH20');
   const applyButton = page.getByRole('button', { name: 'تطبيق' });
   await expect(applyButton).toBeEnabled({ timeout: 10_000 });

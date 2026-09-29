@@ -3,8 +3,8 @@ import { test, expect } from '@playwright/test';
 test.describe('الصفحة الرئيسية', () => {
   test('الكتالوج يظهر للزائر بدون تسجيل دخول', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: /كتبٌ تُقتنى/ })).toBeVisible();
-    await expect(page.getByText('من رفوف الدار')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'أقسام المتجر' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('heading', { name: 'من رفوف الدار' })).toBeVisible();
 
     // على الأقل كتاب واحد قابل للفتح من الكتالوج.
     const firstBook = page.getByRole('button', { name: /^فتح صفحة/ }).first();

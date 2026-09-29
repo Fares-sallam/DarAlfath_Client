@@ -1,15 +1,9 @@
 import { test, expect } from '@playwright/test';
+import { addFirstBookToCart } from './helpers';
 
 test.describe('السلة والمفضلة', () => {
   test('إضافة كتاب للسلة، تعديل الكمية، ثم حذفه', async ({ page }) => {
-    await page.goto('/');
-    await page.getByRole('button', { name: /^فتح صفحة/ }).first().click();
-    await page.waitForURL(/\/book\//);
-
-    await page.getByRole('button', { name: /متوفر \d+ نسخة/ }).first().click();
-    const addToCart = page.getByRole('button', { name: 'أضف إلى السلة' });
-    await expect(addToCart).toBeEnabled({ timeout: 10_000 });
-    await addToCart.click();
+    await addFirstBookToCart(page);
 
     await page.goto('/cart');
     await expect(page.getByRole('heading', { name: 'سلة المشتريات' })).toBeVisible();
