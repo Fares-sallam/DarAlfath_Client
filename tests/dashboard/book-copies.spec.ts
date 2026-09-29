@@ -130,7 +130,7 @@ test('إخفاء كتاب جوه مجموعة بيسأل: من المجموعة 
   const exact = new RegExp(`^${book!.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
   const row = page.locator('tbody tr').filter({ has: page.locator('span.truncate', { hasText: exact }) }).first();
   const dialog = page.getByRole('alertdialog');
-  const fromBundles = dialog.getByRole('button', { name: /يتخفي من المجموعات? وككتاب فردي/ });
+  const fromBundles = dialog.getByRole('button', { name: /يتخفي من المجموع(ة|ات) وككتاب فردي/ });
   const bookOnly = dialog.getByRole('button', { name: /يتخفي ككتاب فردي لوحده ويفضل في/ });
 
   // The question names the book and every bundle, and offers both ways plus cancel.
