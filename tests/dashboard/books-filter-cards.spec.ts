@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 
-// The four counters above the books list are filter buttons. Read-only:
+// The counters above the books list are filter buttons. Read-only:
 // nothing here changes data.
 
 const card = (page: Page, label: string) =>
@@ -19,7 +19,7 @@ test('كل مربع فوق قائمة الكتب بيعرض بالظبط عدد 
   const all = await count(page, 'إجمالي الكتب');
   await expect(shownBooks(page)).toHaveCount(all);
 
-  for (const label of ['غير نشط', 'نشط', 'كتب رقمية']) {
+  for (const label of ['غير نشط', 'نشط', 'كتب رقمية', 'المجموعات']) {
     const n = await count(page, label);
     await card(page, label).click();
     await expect(card(page, label)).toHaveAttribute('aria-pressed', 'true');
