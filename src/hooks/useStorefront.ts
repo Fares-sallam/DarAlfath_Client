@@ -463,7 +463,7 @@ export function useBundleContents(bundleProductId?: string, enabled = true) {
     queryFn: async (): Promise<BundleContentItem[]> => {
       const { data, error } = await supabase
         .from('bundle_contents_public')
-        .select('product_id, variant_id, quantity, sort_order, title, author, cover_url, variant_name, is_active')
+        .select('bundle_variant_id, product_id, variant_id, quantity, sort_order, title, author, cover_url, variant_name, is_active')
         .eq('bundle_product_id', bundleProductId!)
         .order('sort_order', { ascending: true });
       if (error) throw error;

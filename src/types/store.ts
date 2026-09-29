@@ -119,6 +119,8 @@ export interface ProductItem {
 
 /** One book inside a bundle, as shown on the bundle's page. */
 export interface BundleContentItem {
+  /** The bundle copy (e.g. ورق عادي / مقاس 24*17) this book belongs to. */
+  bundle_variant_id: string;
   product_id: string;
   variant_id: string;
   quantity: number;

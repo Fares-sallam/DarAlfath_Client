@@ -120,15 +120,21 @@ export default function BookDetailsPage() {
 
   useEffect(() => { setQuantity(1); }, [selectedVariantId]);
 
-  // A bundle is sold as one thing — its single variant is selected for the
-  // customer instead of asking them to pick "المجموعة كاملة". Selected
-  // even when out of stock, so the button reads "غير متوفر" rather than
+  // A bundle always has a copy selected (the first in stock, else the
+  // first), so its books and price show straight away. Selected even when
+  // out of stock, so the button reads "غير متوفر" rather than
   // "اختر نسخة أولًا".
   useEffect(() => {
-    if (isBundle && !selectedVariantId && variants.length === 1) {
-      setSelectedVariantId(variants[0].variant_id);
+    if (isBundle && !selectedVariantId && variants.length > 0) {
+      setSelectedVariantId((variants.find((v) => v.is_available) ?? variants[0]).variant_id);
     }
   }, [isBundle, selectedVariantId, variants]);
+
+  // Each bundle copy has its own books.
+  const shownBundleContents = useMemo(
+    () => bundleContents.filter((item) => item.bundle_variant_id === selectedVariantId),
+    [bundleContents, selectedVariantId]
+  );
 
   // Lightbox keyboard: Escape closes, arrows walk the gallery. RTL keeps the
   // physical key meaning (Left = next in reading order) so it matches the
@@ -345,51 +351,9 @@ export default function BookDetailsPage() {
           {/* Description */}
           <p className="bk3-desc" style={{ '--i': 7 } as React.CSSProperties}>{descriptionText}</p>
 
-          {/* ── Bundle contents (a bundle's single variant is pre-selected,
-              so its books take the variant picker's place) ─── */}
-          {isBundle && (
-            <div className="bk3-bundle" style={{ '--i': 8 } as React.CSSProperties}>
-              <div className="bk3-variants__hd">
-                <Layers size={14} />
-                <span>محتويات المجموعة</span>
-                <small>
-                  {bundleContentsLoading
-                    ? '...'
-                    : bundleContents.length === 2
-                      ? 'كتابين'
-                      : `${bundleContents.length.toLocaleString('ar-EG')} ${bundleContents.length >= 3 && bundleContents.length <= 10 ? 'كتب' : 'كتاب'}`}
-                </small>
-              </div>
-              <ul className="bk3-bundle__list">
-                {bundleContents.map((item) => {
-                  const body = (
-                    <>
-                      <span className="bk3-bundle__cover">
-                        {item.cover_url ? <img src={item.cover_url} alt="" loading="lazy" /> : <BookOpenText size={16} />}
-                      </span>
-                      <span className="bk3-bundle__text">
-                        <b>{item.title}</b>
-                        {item.variant_name && <small>{item.variant_name}</small>}
-                      </span>
-                      {item.quantity > 1 && <span className="bk3-bundle__qty">× {item.quantity}</span>}
-                    </>
-                  );
-                  return (
-                    <li key={item.variant_id}>
-                      {item.is_active ? (
-                        <Link to={`/book/${item.product_id}`} className="bk3-bundle__item">{body}</Link>
-                      ) : (
-                        <div className="bk3-bundle__item">{body}</div>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-
-          {/* ── Variant selector ─── */}
-          {!isBundle && (
+          {/* ── Variant selector (a bundle with one copy skips it: that copy
+              is pre-selected and its books below say what it is) ─── */}
+          {(!isBundle || variants.length > 1) && (
           <div className="bk3-variants" style={{ '--i': 8 } as React.CSSProperties}>
             <div className="bk3-variants__hd">
               <Layers size={14} />
@@ -417,6 +381,48 @@ export default function BookDetailsPage() {
               )}
             </div>
           </div>
+          )}
+
+          {/* ── Bundle contents: the books in the selected copy ─── */}
+          {isBundle && (
+            <div className="bk3-bundle" style={{ '--i': 8 } as React.CSSProperties}>
+              <div className="bk3-variants__hd">
+                <Layers size={14} />
+                <span>{variants.length > 1 && selectedVariant ? `محتويات ${selectedVariant.variant_name}` : 'محتويات المجموعة'}</span>
+                <small>
+                  {bundleContentsLoading
+                    ? '...'
+                    : shownBundleContents.length === 2
+                      ? 'كتابين'
+                      : `${shownBundleContents.length.toLocaleString('ar-EG')} ${shownBundleContents.length >= 3 && shownBundleContents.length <= 10 ? 'كتب' : 'كتاب'}`}
+                </small>
+              </div>
+              <ul className="bk3-bundle__list">
+                {shownBundleContents.map((item) => {
+                  const body = (
+                    <>
+                      <span className="bk3-bundle__cover">
+                        {item.cover_url ? <img src={item.cover_url} alt="" loading="lazy" /> : <BookOpenText size={16} />}
+                      </span>
+                      <span className="bk3-bundle__text">
+                        <b>{item.title}</b>
+                        {item.variant_name && <small>{item.variant_name}</small>}
+                      </span>
+                      {item.quantity > 1 && <span className="bk3-bundle__qty">× {item.quantity}</span>}
+                    </>
+                  );
+                  return (
+                    <li key={item.variant_id}>
+                      {item.is_active ? (
+                        <Link to={`/book/${item.product_id}`} className="bk3-bundle__item">{body}</Link>
+                      ) : (
+                        <div className="bk3-bundle__item">{body}</div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
 
           {/* ── Buybox ─── */}
@@ -502,7 +508,7 @@ export default function BookDetailsPage() {
               {isBundle ? (
                 <div className="bk3-specs__r">
                   <dt>عدد الكتب</dt>
-                  <dd>{bundleContents.reduce((sum, item) => sum + item.quantity, 0) || '—'}</dd>
+                  <dd>{shownBundleContents.reduce((sum, item) => sum + item.quantity, 0) || '—'}</dd>
                 </div>
               ) : (
                 <div className="bk3-specs__r"><dt>النسخ المتاحة</dt><dd>{variants.length || product.variant_count}</dd></div>
