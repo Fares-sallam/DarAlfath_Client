@@ -67,3 +67,49 @@ test('نسخ المجموعة: إضافة نسخة، ومنع اسمين متك�
   await expect(chips).toHaveCount(before);
   await page.getByRole('button', { name: 'إلغاء' }).click();
 });
+
+test('إخفاء كتاب جوه مجموعة بيحذّر الأول، ولو رفضت مفيش حاجة بتتغير', async ({ page }) => {
+  const writes: string[] = [];
+  page.on('request', (r) => {
+    if (r.method() !== 'GET' && r.method() !== 'HEAD' && r.url().includes('/rest/v1/')) writes.push(`${r.method()} ${new URL(r.url()).pathname.split('/').pop()}`);
+  });
+
+  await page.goto('/books');
+  await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
+
+  // A visible book that sits inside a bundle still on sale, read straight from the database.
+  const book = await page.evaluate(async () => {
+    const { supabase } = await import('/src/lib/supabase.ts');
+    const { data: items } = await supabase
+      .from('bundle_items')
+      .select('component_product_id, bundle:products!bundle_items_bundle_product_id_fkey(title, is_active)');
+    const bundlesByBook = new Map<string, Set<string>>();
+    for (const i of (items ?? []) as unknown as { component_product_id: string; bundle: { title: string; is_active: boolean } | null }[]) {
+      if (!i.bundle?.is_active) continue;
+      (bundlesByBook.get(i.component_product_id) ?? bundlesByBook.set(i.component_product_id, new Set()).get(i.component_product_id)!).add(i.bundle.title);
+    }
+    const { data: books } = await supabase.from('products').select('id, title').eq('is_active', true).eq('is_bundle', false).in('id', [...bundlesByBook.keys()]);
+    const b = (books ?? [])[0];
+    return b ? { title: b.title as string, bundles: [...bundlesByBook.get(b.id)!] } : null;
+  });
+  test.skip(!book, 'مفيش كتاب ظاهر جوه مجموعة معروضة للبيع');
+
+  const exact = new RegExp(`^${book!.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
+  const row = page.locator('tbody tr').filter({ has: page.locator('span.truncate', { hasText: exact }) }).first();
+
+  // Refuse: the warning names the book and every bundle, and nothing is sent.
+  let message = '';
+  page.once('dialog', (d) => { message = d.message(); void d.dismiss(); });
+  await row.getByTitle('إخفاء').click();
+  await expect.poll(() => message).not.toBe('');
+  expect(message).toContain(`«${book!.title}»`);
+  for (const bundle of book!.bundles) expect(message).toContain(bundle);
+  expect(message).toContain('هتفضل تتباع');
+  await page.waitForTimeout(500);
+  expect(writes).toEqual([]);
+
+  // Accept: the hide request goes out (blocked by the route above, so the book stays visible).
+  page.once('dialog', (d) => void d.accept());
+  await row.getByTitle('إخفاء').click();
+  await expect.poll(() => writes).toContain('PATCH products');
+});
