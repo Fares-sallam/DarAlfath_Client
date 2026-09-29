@@ -72,6 +72,9 @@ button {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  /* Lets full-bleed sections size to the page (cqw) instead of the
+     viewport (vw), which also counts the vertical scrollbar. */
+  container-type: inline-size;
 }
 
 .page-shell {

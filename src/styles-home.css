@@ -156,6 +156,10 @@ html.dark .page-cursor-light {
 .home-hero-section__container {
   width: 100vw;
   margin-inline: calc(50% - 50vw);
+  /* Exact page width (no scrollbar) where container units are supported;
+     the vw pair above is the fallback, trimmed by html's overflow-x guard. */
+  width: 100cqw;
+  margin-inline: calc(50% - 50cqw);
 }
 
 /* ── Store departments ────────────────────────────────────────────────
@@ -833,11 +837,16 @@ html.dark .home-hero-panel__img {
   color: var(--home-gold);
   cursor: pointer;
   box-shadow: 0 6px 18px rgba(9, 20, 48, 0.16);
-  transition: transform 0.2s var(--ease-out-quint);
+  transition: scale 0.2s var(--ease-out-quint);
 }
-.home-hero-panel__nav:hover { transform: translateY(-50%) scale(1.06); }
+/* `scale`, not `transform`: a transform would stack on top of `translate`
+   above and lift the button by another half its height on hover. */
+.home-hero-panel__nav:hover { scale: 1.06; }
 .home-hero-panel__nav--prev { inset-inline-start: -14px; }
 .home-hero-panel__nav--next { inset-inline-end: -14px; }
+/* The banner is edge to edge, so its arrows sit inside it, not off-screen. */
+.home-hero-section .home-hero-panel__nav--prev { inset-inline-start: clamp(10px, 1.6vw, 24px); }
+.home-hero-section .home-hero-panel__nav--next { inset-inline-end: clamp(10px, 1.6vw, 24px); }
 
 @media (hover: hover) and (pointer: fine) {
   .home-hero-panel__nav { display: flex; }
