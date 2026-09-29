@@ -68,48 +68,64 @@ test('نسخ المجموعة: إضافة نسخة، ومنع اسمين متك�
   await page.getByRole('button', { name: 'إلغاء' }).click();
 });
 
-test('إخفاء كتاب جوه مجموعة بيحذّر الأول، ولو رفضت مفيش حاجة بتتغير', async ({ page }) => {
+test('إخفاء كتاب جوه مجموعة بيسأل: الكتاب بس ولا الكتاب والمجموعات معاه', async ({ page }) => {
   const writes: string[] = [];
   page.on('request', (r) => {
-    if (r.method() !== 'GET' && r.method() !== 'HEAD' && r.url().includes('/rest/v1/')) writes.push(`${r.method()} ${new URL(r.url()).pathname.split('/').pop()}`);
+    if (r.method() !== 'GET' && r.method() !== 'HEAD' && r.url().includes('/rest/v1/')) writes.push(`${r.method()} ${decodeURIComponent(r.url().split('/rest/v1/')[1])}`);
   });
+  const idsIn = (write: string) => (write.match(/id=in\.\(([^)]*)\)/)?.[1] ?? '').split(',').sort();
 
   await page.goto('/books');
   await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 15_000 });
 
-  // A visible book that sits inside a bundle still on sale, read straight from the database.
+  // A visible book that sits inside bundles still on sale, read straight from the database.
   const book = await page.evaluate(async () => {
     const { supabase } = await import('/src/lib/supabase.ts');
     const { data: items } = await supabase
       .from('bundle_items')
-      .select('component_product_id, bundle:products!bundle_items_bundle_product_id_fkey(title, is_active)');
-    const bundlesByBook = new Map<string, Set<string>>();
-    for (const i of (items ?? []) as unknown as { component_product_id: string; bundle: { title: string; is_active: boolean } | null }[]) {
+      .select('component_product_id, bundle:products!bundle_items_bundle_product_id_fkey(id, title, is_active)');
+    const bundlesByBook = new Map<string, Map<string, string>>();
+    for (const i of (items ?? []) as unknown as { component_product_id: string; bundle: { id: string; title: string; is_active: boolean } | null }[]) {
       if (!i.bundle?.is_active) continue;
-      (bundlesByBook.get(i.component_product_id) ?? bundlesByBook.set(i.component_product_id, new Set()).get(i.component_product_id)!).add(i.bundle.title);
+      const m = bundlesByBook.get(i.component_product_id) ?? new Map<string, string>();
+      m.set(i.bundle.id, i.bundle.title);
+      bundlesByBook.set(i.component_product_id, m);
     }
     const { data: books } = await supabase.from('products').select('id, title').eq('is_active', true).eq('is_bundle', false).in('id', [...bundlesByBook.keys()]);
     const b = (books ?? [])[0];
-    return b ? { title: b.title as string, bundles: [...bundlesByBook.get(b.id)!] } : null;
+    return b ? { id: b.id as string, title: (b.title as string).trim(), bundles: [...bundlesByBook.get(b.id)!].map(([id, title]) => ({ id, title })) } : null;
   });
   test.skip(!book, 'مفيش كتاب ظاهر جوه مجموعة معروضة للبيع');
 
   const exact = new RegExp(`^${book!.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`);
   const row = page.locator('tbody tr').filter({ has: page.locator('span.truncate', { hasText: exact }) }).first();
+  const dialog = page.getByRole('alertdialog');
 
-  // Refuse: the warning names the book and every bundle, and nothing is sent.
-  let message = '';
-  page.once('dialog', (d) => { message = d.message(); void d.dismiss(); });
+  // The question names the book and every bundle, and offers all three ways out.
   await row.getByTitle('إخفاء').click();
-  await expect.poll(() => message).not.toBe('');
-  expect(message).toContain(`«${book!.title}»`);
-  for (const bundle of book!.bundles) expect(message).toContain(bundle);
-  expect(message).toContain('هتفضل تتباع');
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText(book!.title);
+  for (const bundle of book!.bundles) await expect(dialog).toContainText(bundle.title);
+  await expect(dialog.getByRole('button', { name: /إخفاء الكتاب بس/ })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: /إخفاء الكتاب و(المجموعات كلها|المجموعة كاملة)/ })).toBeVisible();
+
+  // Cancel: nothing is sent.
+  await dialog.getByRole('button', { name: 'إلغاء' }).click();
+  await expect(dialog).toBeHidden();
   await page.waitForTimeout(500);
   expect(writes).toEqual([]);
 
-  // Accept: the hide request goes out (blocked by the route above, so the book stays visible).
-  page.once('dialog', (d) => void d.accept());
+  // Just the book: one write, for that book alone.
   await row.getByTitle('إخفاء').click();
-  await expect.poll(() => writes).toContain('PATCH products');
+  await dialog.getByRole('button', { name: /إخفاء الكتاب بس/ }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(idsIn(writes[0])).toEqual([book!.id]);
+  await expect(dialog).toBeHidden();
+
+  // The book and its bundles: one write covering the book and every bundle (all-or-nothing).
+  await row.getByTitle('إخفاء').click();
+  await dialog.getByRole('button', { name: /إخفاء الكتاب و(المجموعات كلها|المجموعة كاملة)/ }).click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(idsIn(writes[1])).toEqual([book!.id, ...book!.bundles.map((b) => b.id)].sort());
+  expect(writes.every((w) => w.startsWith('PATCH products?'))).toBe(true);
 });
