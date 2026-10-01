@@ -31,6 +31,8 @@ type PublicCatalogRow = {
   author?: string | null;
   description?: string | null;
   main_image_url?: string | null;
+  /** The cover the admin set — the catalog's main_image_url prefers gallery rows over it. */
+  cover_url?: string | null;
   category_name?: string | null;
   category_slug?: string | null;
   type?: string | null;
@@ -83,10 +85,8 @@ function parseImages(value: PublicCatalogRow['images'], mainImage?: string | nul
       : [];
 
   const images = fromValue.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
-  if (mainImage && !images.includes(mainImage)) {
-    return [mainImage, ...images];
-  }
-  return images;
+  // The main image always leads, whether or not the gallery repeats it.
+  return mainImage ? [mainImage, ...images.filter((item) => item !== mainImage)] : images;
 }
 
 function safeParseImages(value: string) {
@@ -111,15 +111,21 @@ function normalizeProduct(row: PublicCatalogRow, stats?: ReviewStats): ProductIt
   const categorySlug = row.category_slug ?? null;
   const categoryName = row.category_name ?? 'غير مصنف';
 
+  // The cover is the main image. The catalog's own main_image_url picks a
+  // gallery image first (a flagged one, else the first), which would put an
+  // extra photo ahead of the cover; it's only the fallback for a book with
+  // no cover.
+  const mainImage = row.cover_url || row.main_image_url || null;
+
   return {
     id: productId,
     product_id: productId,
     title: row.title || 'كتاب بدون عنوان',
     author: row.author || 'دار الفتح',
     description: row.description || null,
-    cover_url: row.main_image_url || null,
-    main_image_url: row.main_image_url || null,
-    images: parseImages(row.images, row.main_image_url),
+    cover_url: mainImage,
+    main_image_url: mainImage,
+    images: parseImages(row.images, mainImage),
     type: row.type || 'كتاب',
     base_price: startingPrice,
     sale_price: null,
@@ -680,7 +686,6 @@ export function useProductImageGallery(productId?: string) {
           .from('product_images')
           .select('url, is_primary, sort_order')
           .eq('product_id', productId)
-          .order('is_primary', { ascending: false })
           .order('sort_order', { ascending: true });
 
         if (error || !data) return [];

@@ -101,12 +101,12 @@ export default function BookDetailsPage() {
   const bookRef = useRef<HTMLDivElement>(null);
   const tiltStyle = useBookTilt(bookRef);
 
+  // The cover leads, then the gallery's other photos (the cover may sit in
+  // the gallery too — it's shown once).
   const displayedImages = useMemo(() => {
     if (!product) return [];
-    if (galleryImages.length > 0) return galleryImages;
-    return product.images?.length
-      ? product.images
-      : ([product.cover_url].filter(Boolean) as string[]);
+    const others = galleryImages.length > 0 ? galleryImages : product.images ?? [];
+    return [...new Set([product.cover_url, ...others].filter((url): url is string => Boolean(url)))];
   }, [product, galleryImages]);
 
   const selectedVariant = useMemo<ProductVariantItem | null>(() => {
