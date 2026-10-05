@@ -657,7 +657,7 @@ button {
 }
 
 .book-card--compact .book-card__cover {
-  aspect-ratio: 0.64;
+  aspect-ratio: 1;
 }
 
 .book-card__fav {
@@ -687,17 +687,25 @@ button {
    image. Two separate @media(max-width:640px) overrides used to fight
    this with aspect-ratio:3/4 and then aspect-ratio:auto+height:206px,
    both paired with object-fit:contain — that's what left visible gaps
-   around the cover on narrow screens. Removed rather than patched. */
+   around the cover on narrow screens. Removed rather than patched.
+
+   The covers uploaded for the catalog are square (2048×2048) book photos:
+   a book standing on a light grey backdrop, wide or tall as it happens to
+   be. A portrait frame with object-fit: cover showed only the middle ~64%
+   of that square, which cut the sides off every wide book (الأنشطة
+   التعليمية, for one). So the frame is square and the whole photo is shown;
+   the frame's grey is the photo's own backdrop, so a photo of another
+   shape (3:4, say) just gets plain bands instead of being cropped. */
 .book-card__cover {
-  aspect-ratio: 0.66;
-  background: linear-gradient(180deg, #f0ece5, #e6dfd1);
+  aspect-ratio: 1;
+  background: #eaebee;
   overflow: hidden;
 }
 
 .book-card__cover img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .book-card__cover-fallback {
@@ -1599,7 +1607,7 @@ button {
   height: 108px;
   border-radius: 14px;
   overflow: hidden;
-  background: #efe9df;
+  background: #eaebee;
   display: grid;
   place-items: center;
 }
@@ -1607,7 +1615,7 @@ button {
 .cart-item__cover img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .cart-item__content h3 {
@@ -5359,7 +5367,19 @@ html.dark .auth-input--readonly {
 .bk3-book__cover img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+}
+
+/* The catalog's covers are square photos of a book (see .book-card__cover),
+   so the details page shows the whole photo as a picture. Standing a
+   photo of a book inside a drawn 3D book (spine, page edge) put a book in a
+   book, and the portrait frame cut the sides off wide ones. The tilt stays. */
+.bk3-book { width: 340px; height: 340px; }
+.bk3-book__spine,
+.bk3-book__pages { display: none; }
+.bk3-book__cover {
+  border-radius: 16px;
+  background: #eaebee;
 }
 
 /* Spine (left edge, visible from angle) */
@@ -5773,10 +5793,10 @@ a.bk3-bundle__item:hover { border-color: rgba(216,177,91,0.45); background: #fff
   overflow: hidden;
   display: grid;
   place-items: center;
-  background: var(--line);
+  background: #eaebee;
   color: var(--muted);
 }
-.bk3-bundle__cover img { width: 100%; height: 100%; object-fit: cover; }
+.bk3-bundle__cover img { width: 100%; height: 100%; object-fit: contain; }
 .bk3-bundle__text { display: grid; gap: 2px; min-width: 0; }
 .bk3-bundle__text b {
   font-size: 14px;
@@ -6213,13 +6233,13 @@ html.dark .bk3-loading__lines span {
   }
   .bk3-book-wrap { position: static; }
   .bk3-book-scene { min-height: 380px; }
-  .bk3-book { width: 200px; height: 280px; }
+  .bk3-book { width: 280px; height: 280px; }
   .bk3-loading { grid-template-columns: 1fr; }
   .bk3-loading__book { max-width: 280px; margin-inline: auto; }
 }
 @media (max-width: 540px) {
   .bk3-book-scene { min-height: 320px; }
-  .bk3-book { width: 170px; height: 240px; }
+  .bk3-book { width: 240px; height: 240px; }
   .bk3-variants__grid { grid-template-columns: repeat(2, 1fr); }
   .bk3-tab-body { padding: 18px; }
   .bk3-related__grid { grid-template-columns: repeat(2, 1fr); }

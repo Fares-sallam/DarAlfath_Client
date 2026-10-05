@@ -613,11 +613,11 @@ html.dark .book-card:focus-visible .book-card__cover {
   height: 108px;
   border-radius: 12px;
   overflow: hidden;
-  background: var(--home-motif);
+  background: #eaebee;
   outline: 1px solid var(--line);
   outline-offset: 0;
 }
-.cart-row__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cart-row__cover img { width: 100%; height: 100%; object-fit: contain; display: block; }
 
 .cart-row__content h3 {
   margin: 0 0 4px;
