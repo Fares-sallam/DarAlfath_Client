@@ -19,8 +19,11 @@ async function fakeUploads(page: Page) {
     route.request().method() === 'GET' ? route.fallback() : route.fulfill({ json: { Key: 'product-images/fake', Id: 'fake' } }));
   await page.route('**/rest/v1/**', (route) => {
     const request = route.request();
-    // The book starts with an empty gallery — the case where the first upload used to become the cover.
-    if (request.method() === 'GET' && request.url().includes('/rest/v1/product_images')) return route.fulfill({ json: [] });
+    // The book starts with an empty gallery — the case where the first upload used to become the cover —
+    // and then lists whatever has been "inserted" since, like the database would.
+    if (request.method() === 'GET' && request.url().includes('/rest/v1/product_images')) {
+      return route.fulfill({ json: inserts.map((row, i) => ({ id: `fake-${i}`, alt_text: null, ...row })) });
+    }
     if (request.method() === 'GET' || request.method() === 'HEAD') return route.fallback();
     if (request.url().includes('/rest/v1/product_images') && request.method() === 'POST') inserts.push(JSON.parse(request.postData()!));
     else otherWrites.push(`${request.method()} ${request.url()}`);
@@ -56,6 +59,25 @@ test('رفع صور للمعرض لا يغيّر الغلاف: الغلاف هو
   // The cover is exactly what it was, and nothing else was saved.
   await expect(cover).toHaveValue(before);
   expect(otherWrites).toEqual([]);
+});
+
+test('رفع صور لكتاب موجود: بتظهر في المعرض فورًا من غير حفظ وإعادة فتح', async ({ page }) => {
+  const { inserts } = await fakeUploads(page);
+  await openImagesTab(page);
+  await expect(page.getByText('0 صورة مضافة')).toBeVisible();
+
+  const input = page.locator('input[type="file"][multiple]');
+  await input.setInputFiles(files(2));
+  await expect.poll(() => inserts.length).toBe(2);
+  // They are in the grid now (with the delete/star buttons), not just in the database.
+  const gallery = page.locator('div:has(> div > label:text-is("معرض صور المنتج"))');
+  await expect(page.getByText('2 صورة مضافة')).toBeVisible();
+  await expect(gallery.getByTitle('حذف')).toHaveCount(2);
+
+  // A later batch is added to the same list.
+  await input.setInputFiles(files(1));
+  await expect(page.getByText('3 صورة مضافة')).toBeVisible();
+  await expect(gallery.getByTitle('حذف')).toHaveCount(3);
 });
 
 test('كتاب من غير غلاف: أول صورة ترفعها بس هي اللي تبقى الغلاف', async ({ page }) => {
