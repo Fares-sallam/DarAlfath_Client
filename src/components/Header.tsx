@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronLeft, Globe2, Heart, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import Logo from '@/components/Logo';
@@ -86,7 +86,6 @@ export default function Header({ settings }: { settings: StoreSettings }) {
 
         const categoryList = Array.from(catMap.values())
           .sort((a, b) => a.name.localeCompare(b.name, 'ar'))
-          .slice(0, 8)
           .map((c) => ({
             slug: c.slug,
             name: c.name,
@@ -98,6 +97,30 @@ export default function Header({ settings }: { settings: StoreSettings }) {
       })
       .filter((series) => series.categories.length > 0);
   }, [allSeries, products, extraCategorySlugs, allCategoryNames]);
+
+  // A category's book list opens beside its menu, to the left of it. For the
+  // last series in the row there isn't room (the list ends up past the edge
+  // of the screen, even while hidden, and the page scrolls sideways), so
+  // those lists open on the right instead. Measured, because it depends on
+  // how many series there are and how wide the screen is.
+  const navRef = useRef<HTMLDivElement>(null);
+  const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
+  useLayoutEffect(() => {
+    const FLYOUT = 270 + 8; // .nav-dropdown__submenu width + gap
+    const measure = () => {
+      const next = new Set<string>();
+      navRef.current?.querySelectorAll<HTMLElement>('.nav-dropdown[data-series]').forEach((dropdown) => {
+        const menu = dropdown.querySelector<HTMLElement>('.nav-dropdown__menu');
+        if (menu && menu.getBoundingClientRect().left < FLYOUT) next.add(dropdown.dataset.series!);
+      });
+      setFlipped((prev) => (prev.size === next.size && [...next].every((id) => prev.has(id)) ? prev : next));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    // Web fonts change the row's widths once they arrive.
+    void document.fonts?.ready.then(measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [seriesMenu]);
 
   const onSearch = (event: FormEvent) => {
     event.preventDefault();
@@ -165,18 +188,25 @@ export default function Header({ settings }: { settings: StoreSettings }) {
           the mobile drawer) — with up to 5 series dropdowns sharing the
           row, flex-wrap on .site-header__nav is the safety net if it ever
           doesn't fit on one line (see that rule's own comment). */}
-      <div className="container site-header__nav">
+      <div className="container site-header__nav" ref={navRef}>
         {navItems.slice(0, 2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
         <NavLink to="/categories">كل التصنيفات</NavLink>
 
         {seriesMenu.map((series) => (
-          <div className="nav-dropdown" key={series.id}>
+          <div
+            className={`nav-dropdown${flipped.has(series.id) ? ' nav-dropdown--flip' : ''}`}
+            key={series.id}
+            data-series={series.id}
+          >
             <NavLink to={`/books?series=${series.id}`} className="nav-dropdown__trigger">
               <span>{series.name}</span>
               <ChevronDown size={16} />
             </NavLink>
 
-            <div className="nav-dropdown__menu" aria-label={`قائمة ${series.name}`}>
+            <div
+              className={`nav-dropdown__menu${series.categories.length > 8 ? ' nav-dropdown__menu--dense' : ''}`}
+              aria-label={`قائمة ${series.name}`}
+            >
               <Link to={`/books?series=${series.id}`} className="nav-dropdown__all">
                 عرض كل كتب {series.name}
               </Link>

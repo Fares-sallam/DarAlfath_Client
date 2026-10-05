@@ -2872,6 +2872,30 @@ h3,
   font-weight: 900;
 }
 
+/* A series with many categories (سلسلة الفتح الرباني has 13) makes a menu
+   taller than a short laptop screen, and the header is sticky, so the page
+   can't scroll to its end. Tighter rows keep the whole list on screen, and
+   the last few flyouts open upward so their book list isn't cut off either. */
+@media (max-height: 860px) {
+  .site-header__nav .nav-dropdown__menu--dense {
+    padding: 8px;
+  }
+
+  .site-header__nav .nav-dropdown__menu--dense .nav-dropdown__all {
+    margin-bottom: 4px;
+    padding-block: 8px;
+  }
+
+  .site-header__nav .nav-dropdown__menu--dense .nav-dropdown__row {
+    padding-block: 5px;
+  }
+}
+
+.nav-dropdown__menu--dense .nav-dropdown__item:nth-last-child(-n + 5) .nav-dropdown__submenu {
+  top: auto;
+  bottom: 0;
+}
+
 .nav-dropdown__row small {
   color: var(--muted);
   font-size: 11px;
@@ -2898,6 +2922,14 @@ h3,
   pointer-events: none;
   transform: translateX(8px);
   transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+}
+
+/* Series at the far end of the row: the book list opens on the other side
+   (see `flipped` in Header.tsx). */
+.nav-dropdown--flip .nav-dropdown__submenu {
+  right: auto;
+  left: calc(100% + 8px);
+  transform: translateX(-8px);
 }
 
 .nav-dropdown__item:hover .nav-dropdown__submenu,
