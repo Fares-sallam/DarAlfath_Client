@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 import { addFirstBookToCart, signIn } from './helpers';
 
 // Buying requires an account (guest checkout was removed), and these tests

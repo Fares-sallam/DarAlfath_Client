@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('إعدادات المشرفين: القائمة تُحمَّل وتعرض المشرفين الحاليين', async ({ page }) => {
   await page.goto('/admins');

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('إدارة المخزون: الجدول يُحمَّل ويعرض الكمية المتاحة', async ({ page }) => {
   await page.goto('/inventory');

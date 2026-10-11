@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('إدارة العملاء: القائمة تُحمَّل من قاعدة البيانات', async ({ page }) => {
   await page.goto('/customers');

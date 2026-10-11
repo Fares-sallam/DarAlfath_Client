@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures';
 
 // Gallery uploads in the book form. Nothing reaches the database or storage:
 // file uploads and REST writes are answered with an empty success, and the

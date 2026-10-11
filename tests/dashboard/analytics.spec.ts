@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('لوحة التحليلات: مؤشرات الأداء (KPI) تُحمَّل من الطلبات الفعلية', async ({ page }) => {
   await page.goto('/analytics');

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 // The catalog's covers are square (2048×2048) photos of a book on a grey
 // backdrop. A portrait frame with object-fit: cover showed only the middle

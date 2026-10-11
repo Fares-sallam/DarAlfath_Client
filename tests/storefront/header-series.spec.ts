@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 // The header's series menus (سلسلة الفتح الرباني، قصص وموسوعات...) list every
 // category of the series. They used to stop at the first 8. Read-only.

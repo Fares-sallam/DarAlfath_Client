@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test.describe('صفحة الكتب والبحث', () => {
   test('صفحة الكتب تعرض الكتالوج', async ({ page }) => {

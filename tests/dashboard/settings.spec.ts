@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('الإعدادات: الصفحة تُحمَّل وتعرض أقسام المتجر والملف الشخصي', async ({ page }) => {
   await page.goto('/settings');

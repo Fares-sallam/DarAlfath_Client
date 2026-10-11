@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 // اختبارات الدخول تبدأ من جلسة فارغة (بدون الاعتماد على storageState المشروع).
 test.use({ storageState: { cookies: [], origins: [] } });

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('إدارة الكوبونات: القائمة تُحمَّل وتعرض الكوبونات النشطة', async ({ page }) => {
   await page.goto('/coupons');

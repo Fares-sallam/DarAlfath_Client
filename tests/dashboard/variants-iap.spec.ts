@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures';
 
 // The store product id (iap_product_id) on a digital copy, and the guarantee
 // that saving a book updates its copies in place. Real books are read; every

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test.describe('صفحة المجموعة', () => {
   test('تعرض كتب النسخة المختارة وتسمح بالشراء، وتتبدل الكتب مع النسخة', async ({ page }) => {

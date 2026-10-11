@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures';
 import { readFile } from 'node:fs/promises';
 
 // Building a report only reads data, so these are safe against the live database.

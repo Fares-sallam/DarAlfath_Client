@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures';
 
 // These open the book form and exercise it without saving. As a safety net
 // against the live database, every write request is blocked: only reads go out.

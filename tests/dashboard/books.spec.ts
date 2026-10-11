@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('إدارة الكتب: الجدول يُحمَّل من قاعدة البيانات', async ({ page }) => {
   await page.goto('/books');

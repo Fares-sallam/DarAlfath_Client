@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 // Wide tables must scroll inside their own box: at a common laptop width no
 // dashboard page may be wider than the screen (it used to push the header

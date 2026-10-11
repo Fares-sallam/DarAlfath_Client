@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures';
 
 // Photos are resized and re-encoded in the browser before they go to storage.
 // No sign-in and no database: the app's own upload functions are called on the

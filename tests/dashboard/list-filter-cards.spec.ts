@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from '../fixtures';
 
 // The counters above the customers and coupons lists are filter buttons.
 // Read-only: nothing here changes data.

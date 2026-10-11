@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 test('إدارة الشحن: الصفحة تُحمَّل بدون خطأ', async ({ page }) => {
   await page.goto('/shipping');

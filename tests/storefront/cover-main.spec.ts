@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from '../fixtures';
 
 // The cover is a book's main image. The public catalog's own main_image_url
 // prefers a gallery photo over it, so the storefront must not trust that
