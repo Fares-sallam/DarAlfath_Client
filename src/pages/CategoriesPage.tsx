@@ -1,10 +1,13 @@
 import { useMemo } from 'react';
+import { siteOrigin, useSeo } from '@/hooks/useSeo';
+import { staticSeo } from '@/lib/seo';
 import { ArrowLeft, ChevronDown, Layers3, LibraryBig } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useCategories, useProductExtraCategorySlugs, useProducts } from '@/hooks/useStorefront';
 
 export default function CategoriesPage() {
+  useSeo(staticSeo('categories', siteOrigin()));
   const { data: categories = [], isLoading } = useCategories();
   const { data: products = [] } = useProducts();
   const { data: extraCategorySlugs } = useProductExtraCategorySlugs();

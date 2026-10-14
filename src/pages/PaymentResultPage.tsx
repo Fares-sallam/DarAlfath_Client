@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { CheckCircle2, XCircle, PackageCheck, Loader2, Clock } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePrivateSeo } from '@/hooks/useSeo';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
 
@@ -16,7 +16,7 @@ import { useCart } from '@/contexts/CartContext';
  * The browser params are only used to find which order to check.
  */
 export default function PaymentResultPage() {
-  usePageTitle('نتيجة الدفع');
+  usePrivateSeo('نتيجة الدفع', '/payment/result');
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
   const { clearCart } = useCart();

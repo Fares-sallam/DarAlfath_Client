@@ -5,6 +5,7 @@ import {
   ShieldCheck, UserRound, AlertTriangle, Loader2, X, Eye, EyeOff,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePrivateSeo } from '@/hooks/useSeo';
 import { supabase } from '@/lib/supabase';
 import OtpInput from '@/components/OtpInput';
 
@@ -39,6 +40,7 @@ function getInitialAuthMode(): AuthMode {
 }
 
 export default function AccountPage() {
+  usePrivateSeo('حسابي', '/account');
   const {
     user,
     loading,

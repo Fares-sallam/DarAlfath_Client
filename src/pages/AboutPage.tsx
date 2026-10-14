@@ -1,6 +1,9 @@
 import { OrnamentDivider } from '@/components/Ornament';
+import { siteOrigin, useSeo } from '@/hooks/useSeo';
+import { staticSeo } from '@/lib/seo';
 
 export default function AboutPage() {
+  useSeo(staticSeo('about', siteOrigin()));
   return (
     <div className="page-sections">
       <section className="story-hero">

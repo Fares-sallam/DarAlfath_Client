@@ -1,13 +1,20 @@
 {
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
-  ],
   "headers": [
     {
       "source": "/(.*)",
-      "headers": [
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-      ]
+      "has": [{ "type": "host", "value": { "suf": ".vercel.app" } }],
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     }
+  ],
+  "rewrites": [
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/robots.txt", "destination": "/api/robots" },
+    { "source": "/book/:id", "destination": "/api/page?kind=book&id=:id" },
+    { "source": "/books", "destination": "/api/page?kind=books" },
+    { "source": "/categories", "destination": "/api/page?kind=categories" },
+    { "source": "/about", "destination": "/api/page?kind=about" },
+    { "source": "/contact", "destination": "/api/page?kind=contact" },
+    { "source": "/policies", "destination": "/api/page?kind=policies" },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

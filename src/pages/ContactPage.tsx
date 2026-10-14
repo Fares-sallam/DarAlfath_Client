@@ -1,4 +1,6 @@
 import { FormEvent, useMemo, useState } from 'react';
+import { siteOrigin, useSeo } from '@/hooks/useSeo';
+import { staticSeo } from '@/lib/seo';
 import { CheckCircle2, Mail, MapPin, MessageSquareText, Phone } from 'lucide-react';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useStoreSettings } from '@/hooks/useStorefront';
@@ -13,6 +15,7 @@ const initialForm = {
 };
 
 export default function ContactPage() {
+  useSeo(staticSeo('contact', siteOrigin()));
   const { data: settings } = useStoreSettings();
   const [form, setForm] = useState(initialForm);
   const [error, setError] = useState('');

@@ -5,10 +5,10 @@ import SectionHeader from '@/components/SectionHeader';
 import { OrnamentDivider } from '@/components/Ornament';
 import { matchesSearch } from '@/lib/search';
 import { useCategories, useProducts, useProductExtraCategorySlugs, useSeries, useSeriesProductIds } from '@/hooks/useStorefront';
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { siteOrigin, useSeo } from '@/hooks/useSeo';
+import { booksListSeo } from '@/lib/seo';
 
 export default function BooksPage() {
-  usePageTitle('الكتب');
   const [searchParams, setSearchParams] = useSearchParams();
 
   const { data: products = [], isLoading } = useProducts();
@@ -30,6 +30,17 @@ export default function BooksPage() {
   const selectedSeries = useMemo(
     () => allSeries.find((item) => item.id === seriesId) ?? null,
     [allSeries, seriesId]
+  );
+
+  // Title, description and preview for this view of the catalog (a category and a series have their own).
+  useSeo(
+    booksListSeo(siteOrigin(), {
+      categorySlug: category || null,
+      categoryName: selectedCategory?.name ?? null,
+      seriesName: selectedSeries?.name ?? null,
+      seriesId: seriesId || null,
+      searched: Boolean(q.trim() || type || searchParams.get('sort')),
+    }),
   );
 
   // The public catalog rows products come from don't carry series info

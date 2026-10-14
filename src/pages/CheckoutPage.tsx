@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { CheckCircle2, CreditCard, ExternalLink, LogIn, Loader2, PackageCheck, Tag, Truck, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OrnamentDivider } from '@/components/Ornament';
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePrivateSeo } from '@/hooks/useSeo';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCountry } from '@/contexts/CountryContext';
@@ -104,7 +104,7 @@ type CheckoutForm = {
 };
 
 export default function CheckoutPage() {
-  usePageTitle('إتمام الطلب');
+  usePrivateSeo('إتمام الطلب', '/checkout');
   const queryClient = useQueryClient();
   const {
     items, subtotal, shipping: flatShipping, currencySymbol,

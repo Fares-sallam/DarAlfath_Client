@@ -1,4 +1,5 @@
 import { Heart } from 'lucide-react';
+import { usePrivateSeo } from '@/hooks/useSeo';
 import { Link } from 'react-router-dom';
 import ProductCard from '@/components/ProductCard';
 import { OrnamentDivider } from '@/components/Ornament';
@@ -6,6 +7,7 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useWishlistProducts } from '@/hooks/useStorefront';
 
 export default function WishlistPage() {
+  usePrivateSeo('المفضلة', '/wishlist');
   const { wishlistIds, clearWishlist } = useWishlist();
   const { data: items = [], isLoading } = useWishlistProducts(wishlistIds);
   // لا نعرض "لا توجد كتب محفوظة" أثناء تحميل الكتالوج لو فيه معرّفات محفوظة

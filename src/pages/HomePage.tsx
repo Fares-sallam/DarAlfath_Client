@@ -11,7 +11,8 @@ import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
 import { useHomeCategorySections, useIntroVideos, useProducts } from '@/hooks/useStorefront';
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { siteOrigin, useSeo } from '@/hooks/useSeo';
+import { staticSeo } from '@/lib/seo';
 
 /** Sections fade up as they arrive; the hook no-ops under reduced motion. */
 function Reveal({ children, className = '' }: { children: React.ReactNode; className?: string }) {
@@ -24,7 +25,7 @@ function Reveal({ children, className = '' }: { children: React.ReactNode; class
 }
 
 export default function HomePage() {
-  usePageTitle();
+  useSeo(staticSeo('home', siteOrigin()));
   const { data: products = [] } = useProducts();
   const { data: categorySections = [] } = useHomeCategorySections();
   const { data: introVideoRows = [] } = useIntroVideos();

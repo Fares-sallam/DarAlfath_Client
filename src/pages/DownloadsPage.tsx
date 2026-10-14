@@ -1,14 +1,14 @@
 import { Link } from 'react-router-dom';
 import { BookOpenCheck, Download, FileClock } from 'lucide-react';
 import { OrnamentDivider } from '@/components/Ornament';
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePrivateSeo } from '@/hooks/useSeo';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCustomerOrders } from '@/hooks/useCustomerOrders';
 import { formatMoney } from '@/hooks/useStorefront';
 import { formatStorefrontOrderDate } from '@/lib/storefrontOrders';
 
 export default function DownloadsPage() {
-  usePageTitle('مكتبتي الرقمية');
+  usePrivateSeo('مكتبتي الرقمية', '/account/downloads');
   const { user } = useAuth();
   const { data: orders = [], isLoading } = useCustomerOrders();
   const downloads = orders.flatMap((order) =>

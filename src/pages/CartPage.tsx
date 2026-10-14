@@ -3,11 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import QuantitySelector from '@/components/QuantitySelector';
 import { useCart } from '@/contexts/CartContext';
 import { formatMoney } from '@/hooks/useStorefront';
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePrivateSeo } from '@/hooks/useSeo';
 import { OrnamentDivider } from '@/components/Ornament';
 
 export default function CartPage() {
-  usePageTitle('سلة المشتريات');
+  usePrivateSeo('سلة المشتريات', '/cart');
   const navigate = useNavigate();
   const {
     items,

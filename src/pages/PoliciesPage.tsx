@@ -1,8 +1,11 @@
 import PolicyAccordion from '@/components/PolicyAccordion';
+import { siteOrigin, useSeo } from '@/hooks/useSeo';
+import { staticSeo } from '@/lib/seo';
 import { OrnamentDivider } from '@/components/Ornament';
 import { policySections, POLICIES_LAST_UPDATED } from '@/data/policies';
 
 export default function PoliciesPage() {
+  useSeo(staticSeo('policies', siteOrigin()));
   return (
     <div className="page-sections">
       <section className="story-hero story-hero--compact">

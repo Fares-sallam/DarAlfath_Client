@@ -19,6 +19,8 @@ import { useCart } from '@/contexts/CartContext';
 import { flyToCart } from '@/lib/flyToCart';
 import BookCover from '@/components/BookCover';
 import ScrollRail from '@/components/ScrollRail';
+import { siteOrigin, useSeo } from '@/hooks/useSeo';
+import { DEFAULT_DESCRIPTION, bookSeo, titleFor } from '@/lib/seo';
 import type { ProductVariantItem } from '@/types/store';
 
 type DetailsTab = 'about' | 'specs' | 'reviews';
@@ -82,6 +84,29 @@ export default function BookDetailsPage() {
   );
   // Every category the book is in (its own plus the extra ones it is also tagged into).
   const categories = useProductCategories(product);
+  // Title, description, preview image and structured data for this book.
+  useSeo(
+    product
+      ? bookSeo(
+          {
+            id: product.id,
+            title: product.title,
+            author: product.author,
+            description: product.description,
+            coverUrl: product.cover_url,
+            categoryName: product.category_name,
+            categorySlug: product.category_slug,
+            minPrice: product.min_price,
+            maxPrice: product.max_price,
+            currency: product.currency,
+            inStock: variants.length > 0 ? variants.some((v) => v.is_available) : null,
+          },
+          siteOrigin(),
+        )
+      : isLoading
+        ? null
+        : { title: titleFor('الكتاب غير موجود'), description: DEFAULT_DESCRIPTION, path: '/books', noindex: true },
+  );
   const { data: galleryImages = [] } = useProductImageGallery(
     product?.product_id ?? productId
   );

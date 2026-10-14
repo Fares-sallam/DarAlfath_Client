@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCustomerOrders } from '@/hooks/useCustomerOrders';
 import { formatMoney } from '@/hooks/useStorefront';
 import { formatStorefrontOrderDate } from '@/lib/storefrontOrders';
-import { usePageTitle } from '@/hooks/usePageTitle';
+import { usePrivateSeo } from '@/hooks/useSeo';
 
 // ── Tracking steps in order ──────────────────────────────────────────────────
 const TRACKING_STEPS: { key: string; label: string }[] = [
@@ -98,7 +98,7 @@ function OrderTrackingBar({ status }: { status?: string }) {
 }
 
 export default function OrdersPage() {
-  usePageTitle('طلباتي');
+  usePrivateSeo('طلباتي', '/account/orders');
   const { user } = useAuth();
   const { data: orders = [], isLoading, isError, error } = useCustomerOrders();
 
