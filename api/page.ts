@@ -87,16 +87,31 @@ async function seoFor(kind: string, params: URLSearchParams, origin: string): Pr
   return null;
 }
 
+/**
+ * The app's own HTML (the same file every route falls back to). The visitor's cookies go along so a
+ * protected deployment (a preview behind Vercel login) lets this internal request through too.
+ */
+const appHtml = (request: Request) => {
+  const cookie = request.headers.get('cookie');
+  return fetch(new URL('/index.html', request.url), cookie ? { headers: { cookie } } : undefined);
+};
+
+const plain = (html: string) =>
+  new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, s-maxage=60' } });
+
 export default async function handler(request: Request): Promise<Response> {
   const url = new URL(request.url);
   const origin = siteOrigin(request);
   try {
-    const base = await fetch(new URL('/index.html', url.origin));
+    const base = await appHtml(request);
     if (!base.ok) throw new Error(`index.html ${base.status}`);
     const html = await base.text();
+    // Something other than the app came back (e.g. a login page in front of a protected deployment):
+    // send it on untouched rather than write tags into a page that isn't ours.
+    if (!html.includes('id="root"')) return plain(html);
 
     const found = await seoFor(url.searchParams.get('kind') ?? 'home', url.searchParams, origin);
-    if (!found) return new Response(html, { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, s-maxage=60' } });
+    if (!found) return plain(html);
 
     return new Response(injectSeo(html, found.seo, origin), {
       status: found.status,
@@ -108,6 +123,6 @@ export default async function handler(request: Request): Promise<Response> {
     });
   } catch {
     // Last resort: the app itself.
-    return fetch(new URL('/index.html', url.origin));
+    return appHtml(request);
   }
 }

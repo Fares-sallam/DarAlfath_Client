@@ -283,3 +283,30 @@ test('الصفحة المبنية فيها tags الرئيسية أصلًا: ا�
   expect(jsonLd(html).map((d) => (Array.isArray(d['@type']) ? 'Product' : d['@type']))).toEqual(['Product', 'BreadcrumbList']); // the home page's two are gone
   expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/book/${ID}`);
 });
+
+test('لو اللي رجع مش صفحة الموقع (صفحة دخول قدام نسخة محمية): بيتبعت زي ما هو من غير ما نكتب فيه، والكوكيز بتتمرر', async () => {
+  const world = mockWorld({ products_public_catalog: [BOOK], product_variants_public: [] });
+  const seen: (string | null)[] = [];
+  const inner = globalThis.fetch;
+  const LOGIN = '<!doctype html><html><head><title>Log in to Vercel</title></head><body>login</body></html>';
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
+    if (url.pathname === '/index.html') {
+      const cookie = new Headers(init?.headers).get('cookie');
+      seen.push(cookie);
+      return new Response(cookie === '_vercel_jwt=abc' ? INDEX_HTML : LOGIN);
+    }
+    return inner(input, init);
+  }) as typeof fetch;
+  try {
+    // Without the cookie the protected deployment answers with its login page: passed on as it is.
+    let html = await (await pageHandler(request(`/api/page?kind=book&id=${ID}`))).text();
+    expect(html).toBe(LOGIN);
+    // With it, the app's page comes back and gets the book's tags.
+    html = await (await pageHandler(new Request(`https://dar-alfath-client.vercel.app/api/page?kind=book&id=${ID}`, { headers: { cookie: '_vercel_jwt=abc' } }))).text();
+    expect(html).toContain(`<title>${BOOK.title} — دار الفتح للنشر والتوزيع</title>`);
+    expect(seen).toEqual([null, '_vercel_jwt=abc']);
+  } finally {
+    world.restore();
+  }
+});
