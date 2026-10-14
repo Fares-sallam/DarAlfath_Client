@@ -149,7 +149,9 @@ test('كتاب مش موجود: 404 وnoindex، وid غلط كمان، وقاع�
       const response = await pageHandler(request(`/api/page?kind=book&id=${encodeURIComponent(id)}`));
       expect(response.status, id).toBe(404);
       expect(response.headers.get('x-robots-tag')).toBe('noindex');
-      expect(meta(await response.text(), 'name', 'robots')).toContain('noindex');
+      const body = await response.text();
+      expect(meta(body, 'name', 'robots')).toContain('noindex');
+      expect(body).not.toContain('application/ld+json');
     }
   } finally {
     world.restore();

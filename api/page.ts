@@ -59,14 +59,17 @@ async function loadBook(id: string): Promise<SeoBook | null | undefined> {
   };
 }
 
+/** A book that doesn't exist: titled as such, kept out of search results, no structured data. */
+const notFound = (origin: string): Seo => ({ ...staticSeo('home', origin), title: titleFor('الكتاب غير موجود'), path: '/books', noindex: true, jsonLd: undefined });
+
 async function seoFor(kind: string, params: URLSearchParams, origin: string): Promise<{ seo: Seo; status: number } | null> {
   if (kind === 'book') {
     const id = params.get('id') ?? '';
-    if (!UUID.test(id)) return { seo: { ...staticSeo('home', origin), title: titleFor('الكتاب غير موجود'), path: '/books', noindex: true }, status: 404 };
+    if (!UUID.test(id)) return { seo: notFound(origin), status: 404 };
     const book = await loadBook(id);
     // The database didn't answer: leave the app to show the book as it always did.
     if (book === undefined) return null;
-    if (book === null) return { seo: { ...staticSeo('home', origin), title: titleFor('الكتاب غير موجود'), path: '/books', noindex: true }, status: 404 };
+    if (book === null) return { seo: notFound(origin), status: 404 };
     return { seo: bookSeo(book, origin), status: 200 };
   }
 
