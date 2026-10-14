@@ -26,7 +26,7 @@ function Reveal({ children, className = '' }: { children: React.ReactNode; class
 export default function HomePage() {
   usePageTitle();
   const { data: products = [] } = useProducts();
-  const { data: categorySections = [] } = useHomeCategorySections(4);
+  const { data: categorySections = [] } = useHomeCategorySections();
   const { data: introVideoRows = [] } = useIntroVideos();
 
   const railProducts = products.slice(0, 12);

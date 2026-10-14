@@ -9,6 +9,7 @@ import {
   formatMoney,
   useBundleContents,
   useProductDetails,
+  useProductCategories,
   useProductImageGallery,
   useProductVariants,
   useRelatedProducts,
@@ -79,6 +80,8 @@ export default function BookDetailsPage() {
     product?.category_slug,
     product?.product_id
   );
+  // Every category the book is in (its own plus the extra ones it is also tagged into).
+  const categories = useProductCategories(product);
   const { data: galleryImages = [] } = useProductImageGallery(
     product?.product_id ?? productId
   );
@@ -274,10 +277,14 @@ export default function BookDetailsPage() {
 
           {/* Category + wishlist */}
           <div className="bk3-info__top" style={{ '--i': 2 } as React.CSSProperties}>
-            <Link to={`/books?category=${product.category_slug}`} className="bk3-cat">
-              <Tag size={11} />
-              {categoryLabel}
-            </Link>
+            <div className="bk3-cats" data-testid="book-categories">
+              {(categories.length > 0 ? categories : [{ id: product.category_slug ?? '', name: categoryLabel, slug: product.category_slug ?? '' }]).map((category) => (
+                <Link key={category.id || 'none'} to={`/books?category=${category.slug}`} className="bk3-cat">
+                  <Tag size={11} />
+                  {category.name}
+                </Link>
+              ))}
+            </div>
             <button
               type="button"
               className={`bk3-heart ${wished ? 'bk3-heart--on' : ''}`}
@@ -503,7 +510,10 @@ export default function BookDetailsPage() {
           {activeTab === 'specs' && (
             <dl className="bk3-specs">
               <div className="bk3-specs__r"><dt>المؤلف</dt><dd>{product.author}</dd></div>
-              <div className="bk3-specs__r"><dt>التصنيف</dt><dd>{categoryLabel}</dd></div>
+              <div className="bk3-specs__r">
+                <dt>{categories.length > 1 ? 'التصنيفات' : 'التصنيف'}</dt>
+                <dd>{categories.length > 0 ? categories.map((c) => c.name).join('، ') : categoryLabel}</dd>
+              </div>
               <div className="bk3-specs__r"><dt>نوع المنتج</dt><dd>{isBundle ? 'مجموعة كتب' : product.type || 'كتاب'}</dd></div>
               {isBundle ? (
                 <div className="bk3-specs__r">

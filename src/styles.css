@@ -5500,6 +5500,15 @@ html.dark .auth-input--readonly {
   gap: 10px;
 }
 
+/* A book can be in several categories: one chip each, wrapping onto more lines instead of squeezing. */
+.bk3-cats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+
 .bk3-cat {
   display: inline-flex;
   align-items: center;

@@ -628,13 +628,56 @@ export function useProductVariants(productId?: string) {
   });
 }
 
-export function useHomeCategorySections(limitPerCategory = 4) {
+/**
+ * Every category a book belongs to: its own category first, then the extra ones it is also
+ * tagged into (product_categories), named from the categories table. An extra whose name
+ * isn't known yet is left out rather than shown as a raw slug.
+ */
+export function categoriesOfProduct(
+  product: Pick<ProductItem, 'id' | 'category_slug' | 'category_name' | 'category'>,
+  extraSlugs: Map<string, Set<string>> | undefined,
+  names: Map<string, string> | undefined,
+): CategoryItem[] {
+  const result: CategoryItem[] = [];
+  const seen = new Set<string>();
+  if (product.category_slug) {
+    const slug = product.category_slug;
+    seen.add(slug);
+    result.push(product.category ?? { id: slug, name: product.category_name || names?.get(slug) || slug, slug });
+  }
+  const extras = [...(extraSlugs?.get(product.id) ?? [])]
+    .filter((slug) => !seen.has(slug) && names?.has(slug))
+    .map((slug): CategoryItem => ({ id: slug, name: names!.get(slug)!, slug }))
+    .sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  return [...result, ...extras];
+}
+
+/** The categories of one book, for its page: see categoriesOfProduct. */
+export function useProductCategories(product?: ProductItem | null) {
+  const { data: extraSlugs } = useProductExtraCategorySlugs();
+  const { data: names } = useAllCategoryNames();
+  return useMemo(
+    () => (product ? categoriesOfProduct(product, extraSlugs, names) : []),
+    [product, extraSlugs, names],
+  );
+}
+
+/**
+ * The books of each category, for the home page's rows. A book is in every category it is
+ * tagged into, not just its own, and a row holds all of its category's books (it scrolls
+ * sideways). `limitPerCategory` is only for callers that really want a preview.
+ */
+export function useHomeCategorySections(limitPerCategory = Infinity) {
   const productsQuery = useProducts();
+  const { data: extraSlugs } = useProductExtraCategorySlugs();
+  const { data: names } = useAllCategoryNames();
 
   const sections = useMemo(() => {
     const grouped = new Map<string, { category: CategoryItem; products: ProductItem[] }>();
+    const products = productsQuery.data ?? [];
 
-    for (const product of productsQuery.data ?? []) {
+    // Own categories first, in the order they are first met: the rows keep their usual order.
+    for (const product of products) {
       const id = product.category_slug || 'general';
       const category = product.category || { id, name: product.category_name || 'كتب مختارة', slug: id };
       const current = grouped.get(id) ?? { category, products: [] };
@@ -642,11 +685,23 @@ export function useHomeCategorySections(limitPerCategory = 4) {
       grouped.set(id, current);
     }
 
+    // Then the extra categories: the book also goes into each of those rows (and a category
+    // that is only ever an extra gets a row after the others).
+    for (const product of products) {
+      const own = product.category_slug || 'general';
+      for (const category of categoriesOfProduct(product, extraSlugs, names)) {
+        if (category.id === own) continue;
+        const current = grouped.get(category.id) ?? { category, products: [] };
+        current.products.push(product);
+        grouped.set(category.id, current);
+      }
+    }
+
     return Array.from(grouped.values()).map((entry) => ({
       ...entry,
-      products: entry.products.slice(0, limitPerCategory),
+      products: Number.isFinite(limitPerCategory) ? entry.products.slice(0, limitPerCategory) : entry.products,
     }));
-  }, [productsQuery.data, limitPerCategory]);
+  }, [productsQuery.data, extraSlugs, names, limitPerCategory]);
 
   return { ...productsQuery, data: sections };
 }
