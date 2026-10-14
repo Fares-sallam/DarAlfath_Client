@@ -115,6 +115,8 @@ export interface ProductItem {
   /** A bundle (مجموعة) of other books. Its single variant's price, stock
    *  and weight are all derived from those books by the database. */
   is_bundle?: boolean;
+  /** When the book was added to the catalog (what "وصل حديثًا" and the newest-first sort go by). */
+  created_at?: string | null;
 }
 
 /** One book inside a bundle, as shown on the bundle's page. */

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { useCountry } from '@/contexts/CountryContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { newestFirst } from '@/lib/catalogFilters';
 import type { BundleContentItem, CategoryItem, ProductItem, ProductVariantItem, SeriesItem, StoreSettings } from '@/types/store';
 
 const fallbackSettings: StoreSettings = {
@@ -48,6 +49,7 @@ type PublicCatalogRow = {
   variant_count?: number | string | null;
   images?: string[] | string | null;
   is_bundle?: boolean | null;
+  created_at?: string | null;
 };
 
 type PublicVariantRow = {
@@ -153,6 +155,7 @@ function normalizeProduct(row: PublicCatalogRow, stats?: ReviewStats): ProductIt
     variant_count: Math.max(0, Math.floor(toNumber(row.variant_count))),
     variants: [],
     is_bundle: Boolean(row.is_bundle),
+    created_at: row.created_at ?? null,
   };
 }
 
@@ -706,6 +709,62 @@ export function useHomeCategorySections(limitPerCategory = Infinity) {
   return { ...productsQuery, data: sections };
 }
 
+
+/**
+ * The books that can be bought right now in the selected country (at least one copy in stock, or a
+ * digital copy), for the "available only" filter. Null when it couldn't be read: the filter is then
+ * left out rather than hiding everything.
+ */
+export function useAvailableProductIds() {
+  const { selectedCountry } = useCountry();
+  const countryCode = selectedCountry?.code || undefined;
+
+  return useQuery({
+    queryKey: ['available-product-ids', countryCode ?? 'all'],
+    queryFn: async (): Promise<Set<string> | null> => {
+      if (!isSupabaseConfigured) return null;
+      const available = new Set<string>();
+      const PAGE = 1000; // the API's page size: read in pages so a growing catalog is never cut short
+      for (let page = 0; page < 20; page++) {
+        let query = supabase
+          .from('product_variants_public')
+          .select('product_id, is_available')
+          .order('variant_id')
+          .range(page * PAGE, page * PAGE + PAGE - 1);
+        if (countryCode) query = query.eq('country_code', countryCode);
+        const { data, error } = await query;
+        if (error || !data) return null;
+        for (const row of data as { product_id: string; is_available: boolean | null }[]) if (row.is_available) available.add(row.product_id);
+        if (data.length < PAGE) break;
+      }
+      return available;
+    },
+    staleTime: 60_000,
+  });
+}
+
+/** The newest books, for the home page's "وصل حديثًا" row. */
+export function useNewArrivals(limit = 12) {
+  const productsQuery = useProducts();
+  const data = useMemo(
+    () => newestFirst(productsQuery.data ?? []).slice(0, limit),
+    [productsQuery.data, limit],
+  );
+  return { ...productsQuery, data };
+}
+
+/** The books that are on sale right now (a copy with a lower price than its list price), biggest discount first. */
+export function useDiscountedProducts() {
+  const productsQuery = useProducts();
+  const data = useMemo(
+    () =>
+      (productsQuery.data ?? [])
+        .filter((product) => (product.discount_percent ?? 0) > 0)
+        .sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0) || a.title.localeCompare(b.title, 'ar')),
+    [productsQuery.data],
+  );
+  return { ...productsQuery, data };
+}
 
 export function useRelatedProducts(categorySlug?: string | null, excludedId?: string) {
   const productsQuery = useProducts();

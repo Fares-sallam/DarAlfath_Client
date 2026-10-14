@@ -76,7 +76,7 @@ async function seoFor(kind: string, params: URLSearchParams, origin: string): Pr
   if (kind === 'books') {
     const category = safeFilterValue(params.get('category'));
     const series = safeFilterValue(params.get('series'));
-    const searched = ['q', 'sort', 'type'].some((key) => (params.get(key) ?? '') !== '');
+    const searched = ['q', 'sort', 'type', 'author', 'min', 'max', 'available', 'sale'].some((key) => (params.get(key) ?? '') !== '');
     let categoryName: string | null = null;
     let seriesName: string | null = null;
     if (category) categoryName = (await rest<{ name: string }>(`categories?select=name&slug=eq.${encodeURIComponent(category)}&limit=1`))?.[0]?.name ?? null;

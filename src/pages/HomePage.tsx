@@ -10,15 +10,18 @@ import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
-import { useHomeCategorySections, useIntroVideos, useProducts } from '@/hooks/useStorefront';
+import { useDiscountedProducts, useHomeCategorySections, useIntroVideos, useNewArrivals, useProducts } from '@/hooks/useStorefront';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { staticSeo } from '@/lib/seo';
 
+/** An offers row with one or two books in it looks unfinished: it appears from three on (the "offers only" filter works for any number). */
+const MIN_OFFERS_ROW = 3;
+
 /** Sections fade up as they arrive; the hook no-ops under reduced motion. */
-function Reveal({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+function Reveal({ children, className = '', 'data-testid': testId }: { children: React.ReactNode; className?: string; 'data-testid'?: string }) {
   const ref = useReveal<HTMLElement>();
   return (
-    <section ref={ref} className={`reveal ${className}`.trim()}>
+    <section ref={ref} className={`reveal ${className}`.trim()} data-testid={testId}>
       {children}
     </section>
   );
@@ -28,6 +31,8 @@ export default function HomePage() {
   useSeo(staticSeo('home', siteOrigin()));
   const { data: products = [] } = useProducts();
   const { data: categorySections = [] } = useHomeCategorySections();
+  const { data: newArrivals = [] } = useNewArrivals(12);
+  const { data: discounted = [] } = useDiscountedProducts();
   const { data: introVideoRows = [] } = useIntroVideos();
 
   const railProducts = products.slice(0, 12);
@@ -72,6 +77,35 @@ export default function HomePage() {
           />
           <ScrollRail ariaLabel="إصدارات دار الفتح" className="shelf-rail">
             {railProducts.map((product, i) => (
+              <div className="shelf-rail__item" key={product.product_id}>
+                <ProductCard product={product} index={i} />
+              </div>
+            ))}
+          </ScrollRail>
+        </Reveal>
+      )}
+
+      {/* ── What's new, and what is on offer. Both come from the catalog itself (the date a book was added,
+             and a copy priced below its list price), so they fill and empty as the catalog does; a row with
+             nothing to show is simply not drawn. ── */}
+      {newArrivals.length > 0 && (
+        <Reveal className="shelf-section" data-testid="new-arrivals">
+          <SectionHeader title="وصل حديثًا" subtitle="أحدث إصدارات الدار" href="/books?sort=newest" linkLabel="عرض الكل" />
+          <ScrollRail ariaLabel="وصل حديثًا" className="shelf-rail">
+            {newArrivals.map((product, i) => (
+              <div className="shelf-rail__item" key={product.product_id}>
+                <ProductCard product={product} index={i} />
+              </div>
+            ))}
+          </ScrollRail>
+        </Reveal>
+      )}
+
+      {discounted.length >= MIN_OFFERS_ROW && (
+        <Reveal className="shelf-section" data-testid="offers">
+          <SectionHeader title="عروض وخصومات" subtitle="كتب بسعر أقل من سعرها المعتاد" href="/books?sale=1&sort=discount" linkLabel="عرض الكل" />
+          <ScrollRail ariaLabel="عروض وخصومات" className="shelf-rail">
+            {discounted.map((product, i) => (
               <div className="shelf-rail__item" key={product.product_id}>
                 <ProductCard product={product} index={i} />
               </div>

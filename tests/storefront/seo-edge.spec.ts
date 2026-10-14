@@ -180,6 +180,11 @@ test('تصنيف وسلسلة والبحث: عنوان التصنيف، وراب
     expect(meta(html, 'name', 'robots')).toContain('noindex');
     html = await (await pageHandler(request('/api/page?kind=books&q=%D9%86%D8%AD%D9%88'))).text();
     expect(meta(html, 'name', 'robots')).toContain('noindex');
+    // Any other filter makes it a view that doesn't belong in search results either.
+    for (const filter of ['author=x', 'min=10', 'max=90', 'available=1', 'sale=1']) {
+      html = await (await pageHandler(request(`/api/page?kind=books&${filter}`))).text();
+      expect(meta(html, 'name', 'robots'), filter).toContain('noindex');
+    }
     expect(html).toContain('<title>كل الكتب — دار الفتح للنشر والتوزيع</title>');
 
     // A value that isn't a plain slug never reaches the database query.

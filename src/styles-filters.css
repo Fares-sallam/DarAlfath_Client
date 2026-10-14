@@ -1,0 +1,206 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   CATALOG FILTERS — the books page's search, order and filter panel.
+   Theme variables throughout, so it follows dark mode without a second set of rules.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.catalog-filters {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(177, 146, 101, 0.4);
+  border-radius: 20px;
+  background: linear-gradient(180deg, var(--surface), color-mix(in srgb, var(--gold-soft) 35%, var(--surface)));
+  box-shadow: var(--shadow-sm);
+}
+
+.catalog-filters input:not([type='checkbox']),
+.catalog-filters select {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(177, 146, 101, 0.45);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.catalog-filters input::placeholder { color: var(--muted); opacity: 0.8; }
+.catalog-filters input:not([type='checkbox']):focus,
+.catalog-filters select:focus {
+  border-color: var(--blue-700);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue-700) 18%, transparent);
+}
+html.dark .catalog-filters { border-color: #1e2d6b; background: #0d1847; }
+html.dark .catalog-filters input:not([type='checkbox']),
+html.dark .catalog-filters select { background: #060d2e; border-color: #1e2d6b; }
+html.dark .catalog-filters input:not([type='checkbox']):focus,
+html.dark .catalog-filters select:focus { border-color: #d4a520; box-shadow: 0 0 0 3px rgba(212, 165, 32, 0.15); }
+html.dark .catalog-filters select option { background: #0d1847; color: #f0edff; }
+
+.catalog-filters__label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* ── search, order, the "filters" button ── */
+.catalog-filters__main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 230px) auto;
+  gap: 10px;
+  align-items: end;
+}
+.catalog-filters__search { align-self: end; }
+
+.catalog-filters__toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid rgba(177, 146, 101, 0.45);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.catalog-filters__toggle[aria-expanded='true'] { border-color: var(--blue-700); }
+.catalog-filters__count {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--blue-800);
+  color: #fff;
+  font-size: 12px;
+  line-height: 20px;
+  text-align: center;
+}
+html.dark .catalog-filters__count { background: #d4a520; color: #060d2e; }
+
+/* ── the panel ── */
+.catalog-filters__panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(176px, 1fr));
+  gap: 12px 10px;
+  align-items: end;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(177, 146, 101, 0.45);
+}
+html.dark .catalog-filters__panel { border-top-color: #1e2d6b; }
+
+.catalog-filters__price > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+.catalog-filters__price i { color: var(--muted); font-style: normal; }
+.catalog-filters__price input[type='number'] { padding-inline: 8px; -moz-appearance: textfield; }
+.catalog-filters__price input::-webkit-outer-spin-button,
+.catalog-filters__price input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+
+.catalog-filters__switches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 42px;
+}
+.catalog-filters__switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+.catalog-filters__switch input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  cursor: pointer;
+}
+.catalog-filters__switch span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(177, 146, 101, 0.45);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.catalog-filters__switch input:checked + span {
+  background: var(--blue-800);
+  border-color: var(--blue-800);
+  color: #fff;
+}
+.catalog-filters__switch input:focus-visible + span { box-shadow: 0 0 0 4px color-mix(in srgb, var(--blue-700) 25%, transparent); }
+html.dark .catalog-filters__switch span { background: #060d2e; border-color: #1e2d6b; }
+html.dark .catalog-filters__switch input:checked + span { background: #d4a520; border-color: #d4a520; color: #060d2e; }
+
+/* ── what is on ── */
+.catalog-filters__active {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.catalog-filters__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid color-mix(in srgb, var(--blue-700) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--blue-700) 9%, transparent);
+  color: var(--blue-800);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.catalog-filters__chip:hover { background: color-mix(in srgb, var(--blue-700) 18%, transparent); }
+html.dark .catalog-filters__chip { color: #f0c842; border-color: rgba(212, 165, 32, 0.4); background: rgba(212, 165, 32, 0.1); }
+html.dark .catalog-filters__chip:hover { background: rgba(212, 165, 32, 0.2); }
+.catalog-filters__clear {
+  border: none;
+  background: none;
+  padding: 6px 4px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.catalog-filters__clear:hover { color: var(--text); }
+
+/* ── a phone: the panel opens from the button ── */
+@media (max-width: 900px) {
+  .catalog-filters__main { grid-template-columns: minmax(0, 1fr) auto; }
+  .catalog-filters__search { grid-column: 1 / -1; }
+  .catalog-filters__toggle { display: inline-flex; }
+  .catalog-filters__panel[data-open='false'] { display: none; }
+  .catalog-filters__panel { grid-template-columns: 1fr 1fr; }
+  .catalog-filters__price,
+  .catalog-filters__switches { grid-column: 1 / -1; }
+}
+@media (max-width: 420px) {
+  .catalog-filters__panel { grid-template-columns: 1fr; }
+}

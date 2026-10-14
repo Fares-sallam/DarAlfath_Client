@@ -1,12 +1,23 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import BooksFilterBar from '@/components/BooksFilterBar';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
 import { OrnamentDivider } from '@/components/Ornament';
-import { matchesSearch } from '@/lib/search';
-import { useCategories, useProducts, useProductExtraCategorySlugs, useSeries, useSeriesProductIds } from '@/hooks/useStorefront';
+import { applyFilters, authorOptions, parseFilters, priceBounds } from '@/lib/catalogFilters';
+import {
+  useAvailableProductIds,
+  useCategories,
+  useProducts,
+  useProductExtraCategorySlugs,
+  useSeries,
+  useSeriesProductIds,
+} from '@/hooks/useStorefront';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { booksListSeo } from '@/lib/seo';
+
+/** The filters that go in the address, besides the search words and the order. */
+const FILTER_KEYS = ['category', 'series', 'author', 'type', 'min', 'max', 'available', 'sale'];
 
 export default function BooksPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -15,38 +26,39 @@ export default function BooksPage() {
   const { data: categories = [] } = useCategories();
   const { data: allSeries = [] } = useSeries();
   const { data: extraCategorySlugs } = useProductExtraCategorySlugs();
+  const { data: availableIds } = useAvailableProductIds();
 
-  const q = searchParams.get('q') ?? '';
-  const category = searchParams.get('category') ?? '';
-  const type = searchParams.get('type') ?? '';
-  const sort = searchParams.get('sort') ?? 'title';
-  const seriesId = searchParams.get('series') ?? '';
+  const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
 
   const selectedCategory = useMemo(
-    () => categories.find((item) => item.id === category) ?? null,
-    [categories, category]
+    () => categories.find((item) => item.id === filters.category) ?? null,
+    [categories, filters.category]
   );
 
   const selectedSeries = useMemo(
-    () => allSeries.find((item) => item.id === seriesId) ?? null,
-    [allSeries, seriesId]
+    () => allSeries.find((item) => item.id === filters.series) ?? null,
+    [allSeries, filters.series]
   );
 
-  // Title, description and preview for this view of the catalog (a category and a series have their own).
+  // Title, description and preview for this view of the catalog (a category and a series have their own);
+  // a search, an order or any other filter makes it one that doesn't belong in search results.
   useSeo(
     booksListSeo(siteOrigin(), {
-      categorySlug: category || null,
+      categorySlug: filters.category || null,
       categoryName: selectedCategory?.name ?? null,
       seriesName: selectedSeries?.name ?? null,
-      seriesId: seriesId || null,
-      searched: Boolean(q.trim() || type || searchParams.get('sort')),
+      seriesId: filters.series || null,
+      searched: Boolean(
+        filters.q.trim() || filters.type || filters.author || searchParams.get('sort') ||
+          filters.min != null || filters.max != null || filters.availableOnly || filters.saleOnly,
+      ),
     }),
   );
 
   // The public catalog rows products come from don't carry series info
   // themselves (see useSeries in useStorefront.ts) — a separate lookup of
   // just this series' product ids, used to filter below.
-  const { data: seriesProductIds, isLoading: loadingSeriesIds } = useSeriesProductIds(seriesId || null);
+  const { data: seriesProductIds, isLoading: loadingSeriesIds } = useSeriesProductIds(filters.series || null);
 
   const productTypes = useMemo(() => {
     const values = new Set<string>();
@@ -56,58 +68,46 @@ export default function BooksPage() {
     return Array.from(values).sort((a, b) => a.localeCompare(b, 'ar'));
   }, [products]);
 
-  const setParam = (key: string, value: string) => {
+  const options = useMemo(
+    () => ({
+      categories: categories.map((item) => ({ value: item.id, label: item.name })),
+      series: allSeries.map((item) => ({ value: item.id, label: item.name })),
+      authors: authorOptions(products),
+      types: productTypes,
+      bounds: priceBounds(products),
+      currencySymbol: products[0]?.currency_symbol ?? 'ج.م',
+      canFilterAvailability: availableIds != null,
+    }),
+    [categories, allSeries, products, productTypes, availableIds],
+  );
+
+  /** `replace`: a field being typed in shouldn't leave a history entry for every keystroke. */
+  const setParams = (changes: Record<string, string>, replace = false) => {
     const next = new URLSearchParams(searchParams);
-    if (value.trim()) next.set(key, value);
-    else next.delete(key);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value.trim()) next.set(key, value);
+      else next.delete(key);
+    }
+    setSearchParams(next, { replace });
+  };
+
+  const clearFilters = () => {
+    const next = new URLSearchParams(searchParams);
+    FILTER_KEYS.forEach((key) => next.delete(key));
     setSearchParams(next);
   };
 
-  const filtered = useMemo(() => {
-    let rows = [...products];
+  const filtered = useMemo(
+    () =>
+      applyFilters(products, filters, {
+        extraCategorySlugs,
+        seriesProductIds: filters.series && seriesProductIds ? new Set(seriesProductIds) : null,
+        availableIds,
+      }),
+    [products, filters, extraCategorySlugs, seriesProductIds, availableIds],
+  );
 
-    if (q.trim()) {
-      // Same matching as the header's live search: spelling variants and word order don't matter.
-      rows = rows.filter((item) => matchesSearch(item, q));
-    }
-
-    if (category) {
-      rows = rows.filter(
-        (item) =>
-          item.category_slug === category ||
-          extraCategorySlugs?.get(item.product_id)?.has(category)
-      );
-    }
-
-    if (seriesId) {
-      const idSet = new Set(seriesProductIds ?? []);
-      rows = rows.filter((item) => idSet.has(item.product_id));
-    }
-
-    if (type) {
-      rows = rows.filter((item) => item.type === type);
-    }
-
-    switch (sort) {
-      case 'price-asc':
-        rows.sort((a, b) => a.starting_price - b.starting_price);
-        break;
-      case 'price-desc':
-        rows.sort((a, b) => b.starting_price - a.starting_price);
-        break;
-      case 'rating':
-        // Unrated books (rating === null) sort last, not first — treating
-        // "no reviews yet" as equivalent to a 0 rating would push them
-        // above genuinely low-rated books.
-        rows.sort((a, b) => (b.rating ?? -1) - (a.rating ?? -1));
-        break;
-      default:
-        rows.sort((a, b) => a.title.localeCompare(b.title, 'ar'));
-        break;
-    }
-
-    return rows;
-  }, [products, q, category, extraCategorySlugs, seriesId, seriesProductIds, type, sort]);
+  const filtersOn = FILTER_KEYS.some((key) => searchParams.get(key));
 
   return (
     <div className="page-sections">
@@ -116,54 +116,20 @@ export default function BooksPage() {
           <span className="page-kicker">الكتالوج العام</span>
           <h1>كل كتب دار الفتح في مكان واحد</h1>
           <p>
-            هذه صفحة الكتب فقط: ابحث، صفِّ النتائج، وافتح صفحة أي كتاب لاختيار
+            هذه صفحة الكتب فقط: ابحث، صفِّ النتائج، وافتح صفحة أي كتاب لاختيار
             النسخة المناسبة قبل الإضافة إلى السلة.
           </p>
           <OrnamentDivider />
         </div>
       </section>
 
-      <section className="filters-bar">
-        <input
-          value={q}
-          onChange={(e) => setParam('q', e.target.value)}
-          placeholder="ابحث عن كتاب، مؤلف، أو تصنيف..."
-        />
+      <BooksFilterBar filters={filters} options={options} setParams={setParams} clearFilters={clearFilters} />
 
-        <select
-          value={category}
-          onChange={(e) => setParam('category', e.target.value)}
-        >
-          <option value="">كل التصنيفات</option>
-          {categories.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-
-        <select value={type} onChange={(e) => setParam('type', e.target.value)}>
-          <option value="">كل الأنواع</option>
-          {productTypes.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-
-        <select value={sort} onChange={(e) => setParam('sort', e.target.value)}>
-          <option value="title">ترتيب أبجدي</option>
-          <option value="price-asc">السعر من الأقل</option>
-          <option value="price-desc">السعر من الأعلى</option>
-          <option value="rating">الأعلى تقييمًا</option>
-        </select>
-      </section>
-
-      {isLoading || (seriesId && loadingSeriesIds) ? (
+      {isLoading || (filters.series && loadingSeriesIds) ? (
         <section className="page-card page-card--loading" />
       ) : null}
 
-      {!isLoading && !(seriesId && loadingSeriesIds) ? (
+      {!isLoading && !(filters.series && loadingSeriesIds) ? (
         <section>
           <SectionHeader
             title={selectedSeries?.name || selectedCategory?.name || 'كل الكتب'}
@@ -178,11 +144,16 @@ export default function BooksPage() {
         </section>
       ) : null}
 
-      {!isLoading && !(seriesId && loadingSeriesIds) && filtered.length === 0 ? (
+      {!isLoading && !(filters.series && loadingSeriesIds) && filtered.length === 0 ? (
         <section className="page-card">
           <div className="empty-state">
             <h3>لا توجد نتائج</h3>
-            <p>غيّر التصنيف أو جرّب كلمة بحث أخرى.</p>
+            <p>{filtersOn ? 'خفّف الفلاتر أو جرّب كلمة بحث أخرى.' : 'جرّب كلمة بحث أخرى.'}</p>
+            {filtersOn && (
+              <button type="button" className="ghost-button" onClick={clearFilters}>
+                مسح الفلاتر
+              </button>
+            )}
           </div>
         </section>
       ) : null}
