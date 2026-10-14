@@ -12,6 +12,7 @@ import './styles.css';
 import './styles-enhancements.css'; // ✦ Dark mode rules — scoped under html.dark
 import './styles-craft.css';        // ✦ Craft layer — covers, motion, typography polish
 import './styles-home.css';         // ✦ Home layer — frontispiece, shelf rails, ornaments
+import './styles-search.css';       // ✦ Live search — the results list under the header box
 
 const queryClient = new QueryClient({
   defaultOptions: {

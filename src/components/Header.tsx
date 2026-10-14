@@ -1,7 +1,9 @@
-import { FormEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, Globe2, Heart, Menu, Moon, Search, ShoppingBag, Sun, UserRound, X } from 'lucide-react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronLeft, Globe2, Heart, Menu, Moon, ShoppingBag, Sun, UserRound, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import Logo from '@/components/Logo';
+import LiveSearch from '@/components/LiveSearch';
 import { useCountry } from '@/contexts/CountryContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
@@ -19,7 +21,6 @@ const navItems = [
 ];
 
 export default function Header({ settings }: { settings: StoreSettings }) {
-  const navigate = useNavigate();
   const location = useLocation();
   const { countries, selectedCountry, setSelectedCountryById } = useCountry();
   const { count: wishlistCount } = useWishlist();
@@ -122,23 +123,12 @@ export default function Header({ settings }: { settings: StoreSettings }) {
     return () => window.removeEventListener('resize', measure);
   }, [seriesMenu]);
 
-  const onSearch = (event: FormEvent) => {
-    event.preventDefault();
-    const params = new URLSearchParams();
-    if (query.trim()) params.set('q', query.trim());
-    navigate(`/books?${params.toString()}`);
-    setMobileOpen(false);
-  };
-
   return (
     <header className="site-header">
       <div className="container site-header__main">
         <Logo disableLink={false} />
 
-        <form className="site-search" onSubmit={onSearch}>
-          <button type="submit" className="site-search__icon"><Search size={20} /></button>
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ابحث عن كتاب، مؤلف، أو تصنيف..." />
-        </form>
+        <LiveSearch value={query} onChange={setQuery} placeholder="ابحث عن كتاب، مؤلف، أو تصنيف..." />
 
         <div className="site-header__actions">
           <div className="country-switcher desktop-only">
@@ -244,7 +234,11 @@ export default function Header({ settings }: { settings: StoreSettings }) {
         <NavLink to="/contact">تواصل معنا</NavLink>
       </div>
 
-      {/* ── Mobile drawer overlay ── */}
+      {/* ── Mobile drawer overlay ──
+          Rendered on <body>: the header has a backdrop-filter, which makes it the containing block of
+          anything `position: fixed` inside it, so the overlay used to be cut to the header's own 62px
+          and only the top strip of the menu showed. */}
+      {createPortal(
       <div
         className={`mobile-nav-overlay${mobileOpen ? ' mobile-nav-overlay--open' : ''}`}
         onClick={() => setMobileOpen(false)}
@@ -275,14 +269,13 @@ export default function Header({ settings }: { settings: StoreSettings }) {
           </div>
 
           {/* Search */}
-          <form className="mobile-nav-drawer__search" onSubmit={onSearch}>
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="ابحث عن كتاب أو مؤلف..."
-            />
-            <button type="submit"><Search size={17} /></button>
-          </form>
+          <LiveSearch
+            variant="drawer"
+            value={query}
+            onChange={setQuery}
+            placeholder="ابحث عن كتاب أو مؤلف..."
+            onNavigate={() => setMobileOpen(false)}
+          />
 
           {/* Country switcher */}
           <div className="mobile-nav-drawer__country">
@@ -328,7 +321,9 @@ export default function Header({ settings }: { settings: StoreSettings }) {
             </Link>
           </div>
         </nav>
-      </div>
+      </div>,
+      document.body,
+      )}
     </header>
   );
 }

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
 import { OrnamentDivider } from '@/components/Ornament';
+import { matchesSearch } from '@/lib/search';
 import { useCategories, useProducts, useProductExtraCategorySlugs, useSeries, useSeriesProductIds } from '@/hooks/useStorefront';
 import { usePageTitle } from '@/hooks/usePageTitle';
 
@@ -55,18 +56,8 @@ export default function BooksPage() {
     let rows = [...products];
 
     if (q.trim()) {
-      const needle = q.toLowerCase();
-      rows = rows.filter((item) =>
-        [
-          item.title,
-          item.author,
-          item.description,
-          item.category_name,
-          item.type,
-        ]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(needle))
-      );
+      // Same matching as the header's live search: spelling variants and word order don't matter.
+      rows = rows.filter((item) => matchesSearch(item, q));
     }
 
     if (category) {

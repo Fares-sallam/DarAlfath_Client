@@ -1,0 +1,164 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   LIVE SEARCH — the results list under the header search box (and inline in the
+   mobile menu). Colours come from the theme variables, so it follows dark mode.
+   ────────────────────────────────────────────────────────────────────────── */
+
+.live-search__clear {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--muted) 16%, transparent);
+  color: var(--muted);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.live-search__clear:hover {
+  background: color-mix(in srgb, var(--muted) 28%, transparent);
+  color: var(--text);
+}
+
+.live-search__panel {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+/* Floating under the header box (placed by the component; it is rendered on <body>). */
+.live-search__panel--header {
+  position: fixed;
+  z-index: 60;
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  animation: live-search-in 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Inline in the mobile menu (a column that scrolls: the list keeps its height instead of being squeezed). */
+.live-search__panel--drawer {
+  flex-shrink: 0;
+  margin: 8px 16px 0;
+  max-height: 46vh;
+  overflow-y: auto;
+  box-shadow: none;
+}
+
+@keyframes live-search-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-search__panel--header { animation: none; }
+}
+
+.live-search__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.live-search__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  display: grid;
+  gap: 2px;
+}
+
+.live-search__item {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  color: inherit;
+  text-decoration: none;
+}
+.live-search__item.is-active,
+.live-search__all.is-active {
+  background: color-mix(in srgb, var(--gold) 16%, transparent);
+}
+
+.live-search__thumb {
+  width: 44px;
+  height: 60px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+}
+.live-search__thumb .book-cover__img { object-fit: cover; }
+
+.live-search__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.live-search__title {
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.live-search__meta {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.live-search__price {
+  font-size: 12.5px;
+  font-weight: 800;
+  color: var(--blue-800);
+  white-space: nowrap;
+}
+html.dark .live-search__price { color: var(--gold-light, #f0c842); }
+
+.live-search__all {
+  display: block;
+  margin-top: 4px;
+  padding: 11px 12px;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 10px 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--blue-800);
+  text-decoration: none;
+}
+html.dark .live-search__all { color: var(--gold-light, #f0c842); }
+
+.live-search__empty {
+  margin: 0;
+  padding: 18px 16px;
+  text-align: center;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.live-search__empty a { color: var(--blue-800); font-weight: 800; }
+html.dark .live-search__empty a { color: var(--gold-light, #f0c842); }
+
+@media (max-width: 560px) {
+  .live-search__item { grid-template-columns: 38px minmax(0, 1fr); gap: 10px; }
+  .live-search__thumb { width: 38px; height: 52px; }
+  /* The price drops under the author on a narrow screen. */
+  .live-search__price { grid-column: 2; font-size: 12px; }
+}
