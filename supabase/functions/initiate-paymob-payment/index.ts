@@ -378,12 +378,13 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Native-store policy: mobile-app digital content must use Apple/Google
-    // billing. This endpoint is shared with the website, where Paymob remains
-    // a valid digital-payment route, so scope the rejection to app callers.
+    // A guest can't buy a digital book: it is downloaded from the account.
     if (!userId && normalizedItems.some((i) => i.is_digital)) {
       return jsonError('الكتب الرقمية تحتاج تسجيل الدخول: تُحمَّل من حسابك بعد الشراء.', 401);
     }
+    // Native-store policy: mobile-app digital content must use Apple/Google
+    // billing. This endpoint is shared with the website, where Paymob remains
+    // a valid digital-payment route, so scope the rejection to app callers.
     if (isTrustedApp && normalizedItems.some((i) => i.is_digital)) {
       return jsonError(
         'الكتب الرقمية داخل التطبيق يجب شراؤها عبر App Store أو Google Play.',
