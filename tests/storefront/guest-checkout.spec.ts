@@ -42,6 +42,12 @@ async function fakeOrderFunctions(page: Page, answers: { order?: (route: Route) 
   return sent;
 }
 
+/** Where the store asks Cloudflare's "are you a person" check (the deployed site), a script can't send the order. */
+async function skipBehindTurnstile(page: Page) {
+  await page.waitForLoadState('networkidle');
+  test.skip((await page.locator('.turnstile-box').count()) > 0, 'التحقق الأمني شغال هنا: الإرسال بيتجرب على نسخة التطوير');
+}
+
 test('زائر: الدفع عنده 3 خطوات من غير تسجيل دخول، وكل خطوة بتتأكد من بياناتها قبل اللي بعدها', async ({ page }) => {
   await fakeOrderFunctions(page);
   await addPaperBookAndCheckout(page);
@@ -93,6 +99,7 @@ test('زائر يطلب دفع عند الاستلام: الطلب بيتبعت 
   const sent = await fakeOrderFunctions(page);
   await addPaperBookAndCheckout(page);
   await fillCheckoutSteps(page, { name: 'سارة محمود حسن', phone: '+20 101 234 5678' });
+  await skipBehindTurnstile(page);
 
   const step3 = page.getByTestId('checkout-step-3');
   await expect(step3.locator('.checkout-recap')).toContainText('سارة محمود حسن');
@@ -119,6 +126,7 @@ test('زائر يدفع أونلاين (Paymob): بعد تأكيد الدفع ب
   const sent = await fakeOrderFunctions(page);
   await addPaperBookAndCheckout(page);
   await fillCheckoutSteps(page, { email: 'guest@example.com' });
+  await skipBehindTurnstile(page);
   await page.getByTestId('checkout-step-3').getByRole('radio', { name: /محفظة إلكترونية|بطاقة ائتمان/ }).first().click();
   await page.getByRole('button', { name: 'الدفع عبر Paymob' }).click();
 
@@ -136,6 +144,7 @@ test('رفض السيرفر (طلبات كتير على نفس الرقم) بي�
   });
   await addPaperBookAndCheckout(page);
   await fillCheckoutSteps(page);
+  await skipBehindTurnstile(page);
   await page.getByTestId('checkout-step-3').getByRole('radio', { name: /الدفع عند الاستلام/ }).click();
   await page.getByRole('button', { name: 'تأكيد الطلب' }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'يوجد عدد كبير من الطلبات المفتوحة' })).toBeVisible();
@@ -170,6 +179,7 @@ test('عميل مسجّل: الإيميل من حسابه، وبعد الطلب 
   await expect(step1.getByLabel(/^البريد الإلكتروني/)).not.toHaveValue('');
   await expect(page.getByRole('link', { name: 'سجّل الدخول' })).toHaveCount(0);
   await fillCheckoutSteps(page);
+  await skipBehindTurnstile(page);
   await page.getByTestId('checkout-step-3').getByRole('radio', { name: /الدفع عند الاستلام/ }).click();
   await page.getByRole('button', { name: 'تأكيد الطلب' }).click();
   await expect(page.getByTestId('order-confirmed').getByRole('link', { name: 'عرض طلباتي' })).toBeVisible();
