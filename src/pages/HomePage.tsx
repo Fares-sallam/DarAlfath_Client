@@ -1,4 +1,3 @@
-import { Link } from 'react-router-dom';
 import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
@@ -145,24 +144,6 @@ export default function HomePage() {
           </ScrollRail>
         </Reveal>
       ))}
-
-      {/* ── Who we are: this store hasn't launched, so a first visitor needs
-             to know whose books these are before being asked to buy. ── */}
-      <Reveal className="house-note">
-        <div className="house-note__body">
-          <p className="house-note__kicker">عن الدار</p>
-          <h2>نَنشُر ما يستحق أن يُقرأ مرّتين</h2>
-          <p>
-            دار الفتح للنشر والتوزيع تختار إصداراتها بعناية، وتعرضها هنا كما هي: نسخة ورقية أو
-            رقمية، سعر واضح، ومخزون معلوم قبل الطلب.
-          </p>
-          <Link to="/about" className="ghost-button">
-            اقرأ المزيد
-          </Link>
-        </div>
-      </Reveal>
-
-      <OrnamentDivider />
 
       {introVideos.length > 0 && (
         <Reveal>

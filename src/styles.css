@@ -1915,15 +1915,20 @@ button {
 
 .site-footer__grid {
   display: grid;
-  grid-template-columns: 1.45fr 1fr 1fr 1.05fr;
+  grid-template-columns: 2.2fr 1fr 1fr 1.05fr;
   gap: 22px;
   padding-bottom: 24px;
 }
 
+/* The paragraph under the logo can run to a few sentences: it keeps the lines the dashboard's
+   field was written with, and a long unbroken string can't push the footer wider than the page. */
 .site-footer__brand p {
   color: rgba(255, 255, 255, 0.78);
   line-height: 1.95;
   margin: 16px 0 0;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
 }
 
 .site-footer h3 {

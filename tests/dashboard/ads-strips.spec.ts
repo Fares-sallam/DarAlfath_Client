@@ -196,4 +196,9 @@ test('الإعدادات: خانة «نص الفوتر» في إعدادات ا�
   const field = page.getByLabel('نص الفوتر');
   await expect(field).toBeVisible({ timeout: 15_000 });
   await expect(field).toHaveAttribute('placeholder', /ننشر المعرفة الهادفة/);
+  // Room for a few sentences: 600 characters, a tall field, and a counter that follows what is typed.
+  await expect(field).toHaveAttribute('maxlength', '600');
+  expect(await field.evaluate((el) => (el as HTMLTextAreaElement).rows)).toBeGreaterThanOrEqual(5);
+  await field.fill('ا'.repeat(450));
+  await expect(page.getByTestId('footer-tagline-count')).toHaveText('450 / 600');
 });

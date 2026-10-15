@@ -209,3 +209,21 @@ test('نص الفوتر وعنوان الفيديوهات من لوحة التح
   await expect(page.locator('.site-footer__brand p')).toHaveText(/^ننشر المعرفة الهادفة/, { timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'فيديوهات تعريفية' })).toBeVisible();
 });
+
+test('نص الفوتر الطويل: بيظهر كله بسطوره، وعموده أعرض من الباقي، ومن غير ما يوسّع الصفحة', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const longText = 'شركتنا دار الفتح للنشر والتوزيع رائدة في مجال النشر التعليمي والتربوي للأطفال. نسعى بفضل الله أن نصنع من الأطفال جيلًا قادرًا على التمييز والتقدم من خلال نشر الكتب القيمة والهادفة في مختلف المجالات، (الدينية والتعليمية والتربوية).';
+  await withContent(page, { footer: `${longText}\nسطر ثانٍ كتبه المدير` });
+  await page.goto('/');
+  const paragraph = page.locator('.site-footer__brand p');
+  await expect(paragraph).toContainText('نسعى بفضل الله', { timeout: 20_000 });
+  await expect(paragraph).toContainText('سطر ثانٍ كتبه المدير');
+  // Nothing cut off, and the line break the manager typed is kept.
+  expect(await paragraph.evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
+  expect(await paragraph.evaluate((el) => getComputedStyle(el).whiteSpace)).toBe('pre-line');
+  // Room for it: the first column is clearly wider than the link columns.
+  const widths = await page.locator('.site-footer__grid > *').evaluateAll((els) => els.map((el) => el.getBoundingClientRect().width));
+  expect(widths[0]).toBeGreaterThan(widths[1] * 1.5);
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+});

@@ -11,6 +11,14 @@ test.describe('الصفحة الرئيسية', () => {
     await expect(firstBook).toBeVisible({ timeout: 15_000 });
   });
 
+  test('قسم «عن الدار» اتحذف من الصفحة الرئيسية', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'أقسام المتجر' })).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('.house-note')).toHaveCount(0);
+    await expect(page.getByText('عن الدار', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('نَنشُر ما يستحق أن يُقرأ مرّتين')).toHaveCount(0);
+  });
+
   test('لا يوجد سكرول أفقي على سطح المكتب (اختبار ارتداد)', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto('/');
