@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePrivateSeo } from '@/hooks/useSeo';
 import { supabase } from '@/lib/supabase';
 import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 /**
  * After a Paymob redirect, the URL contains success/status params + HMAC.
@@ -16,6 +17,8 @@ import { useCart } from '@/contexts/CartContext';
  * The browser params are only used to find which order to check.
  */
 export default function PaymentResultPage() {
+  // A guest has no orders page to go to: the links to it show for a signed-in customer only.
+  const { user } = useAuth();
   usePrivateSeo('نتيجة الدفع', '/payment/result');
   const [params] = useSearchParams();
   const queryClient = useQueryClient();
@@ -174,10 +177,12 @@ export default function PaymentResultPage() {
               حدّث الصفحة بعد قليل للتأكد، أو تواصل معنا برقم العملية لو استمرت المشكلة.
             </p>
             <div className="empty-state__actions">
-              <Link to="/account/orders" className="primary-button">
-                <PackageCheck size={16} />
-                عرض طلباتي
-              </Link>
+              {user && (
+                <Link to="/account/orders" className="primary-button">
+                  <PackageCheck size={16} />
+                  عرض طلباتي
+                </Link>
+              )}
               <Link to="/contact" className="ghost-button">
                 تواصل معنا
               </Link>
@@ -202,10 +207,12 @@ export default function PaymentResultPage() {
               </p>
             )}
             <div className="empty-state__actions">
-              <Link to="/account/orders" className="primary-button">
-                <PackageCheck size={16} />
-                عرض طلباتي
-              </Link>
+              {user && (
+                <Link to="/account/orders" className="primary-button">
+                  <PackageCheck size={16} />
+                  عرض طلباتي
+                </Link>
+              )}
               <Link to="/" className="ghost-button">
                 العودة للرئيسية
               </Link>

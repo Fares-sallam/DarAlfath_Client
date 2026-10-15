@@ -1,14 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CheckCircle2, CreditCard, ExternalLink, LogIn, Loader2, PackageCheck, Tag, Truck, X } from 'lucide-react';
+import { Check, CheckCircle2, CreditCard, ExternalLink, Loader2, LogIn, PackageCheck, Phone, Tag, Truck, UserRound, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OrnamentDivider } from '@/components/Ornament';
+import TurnstileWidget, { TURNSTILE_SITE_KEY, type TurnstileHandle } from '@/components/TurnstileWidget';
 import { usePrivateSeo } from '@/hooks/useSeo';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCountry } from '@/contexts/CountryContext';
 import { formatMoney, usePaymentMethods, useStoreSettings, useShippingRate } from '@/hooks/useStorefront';
 import { supabase } from '@/lib/supabase';
+import {
+  EMPTY_CHECKOUT,
+  firstIncompleteStep,
+  normalizePhone,
+  stepErrors,
+  type CheckoutForm,
+  type CheckoutStep,
+} from '@/lib/checkout';
 import {
   createStorefrontOrder,
   formatStorefrontOrderDate,
@@ -17,21 +26,6 @@ import {
 
 declare global {
   interface Window {
-    turnstile?: {
-      render: (
-        container: HTMLElement,
-        options: {
-          sitekey: string;
-          callback: (token: string) => void;
-          'expired-callback'?: () => void;
-          'error-callback'?: () => void;
-          language?: string;
-          theme?: 'light' | 'dark' | 'auto';
-        }
-      ) => string;
-      reset: (widgetId?: string) => void;
-      remove?: (widgetId: string) => void;
-    };
     // Only ever defined by Safari on an Apple device — used purely as a
     // presence/capability check, never actually invoked (Paymob's own hosted
     // checkout page drives the real Apple Pay sheet).
@@ -88,21 +82,25 @@ const EGYPT_REGIONS: Record<string, string[]> = {
 
 const GOVERNORATES = Object.keys(EGYPT_REGIONS);
 
-// التحقق من الاسم الثلاثي
-function isTripleName(name: string) {
-  return name.trim().split(/\s+/).filter(Boolean).length >= 3;
+const STEPS: { step: CheckoutStep; label: string }[] = [
+  { step: 1, label: 'بياناتك' },
+  { step: 2, label: 'الشحن والعنوان' },
+  { step: 3, label: 'الدفع' },
+];
+
+/** A field's error under it, tied to the field for screen readers. */
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return <small id={id} className="checkout-field__error">{message}</small>;
 }
 
-type CheckoutForm = {
-  fullName: string;
-  email: string;
-  phone: string;
-  governorate: string;
-  city: string;
-  address: string;
-  notes: string;
-};
-
+/**
+ * Checkout in three steps, with or without an account: 1) name, mobile and (if wanted) email; 2) the
+ * shipping address; 3) payment. Each step is checked before the next, and going back keeps what was typed.
+ * The order summary stays beside them throughout. A signed-in customer's name and number are filled in
+ * from the account. Digital books need an account (they're downloaded from it), so a cart with one asks
+ * to sign in first.
+ */
 export default function CheckoutPage() {
   usePrivateSeo('إتمام الطلب', '/checkout');
   const queryClient = useQueryClient();
@@ -115,24 +113,39 @@ export default function CheckoutPage() {
   const { data: paymentMethods = [] } = usePaymentMethods();
   const { data: storeSettings } = useStoreSettings();
 
-  const [form, setForm] = useState<CheckoutForm>({
-    fullName: '',
-    email: user?.email ?? '',
-    phone: '',
-    governorate: '',
-    city: '',
-    address: '',
-    notes: '',
-  });
+  const [form, setForm] = useState<CheckoutForm>({ ...EMPTY_CHECKOUT, email: user?.email ?? '' });
+  const [step, setStep] = useState<CheckoutStep>(1);
+  const [showErrors, setShowErrors] = useState(false);
+  const stepHeading = useRef<HTMLHeadingElement | null>(null);
+
+  // A signed-in customer: the account's email, name and number, unless already typed.
+  useEffect(() => {
+    if (!user) return;
+    setForm((prev) => ({ ...prev, email: prev.email || user.email || '' }));
+    let cancelled = false;
+    void supabase
+      .from('profiles')
+      .select('full_name, phone')
+      .eq('id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled || !data) return;
+        setForm((prev) => ({
+          ...prev,
+          fullName: prev.fullName || (data.full_name as string | null) || '',
+          phone: prev.phone || (data.phone as string | null) || '',
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   // The real governorate+weight shipping quote — same lookup the server
   // runs right before actually charging (see useShippingRate). flatShipping
   // above is only ever an estimate shown before a governorate is picked, or
   // the safety-net fallback the server itself uses when no rate row covers
-  // this exact (company, governorate, weight) combination. shipping/total
-  // below are what the rest of this page (and the order it submits) uses —
-  // everything reads the real number the moment it's known, never the flat
-  // estimate silently left on screen through to payment.
+  // this exact (company, governorate, weight) combination.
   const { data: realShippingRate } = useShippingRate(
     storeSettings?.default_shipping_company_id,
     form.governorate,
@@ -153,9 +166,6 @@ export default function CheckoutPage() {
     let list = hasDigitalItem
       ? paymentMethods.filter((m) => m.provider.toLowerCase().startsWith('paymob'))
       : paymentMethods;
-    // Apple Pay only ever works in a Safari session on an Apple device — hide
-    // it everywhere else so a customer never lands on a button that can't
-    // possibly complete.
     if (!applePaySupported) {
       list = list.filter((m) => m.provider.toLowerCase().trim() !== 'paymob_apple_pay');
     }
@@ -163,8 +173,7 @@ export default function CheckoutPage() {
   }, [paymentMethods, hasDigitalItem, applePaySupported]);
 
   useEffect(() => {
-    // أعد الاختيار لو مفيش طريقة مختارة، أو لو المختارة لم تعد متاحة (مثلاً كانت
-    // COD وتغيّرت السلة لتضم كتابًا رقميًا).
+    // أعد الاختيار لو مفيش طريقة مختارة، أو لو المختارة لم تعد متاحة.
     const stillValid = availablePaymentMethods.some((m) => m.id === selectedPaymentId);
     if (availablePaymentMethods.length > 0 && (!selectedPaymentId || !stillValid)) {
       setSelectedPaymentId(availablePaymentMethods[0].id);
@@ -180,6 +189,8 @@ export default function CheckoutPage() {
 
   const [submitted, setSubmitted] = useState(false);
   const [submittedOrder, setSubmittedOrder] = useState<StorefrontOrder | null>(null);
+  const [submittedAsGuest, setSubmittedAsGuest] = useState(false);
+  const [submittedPhone, setSubmittedPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
 
@@ -191,10 +202,8 @@ export default function CheckoutPage() {
   const pollAbortRef = useRef<{ cancelled: boolean }>({ cancelled: false });
   const paymobClientSecretRef = useRef<string>('');
 
-  const turnstileSiteKey = (import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined)?.trim();
-  const captchaEnabled = Boolean(turnstileSiteKey);
-  const turnstileContainerRef = useRef<HTMLDivElement | null>(null);
-  const turnstileWidgetRef = useRef<string | null>(null);
+  const captchaEnabled = Boolean(TURNSTILE_SITE_KEY);
+  const turnstileRef = useRef<TurnstileHandle>(null);
   const [turnstileToken, setTurnstileToken] = useState('');
 
   // ── Coupon state ──────────────────────────────────────────
@@ -211,41 +220,18 @@ export default function CheckoutPage() {
     description: string;
   } | null>(null);
 
-  useEffect(() => {
-    if (!user?.email) return;
-    setForm((prev) => (prev.email ? prev : { ...prev, email: user.email ?? '' }));
-  }, [user?.email]);
+  const countryCode = selectedCountry?.code ?? null;
+  const errors = stepErrors(step, form, countryCode);
+  const digitalNeedsAccount = hasDigitalItem && !user;
 
-  const canSubmit = useMemo(() => {
-    return Boolean(
-      items.length > 0 &&
-      selectedPaymentId &&
-      (!hasDigitalItem || isPaymob) &&
-      isTripleName(form.fullName) &&
-      form.email.trim() &&
-      form.phone.trim() &&
-      form.governorate.trim() &&
-      form.city.trim() &&
-      form.address.trim() &&
-      (!captchaEnabled || turnstileToken)
-    );
-  }, [captchaEnabled, items.length, selectedPaymentId, hasDigitalItem, isPaymob, form, turnstileToken]);
-
-  // Diagnostic: list the missing fields so the user knows exactly what's wrong
-  const missingFields = useMemo(() => {
-    const missing: string[] = [];
-    if (items.length === 0) missing.push('السلة فارغة');
-    if (!selectedPaymentId) missing.push('طريقة الدفع');
-    if (hasDigitalItem && !isPaymob) missing.push('الكتب الرقمية تتطلب الدفع الإلكتروني (لا يوجد دفع عند الاستلام)');
-    if (!form.fullName.trim()) missing.push('الاسم الكامل');
-    if (!form.email.trim()) missing.push('البريد الإلكتروني');
-    if (!form.phone.trim()) missing.push('رقم الهاتف');
-    if (!form.governorate.trim()) missing.push('المحافظة');
-    if (!form.city.trim()) missing.push('المدينة');
-    if (!form.address.trim()) missing.push('العنوان');
-    if (captchaEnabled && !turnstileToken) missing.push('التحقق الأمني');
-    return missing;
-  }, [captchaEnabled, items.length, selectedPaymentId, hasDigitalItem, isPaymob, form, turnstileToken]);
+  const canSubmit = Boolean(
+    items.length > 0 &&
+    !digitalNeedsAccount &&
+    selectedPaymentId &&
+    (!hasDigitalItem || isPaymob) &&
+    firstIncompleteStep(form, countryCode) === 3 &&
+    (!captchaEnabled || turnstileToken)
+  );
 
   const updateField = <K extends keyof CheckoutForm>(key: K, value: CheckoutForm[K]) => {
     setForm((prev) => ({
@@ -256,18 +242,40 @@ export default function CheckoutPage() {
     }));
   };
 
+  const goTo = (next: CheckoutStep) => {
+    // Forward only once every step before it is complete; back always.
+    if (next > step) {
+      const blocked = Math.min(next, firstIncompleteStep(form, countryCode)) as CheckoutStep;
+      if (blocked < next) {
+        setStep(blocked);
+        setShowErrors(true);
+        return;
+      }
+    }
+    setShowErrors(false);
+    setStep(next);
+    requestAnimationFrame(() => stepHeading.current?.focus());
+  };
+
+  const next = () => {
+    if (Object.keys(errors).length) {
+      setShowErrors(true);
+      return;
+    }
+    goTo((step + 1) as CheckoutStep);
+  };
+
   // مدن المحافظة المختارة
   const availableCities = EGYPT_REGIONS[form.governorate] ?? [];
 
   // ── Adjusted totals (with coupon) ─────────────────────────
   // For "شحن مجاني" coupon: the saving IS the shipping cost; we zero shipping
   // and skip subtracting calculatedAmount from subtotal (would be a double deduction).
-  // For other coupon types: subtract calculatedAmount from subtotal as a normal discount.
   const adjustedShipping = appliedCoupon?.freeShipping ? 0 : shipping;
   const subtotalDiscount = appliedCoupon && !appliedCoupon.freeShipping
     ? (appliedCoupon.calculatedAmount ?? 0)
     : 0;
-  const discountAmount = appliedCoupon?.calculatedAmount ?? 0; // كده الـ UI يقدر يعرض قيمة الخصم سواء كان شحن أو مبلغ
+  const discountAmount = appliedCoupon?.calculatedAmount ?? 0;
   const adjustedTotal = Math.max(0, subtotal - subtotalDiscount + adjustedShipping);
 
   const handleApplyCoupon = async () => {
@@ -325,62 +333,6 @@ export default function CheckoutPage() {
     setCouponError('');
   };
 
-  useEffect(() => {
-    if (!captchaEnabled || !turnstileSiteKey || !turnstileContainerRef.current) return undefined;
-
-    let cancelled = false;
-    const renderTurnstile = () => {
-      if (
-        cancelled ||
-        !window.turnstile ||
-        !turnstileContainerRef.current ||
-        turnstileWidgetRef.current
-      ) {
-        return;
-      }
-
-      turnstileWidgetRef.current = window.turnstile.render(turnstileContainerRef.current, {
-        sitekey: turnstileSiteKey,
-        language: 'ar',
-        theme: 'auto',
-        callback: (token) => setTurnstileToken(token),
-        'expired-callback': () => setTurnstileToken(''),
-        'error-callback': () => setTurnstileToken(''),
-      });
-    };
-
-    let script = document.querySelector<HTMLScriptElement>('script[data-turnstile-script="true"]');
-    if (window.turnstile) {
-      renderTurnstile();
-    } else {
-      if (!script) {
-        script = document.createElement('script');
-        script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-        script.async = true;
-        script.defer = true;
-        script.dataset.turnstileScript = 'true';
-        document.head.appendChild(script);
-      }
-      script.addEventListener('load', renderTurnstile);
-    }
-
-    return () => {
-      cancelled = true;
-      script?.removeEventListener('load', renderTurnstile);
-      if (turnstileWidgetRef.current && window.turnstile?.remove) {
-        window.turnstile.remove(turnstileWidgetRef.current);
-      }
-      turnstileWidgetRef.current = null;
-      setTurnstileToken('');
-    };
-  }, [captchaEnabled, turnstileSiteKey]);
-
-  const resetTurnstile = () => {
-    if (!captchaEnabled || !turnstileWidgetRef.current || !window.turnstile) return;
-    window.turnstile.reset(turnstileWidgetRef.current);
-    setTurnstileToken('');
-  };
-
   // A changed cart/country invalidates an applied discount. The typed code
   // stays: this also fires while prices and country load on arrival, and
   // wiping the field then erased what the customer had just typed.
@@ -393,6 +345,22 @@ export default function CheckoutPage() {
     localStorage.removeItem('paymob_pending_order_id');
     localStorage.removeItem('paymob_pending_client_secret');
     paymobClientSecretRef.current = '';
+  };
+
+  /** The confirmation's details: a guest can't read the order back, so it is built from what was sent. */
+  const finish = (order: StorefrontOrder | null, orderId?: string) => {
+    setSubmittedOrder(
+      order ?? (orderId
+        ? ({ id: orderId, total_price: adjustedTotal, created_at: new Date().toISOString(), countries: null } as unknown as StorefrontOrder)
+        : null)
+    );
+    setSubmittedAsGuest(!user);
+    setSubmittedPhone(normalizePhone(form.phone));
+    setSubmitted(true);
+    clearCart();
+    void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
+    void queryClient.invalidateQueries({ queryKey: ['catalog-variants'] });
+    void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
   };
 
   // ── Polling Paymob until terminal state ──────────────────────────
@@ -423,29 +391,26 @@ export default function CheckoutPage() {
 
         if (!error && data) {
           if (data.status === 'success') {
-            // Payment confirmed — fetch the order details to show success
-            const { data: orderRow } = await supabase
-              .from('orders')
-              .select(`
-                id, total_price, shipping_cost, discount_amount, payment_status,
-                created_at,
-                countries(name, currency_symbol)
-              `)
-              .eq('id', data.orderId)
-              .maybeSingle();
+            // A signed-in customer can read the order back; a guest can't (and gets it from what was sent).
+            const { data: orderRow } = user
+              ? await supabase
+                .from('orders')
+                .select(`
+                  id, total_price, shipping_cost, discount_amount, payment_status,
+                  created_at,
+                  countries(name, currency_symbol)
+                `)
+                .eq('id', data.orderId)
+                .maybeSingle()
+              : { data: null };
 
-            setSubmittedOrder(orderRow as unknown as StorefrontOrder);
-            setSubmitted(true);
             setPaymobPolling(false);
             clearPendingPaymob();
-            clearCart();
-            void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
-            void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
+            finish(orderRow as unknown as StorefrontOrder | null, data.orderId);
             return;
           }
 
           if (data.status === 'failed') {
-            // Payment failed — release stock, keep cart, show error
             clearPendingPaymob();
             setSubmitError(data.error || 'فشل الدفع. حاول مرة أخرى أو اختر طريقة دفع أخرى.');
             setPaymobPolling(false);
@@ -458,7 +423,6 @@ export default function CheckoutPage() {
             return;
           }
 
-          // status === 'pending' — keep polling
           setPaymobStatusMsg('جارٍ إنتظار تأكيد الدفع من Paymob...');
         }
       } catch (e) {
@@ -474,7 +438,6 @@ export default function CheckoutPage() {
     setPaymobPolling(false);
     if (paymobMerchantOrderId) {
       try {
-        // Explicitly cancel pending payment to release reserved stock
         await supabase.functions.invoke('check-paymob-transaction', {
           body: { merchantOrderId: paymobMerchantOrderId, cancel: true, clientSecret: paymobClientSecretRef.current },
         });
@@ -489,6 +452,16 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setSubmitError('');
 
+    const customer = {
+      fullName:    form.fullName.trim(),
+      email:       form.email.trim(),
+      phone:       normalizePhone(form.phone),
+      governorate: form.governorate,
+      city:        form.city,
+      address:     form.address.trim(),
+      notes:       form.notes.trim(),
+    };
+
     try {
       // ═══════════════════════════════════════════════════════════════
       //  FORK A — Paymob (online): do NOT create an order yet.
@@ -501,15 +474,7 @@ export default function CheckoutPage() {
           body: {
             provider:        selectedMethod.provider.toLowerCase(),
             paymentMethodId: selectedPaymentId,
-            customer: {
-              fullName:    form.fullName,
-              email:       form.email,
-              phone:       form.phone,
-              governorate: form.governorate,
-              city:        form.city,
-              address:     form.address,
-              notes:       form.notes,
-            },
+            customer,
             country:    selectedCountry,
             shipping,
             items: items.map((i) => ({
@@ -552,10 +517,7 @@ export default function CheckoutPage() {
         setSubmitting(false);
         setPaymobStatusMsg('فتحنا نافذة الدفع في تبويب جديد. أكمل الدفع هناك...');
 
-        // Open Paymob payment page in a new tab
         window.open(data.paymentUrl, '_blank', 'noopener,noreferrer');
-
-        // Begin polling (runs in background)
         void pollPaymobTransaction(data.merchantOrderId);
         return;
       }
@@ -564,15 +526,7 @@ export default function CheckoutPage() {
       //  FORK B — COD (cash on delivery): create the order immediately.
       // ═══════════════════════════════════════════════════════════════
       const order = await createStorefrontOrder({
-        customer: {
-          fullName:    form.fullName,
-          email:       form.email,
-          phone:       form.phone,
-          governorate: form.governorate,
-          city:        form.city,
-          address:     form.address,
-          notes:       form.notes,
-        },
+        customer,
         paymentMethod:   'cod',
         paymentMethodId: selectedPaymentId,
         country:         selectedCountry,
@@ -583,18 +537,10 @@ export default function CheckoutPage() {
         turnstileToken:  captchaEnabled ? turnstileToken : null,
       });
 
-      // الكوبون يُطبّق داخل create-storefront-order (سيرفر)
-      // لا حاجة لاستدعاء apply_coupon_to_order مرة أخرى هنا
-
-      setSubmittedOrder(order);
-      setSubmitted(true);
-      clearCart();
-
-      void queryClient.invalidateQueries({ queryKey: ['product-variants-public'] });
-      void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
+      finish(order);
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'تعذر إرسال الطلب إلى قاعدة البيانات.');
-      resetTurnstile();
+      turnstileRef.current?.reset();
     } finally {
       setSubmitting(false);
     }
@@ -604,7 +550,7 @@ export default function CheckoutPage() {
     return (
       <div className="page-sections">
         <section className="page-card">
-          <div className="empty-state">
+          <div className="empty-state" data-testid="order-confirmed">
             <CheckCircle2 size={30} />
             <h3>تم إرسال الطلب بنجاح</h3>
             {submittedOrder ? (
@@ -623,13 +569,22 @@ export default function CheckoutPage() {
                 </div>
               </div>
             ) : null}
-            <p>شكرًا على طلبك وستتم مراجعته في أقرب وقت.</p>
+            {submittedAsGuest ? (
+              <p>
+                شكرًا على طلبك. سنتواصل معك على رقم <b dir="ltr">{submittedPhone}</b> لتأكيد الطلب وموعد التوصيل.
+                احتفظ برقم الطلب لو احتجت تسأل عنه.
+              </p>
+            ) : (
+              <p>شكرًا على طلبك وستتم مراجعته في أقرب وقت.</p>
+            )}
             <div className="empty-state__actions">
-              <Link to="/account/orders" className="primary-button">
-                <PackageCheck size={16} />
-                عرض طلباتي
-              </Link>
-              <Link to="/" className="ghost-button">
+              {!submittedAsGuest && (
+                <Link to="/account/orders" className="primary-button">
+                  <PackageCheck size={16} />
+                  عرض طلباتي
+                </Link>
+              )}
+              <Link to="/" className={submittedAsGuest ? 'primary-button' : 'ghost-button'}>
                 العودة للرئيسية
               </Link>
             </div>
@@ -639,14 +594,17 @@ export default function CheckoutPage() {
     );
   }
 
+  const fieldClass = (key: keyof CheckoutForm) => (showErrors && errors[key] ? 'checkout-field checkout-field--error' : 'checkout-field');
+  const describedBy = (key: keyof CheckoutForm) => (showErrors && errors[key] ? `err-${key}` : undefined);
+
   return (
     <div className="page-sections">
       <section className="page-card">
         <div className="page-card__head">
           <div>
             <span className="page-kicker">إتمام الطلب</span>
-            <h1>مراجعة البيانات والدفع</h1>
-            <p>أدخل بياناتك ثم راجع الطلب قبل الإرسال.</p>
+            <h1>إتمام الطلب في 3 خطوات</h1>
+            <p>{user ? 'راجع بياناتك وعنوانك، ثم اختر طريقة الدفع.' : 'بدون إنشاء حساب: بياناتك، ثم العنوان، ثم الدفع.'}</p>
           </div>
         </div>
         <OrnamentDivider />
@@ -658,189 +616,258 @@ export default function CheckoutPage() {
             <p>السلة فارغة حاليًا. أضف كتبًا أولًا ثم ارجع إلى صفحة الدفع.</p>
             <Link to="/books" className="primary-button">الذهاب إلى الكتب</Link>
           </div>
-        ) : !user ? (
-          // Purchasing now requires an account — so every order has an owner who
-          // can see it in "طلباتي" and get status-update emails. Enforced for
-          // real server-side too (create-storefront-order / initiate-paymob-payment
-          // both reject an anonymous caller); this is just the friendly front door.
-          <div className="empty-state">
-            <LogIn size={24} />
-            <h3>سجّل الدخول لإتمام الطلب</h3>
-            <p>
-              عشان يبقى ليك سجلّ بمشترياتك وتقدر تتابع حالة طلبك وتستلم إشعارات كل
-              مرحلة، لازم تسجّل الدخول أو تنشئ حساب أولًا.
-            </p>
-            <Link to="/account" className="primary-button">
-              <LogIn size={16} />
-              تسجيل الدخول
-            </Link>
-          </div>
         ) : (
           <div className="cart-layout">
-            <div className="contact-form">
-
-              {/* ── بيانات العميل ─────────────────────────────────── */}
-              <div className="contact-card">
-                <h3>بيانات العميل</h3>
-
-                <div>
-                  <input
-                    value={form.fullName}
-                    onChange={(e) => updateField('fullName', e.target.value)}
-                    placeholder="الاسم الثلاثي كاملاً *"
-                    autoComplete="name"
-                  />
-                  {form.fullName.trim() && !isTripleName(form.fullName) && (
-                    <small style={{ color: 'var(--error, #e53e3e)', fontSize: '0.78rem', marginTop: '4px', display: 'block' }}>
-                      يرجى إدخال الاسم ثلاثياً (الاسم الأول والأب والعائلة)
-                    </small>
-                  )}
-                </div>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => updateField('email', e.target.value)}
-                  placeholder="البريد الإلكتروني *"
-                  autoComplete="email"
-                />
-                <input
-                  value={form.phone}
-                  onChange={(e) => updateField('phone', e.target.value)}
-                  placeholder="رقم الهاتف *"
-                  autoComplete="tel"
-                />
-              </div>
-
-              {/* ── عنوان الشحن ───────────────────────────────────── */}
-              <div className="contact-card">
-                <h3>عنوان الشحن</h3>
-
-                <select
-                  value={form.governorate}
-                  onChange={(e) => updateField('governorate', e.target.value)}
-                >
-                  <option value="">-- اختر المحافظة * --</option>
-                  {GOVERNORATES.map((gov) => (
-                    <option key={gov} value={gov}>{gov}</option>
-                  ))}
-                </select>
-
-                <select
-                  value={form.city}
-                  onChange={(e) => updateField('city', e.target.value)}
-                  disabled={!form.governorate}
-                >
-                  <option value="">
-                    {form.governorate ? '-- اختر المدينة * --' : '-- اختر المحافظة أولاً --'}
-                  </option>
-                  {availableCities.map((city) => (
-                    <option key={city} value={city}>{city}</option>
-                  ))}
-                </select>
-                <input
-                  value={form.address}
-                  onChange={(e) => updateField('address', e.target.value)}
-                  placeholder="الشارع والعنوان بالتفصيل *"
-                  autoComplete="street-address"
-                />
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => updateField('notes', e.target.value)}
-                  placeholder="ملاحظات إضافية (اختياري)"
-                />
-              </div>
-
-              {/* ── طريقة الدفع ───────────────────────────────────── */}
-              <div className="contact-card">
-                <h3>طريقة الدفع</h3>
-
-                {hasDigitalItem ? (
-                  <p style={{ fontSize: '0.85rem', opacity: 0.75, marginBottom: 8 }}>
-                    سلتك تحتوي على كتاب رقمي — الدفع الإلكتروني إلزامي (لا يتوفر الدفع عند الاستلام).
-                  </p>
-                ) : null}
-
-                {paymentMethods.length === 0 ? (
-                  <p style={{ opacity: 0.5, fontSize: '0.9rem' }}>جاري تحميل طرق الدفع...</p>
-                ) : availablePaymentMethods.length === 0 ? (
-                  <p style={{ color: 'var(--error, #e53e3e)', fontSize: '0.85rem' }}>
-                    لا تتوفر حاليًا طريقة دفع إلكتروني للكتب الرقمية. تواصل مع الدعم.
-                  </p>
-                ) : (
-                  <div className="variant-selector__grid">
-                    {availablePaymentMethods.map((method) => (
+            <div className="contact-form checkout-steps-wrap">
+              {/* ── The three steps ─────────────────────────────── */}
+              <ol className="checkout-stepper" aria-label="خطوات إتمام الطلب">
+                {STEPS.map(({ step: n, label }) => {
+                  const done = n < step;
+                  return (
+                    <li key={n} className={`checkout-stepper__item${n === step ? ' is-current' : ''}${done ? ' is-done' : ''}`}>
                       <button
-                        key={method.id}
                         type="button"
-                        className={selectedPaymentId === method.id ? 'variant-pill active' : 'variant-pill'}
-                        onClick={() => setSelectedPaymentId(method.id)}
+                        onClick={() => goTo(n)}
+                        aria-current={n === step ? 'step' : undefined}
+                        disabled={n === step}
                       >
-                        <span>{method.method_name}</span>
-                        <small>{selectedPaymentId === method.id ? 'محدد الآن' : method.provider.startsWith('paymob') ? 'Paymob' : method.provider}</small>
+                        <span className="checkout-stepper__num" aria-hidden="true">{done ? <Check size={14} /> : n}</span>
+                        <span className="checkout-stepper__label">{label}</span>
                       </button>
-                    ))}
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {digitalNeedsAccount && (
+                <div className="auth-alert auth-alert--warning checkout-digital-note" role="status">
+                  <p>سلتك فيها كتاب رقمي، والكتب الرقمية تحتاج تسجيل الدخول لأنها تُحمَّل من حسابك بعد الشراء. سجّل الدخول، أو احذف الكتاب الرقمي من السلة لتكمل بدون حساب.</p>
+                  <div className="checkout-digital-note__actions">
+                    <Link to="/account?next=/checkout" className="primary-button"><LogIn size={15} /> تسجيل الدخول</Link>
+                    <Link to="/cart" className="ghost-button">تعديل السلة</Link>
                   </div>
-                )}
-              </div>
-
-              {captchaEnabled ? (
-                <div className="contact-card">
-                  <h3>التحقق الأمني</h3>
-                  <div ref={turnstileContainerRef} />
                 </div>
-              ) : null}
+              )}
 
-              {/* ── كود الخصم ──────────────────────────────────── */}
-              <div className="contact-card">
-                <h3><Tag size={16} /> كود الخصم</h3>
-
-                {appliedCoupon ? (
-                  <div className="coupon-applied">
-                    <div className="coupon-applied__info">
-                      <span className="coupon-applied__code">{appliedCoupon.code}</span>
-                      <span className="coupon-applied__desc">{appliedCoupon.description}</span>
-                    </div>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={handleRemoveCoupon}
-                      aria-label="إزالة الكوبون"
-                    >
-                      <X size={16} />
+              {step === 1 && (
+                <div className="contact-card checkout-step" data-testid="checkout-step-1">
+                  <h3 ref={stepHeading} tabIndex={-1}><UserRound size={17} /> بياناتك</h3>
+                  {!user && (
+                    <p className="checkout-step__hint">
+                      عندك حساب؟ <Link to="/account?next=/checkout">سجّل الدخول</Link> لتتابع طلباتك من حسابك. أو أكمل بدون حساب.
+                    </p>
+                  )}
+                  <label className={fieldClass('fullName')}>
+                    <span>الاسم ثلاثيًا *</span>
+                    <input
+                      value={form.fullName}
+                      onChange={(e) => updateField('fullName', e.target.value)}
+                      placeholder="الاسم الأول واسم الأب واسم العائلة"
+                      autoComplete="name"
+                      aria-invalid={Boolean(showErrors && errors.fullName)}
+                      aria-describedby={describedBy('fullName')}
+                    />
+                    <FieldError id="err-fullName" message={showErrors ? errors.fullName : undefined} />
+                  </label>
+                  <label className={fieldClass('phone')}>
+                    <span>رقم الموبايل *</span>
+                    <input
+                      type="tel"
+                      inputMode="tel"
+                      dir="ltr"
+                      value={form.phone}
+                      onChange={(e) => updateField('phone', e.target.value)}
+                      placeholder="01xxxxxxxxx"
+                      autoComplete="tel"
+                      aria-invalid={Boolean(showErrors && errors.phone)}
+                      aria-describedby={describedBy('phone')}
+                    />
+                    <FieldError id="err-phone" message={showErrors ? errors.phone : undefined} />
+                  </label>
+                  <label className={fieldClass('email')}>
+                    <span>البريد الإلكتروني {user ? '' : '(اختياري)'}</span>
+                    <input
+                      type="email"
+                      dir="ltr"
+                      value={form.email}
+                      onChange={(e) => updateField('email', e.target.value)}
+                      placeholder="name@example.com"
+                      autoComplete="email"
+                      aria-invalid={Boolean(showErrors && errors.email)}
+                      aria-describedby={describedBy('email')}
+                    />
+                    <small className="checkout-field__hint">لتصلك رسالة تأكيد الطلب وتحديثات حالته.</small>
+                    <FieldError id="err-email" message={showErrors ? errors.email : undefined} />
+                  </label>
+                  <div className="checkout-step__nav">
+                    <button type="button" className="primary-button" onClick={next} disabled={digitalNeedsAccount}>
+                      التالي: الشحن والعنوان
                     </button>
                   </div>
-                ) : (
-                  <>
-                    <div className="coupon-input-row">
-                      <input
-                        value={couponCode}
-                        onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                        placeholder="أدخل كود الخصم"
-                        disabled={couponLoading}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleApplyCoupon();
-                          }
-                        }}
-                      />
-                      <button
-                        type="button"
-                        className="ghost-button"
-                        onClick={handleApplyCoupon}
-                        disabled={couponLoading || !couponCode.trim()}
-                      >
-                        {couponLoading ? 'جاري التحقق...' : 'تطبيق'}
-                      </button>
+                </div>
+              )}
+
+              {step === 2 && (
+                <div className="contact-card checkout-step" data-testid="checkout-step-2">
+                  <h3 ref={stepHeading} tabIndex={-1}><Truck size={17} /> الشحن والعنوان</h3>
+                  <label className={fieldClass('governorate')}>
+                    <span>المحافظة *</span>
+                    <select
+                      value={form.governorate}
+                      onChange={(e) => updateField('governorate', e.target.value)}
+                      aria-invalid={Boolean(showErrors && errors.governorate)}
+                      aria-describedby={describedBy('governorate')}
+                    >
+                      <option value="">اختر المحافظة</option>
+                      {GOVERNORATES.map((gov) => (
+                        <option key={gov} value={gov}>{gov}</option>
+                      ))}
+                    </select>
+                    <FieldError id="err-governorate" message={showErrors ? errors.governorate : undefined} />
+                  </label>
+                  <label className={fieldClass('city')}>
+                    <span>المدينة *</span>
+                    <select
+                      value={form.city}
+                      onChange={(e) => updateField('city', e.target.value)}
+                      disabled={!form.governorate}
+                      aria-invalid={Boolean(showErrors && errors.city)}
+                      aria-describedby={describedBy('city')}
+                    >
+                      <option value="">{form.governorate ? 'اختر المدينة' : 'اختر المحافظة أولًا'}</option>
+                      {availableCities.map((city) => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                    <FieldError id="err-city" message={showErrors ? errors.city : undefined} />
+                  </label>
+                  <label className={fieldClass('address')}>
+                    <span>العنوان بالتفصيل *</span>
+                    <input
+                      value={form.address}
+                      onChange={(e) => updateField('address', e.target.value)}
+                      placeholder="الشارع، رقم المبنى، الدور، علامة مميزة"
+                      autoComplete="street-address"
+                      aria-invalid={Boolean(showErrors && errors.address)}
+                      aria-describedby={describedBy('address')}
+                    />
+                    <FieldError id="err-address" message={showErrors ? errors.address : undefined} />
+                  </label>
+                  <label className="checkout-field">
+                    <span>ملاحظات (اختياري)</span>
+                    <textarea value={form.notes} onChange={(e) => updateField('notes', e.target.value)} placeholder="أي تفاصيل تساعد المندوب" />
+                  </label>
+                  <div className="checkout-step__nav">
+                    <button type="button" className="ghost-button" onClick={() => goTo(1)}>رجوع</button>
+                    <button type="button" className="primary-button" onClick={next}>التالي: الدفع</button>
+                  </div>
+                </div>
+              )}
+
+              {step === 3 && (
+                <>
+                  <div className="contact-card checkout-step" data-testid="checkout-step-3">
+                    <h3 ref={stepHeading} tabIndex={-1}><CreditCard size={17} /> طريقة الدفع</h3>
+
+                    <div className="checkout-recap">
+                      <p><UserRound size={14} /> {form.fullName} · <Phone size={13} /> <span dir="ltr">{normalizePhone(form.phone)}</span></p>
+                      <p><Truck size={14} /> {form.governorate}، {form.city}، {form.address}</p>
+                      <button type="button" className="checkout-recap__edit" onClick={() => goTo(1)}>تعديل البيانات</button>
                     </div>
-                    {couponError ? (
-                      <div className="auth-alert auth-alert--error" style={{ marginTop: 8 }}>
-                        {couponError}
-                      </div>
+
+                    {hasDigitalItem ? (
+                      <p className="checkout-step__hint">
+                        سلتك تحتوي على كتاب رقمي — الدفع الإلكتروني إلزامي (لا يتوفر الدفع عند الاستلام).
+                      </p>
                     ) : null}
-                  </>
-                )}
-              </div>
+
+                    {paymentMethods.length === 0 ? (
+                      <p className="checkout-step__hint">جاري تحميل طرق الدفع...</p>
+                    ) : availablePaymentMethods.length === 0 ? (
+                      <p className="checkout-field__error">لا تتوفر حاليًا طريقة دفع إلكتروني للكتب الرقمية. تواصل مع الدعم.</p>
+                    ) : (
+                      <div className="variant-selector__grid" role="radiogroup" aria-label="طريقة الدفع">
+                        {availablePaymentMethods.map((method) => (
+                          <button
+                            key={method.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selectedPaymentId === method.id}
+                            className={selectedPaymentId === method.id ? 'variant-pill active' : 'variant-pill'}
+                            onClick={() => setSelectedPaymentId(method.id)}
+                          >
+                            <span>{method.method_name}</span>
+                            <small>{selectedPaymentId === method.id ? 'محدد الآن' : method.provider.startsWith('paymob') ? 'Paymob' : method.provider}</small>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* ── كود الخصم ──────────────────────────────────── */}
+                  <div className="contact-card">
+                    <h3><Tag size={16} /> كود الخصم</h3>
+
+                    {appliedCoupon ? (
+                      <div className="coupon-applied">
+                        <div className="coupon-applied__info">
+                          <span className="coupon-applied__code">{appliedCoupon.code}</span>
+                          <span className="coupon-applied__desc">{appliedCoupon.description}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={handleRemoveCoupon}
+                          aria-label="إزالة الكوبون"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="coupon-input-row">
+                          <input
+                            value={couponCode}
+                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                            placeholder="أدخل كود الخصم"
+                            disabled={couponLoading}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleApplyCoupon();
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="ghost-button"
+                            onClick={handleApplyCoupon}
+                            disabled={couponLoading || !couponCode.trim()}
+                          >
+                            {couponLoading ? 'جاري التحقق...' : 'تطبيق'}
+                          </button>
+                        </div>
+                        {couponError ? (
+                          <div className="auth-alert auth-alert--error" style={{ marginTop: 8 }}>
+                            {couponError}
+                          </div>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+
+                  {captchaEnabled ? (
+                    <div className="contact-card">
+                      <h3>التحقق الأمني</h3>
+                      <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
+                    </div>
+                  ) : null}
+
+                  <div className="checkout-step__nav">
+                    <button type="button" className="ghost-button" onClick={() => goTo(2)}>رجوع</button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* ── ملخص الطلب ────────────────────────────────────── */}
@@ -873,11 +900,6 @@ export default function CheckoutPage() {
                 </div>
               ) : null}
 
-              {/* Weight drives the shipping row right below it (governorate
-                  + weight rate table) — shown together so the shipping cost
-                  is never a mystery number, and the sum is correct for any
-                  mix of books/copies since each item already carries its
-                  own weight (see CartContext.cartWeightKg). */}
               {cartWeightKg > 0 && (
                 <div>
                   <span>الوزن الإجمالي</span>
@@ -886,7 +908,7 @@ export default function CheckoutPage() {
               )}
 
               <div>
-                <span>الشحن</span>
+                <span>الشحن{!form.governorate && shipping > 0 ? ' (تقديري)' : ''}</span>
                 <b>
                   {appliedCoupon?.freeShipping && shipping > 0 ? (
                     <>
@@ -915,25 +937,30 @@ export default function CheckoutPage() {
               ) : null}
 
               {submitError ? (
-                <div className="auth-alert auth-alert--error">{submitError}</div>
+                <div className="auth-alert auth-alert--error" role="alert">{submitError}</div>
               ) : null}
 
-              {!canSubmit && missingFields.length > 0 ? (
-                <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.85rem' }}>
-                  أكمل البيانات التالية أولاً: {missingFields.join('، ')}
-                </div>
-              ) : null}
-
-              <button
-                type="button"
-                className="primary-button primary-button--full"
-                onClick={handleSubmit}
-                disabled={!canSubmit || submitting}
-              >
-                {submitting
-                  ? (isPaymob ? 'جاري التحويل لبوابة الدفع...' : 'جاري تسجيل الطلب...')
-                  : (isPaymob ? 'الدفع عبر Paymob' : 'تأكيد الطلب')}
-              </button>
+              {step === 3 ? (
+                <>
+                  {captchaEnabled && !turnstileToken ? (
+                    <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.85rem' }}>
+                      انتظر حتى يكتمل التحقق الأمني.
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="primary-button primary-button--full"
+                    onClick={handleSubmit}
+                    disabled={!canSubmit || submitting}
+                  >
+                    {submitting
+                      ? (isPaymob ? 'جاري التحويل لبوابة الدفع...' : 'جاري تسجيل الطلب...')
+                      : (isPaymob ? 'الدفع عبر Paymob' : 'تأكيد الطلب')}
+                  </button>
+                </>
+              ) : (
+                <p className="checkout-summary__note">الخطوة {step} من 3. زر تأكيد الطلب في خطوة الدفع.</p>
+              )}
 
               <Link to="/cart" className="ghost-button ghost-button--full">
                 الرجوع إلى السلة

@@ -33,3 +33,24 @@ export async function addFirstBookToCart(page: Page) {
   await expect(addToCart).toBeEnabled({ timeout: 10_000 });
   await addToCart.click();
 }
+
+/**
+ * Goes through checkout's first two steps (details, then address) with test details, ending on the
+ * payment step. Nothing is sent: the order is only placed from the payment step.
+ */
+export async function fillCheckoutSteps(page: Page, details: { name?: string; phone?: string; email?: string } = {}) {
+  const step1 = page.getByTestId('checkout-step-1');
+  await expect(step1).toBeVisible({ timeout: 15_000 });
+  await step1.getByLabel('الاسم ثلاثيًا *').fill(details.name ?? 'محمد أحمد علي');
+  await step1.getByLabel('رقم الموبايل *').fill(details.phone ?? '01012345678');
+  if (details.email !== undefined) await step1.getByLabel(/^البريد الإلكتروني/).fill(details.email);
+  await step1.getByRole('button', { name: /^التالي/ }).click();
+
+  const step2 = page.getByTestId('checkout-step-2');
+  await expect(step2).toBeVisible();
+  await step2.getByLabel('المحافظة *').selectOption('القاهرة');
+  await step2.getByLabel('المدينة *').selectOption('مدينة نصر');
+  await step2.getByLabel('العنوان بالتفصيل *').fill('شارع عباس العقاد، عمارة 5');
+  await step2.getByRole('button', { name: /^التالي/ }).click();
+  await expect(page.getByTestId('checkout-step-3')).toBeVisible();
+}

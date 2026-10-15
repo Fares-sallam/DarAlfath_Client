@@ -1,5 +1,5 @@
 import { test, expect } from '../fixtures';
-import { signIn } from './helpers';
+import { fillCheckoutSteps, signIn } from './helpers';
 
 test('كوبون خصم صحيح (DARALFATH20) يُطبَّق ويقلّل الإجمالي', async ({ page }) => {
   await signIn(page);
@@ -13,6 +13,7 @@ test('كوبون خصم صحيح (DARALFATH20) يُطبَّق ويقلّل ال�
   // Prices and country settle right after arrival; an applied coupon made
   // before that would be dropped (as it should be when the cart changes).
   await page.waitForLoadState('networkidle');
+  await fillCheckoutSteps(page);
   const couponInput = page.getByPlaceholder('أدخل كود الخصم');
   await expect(couponInput).toBeVisible({ timeout: 15_000 });
   await couponInput.fill('DARALFATH20');

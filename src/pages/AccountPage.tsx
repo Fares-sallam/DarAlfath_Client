@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   BookOpen, ChevronLeft, CheckCircle2, Download, Heart, LogOut, PackageCheck,
   ShieldCheck, UserRound, AlertTriangle, Loader2, X, Eye, EyeOff,
@@ -63,6 +63,13 @@ export default function AccountPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const navigate = useNavigate();
+  // Sent here to sign in on the way to somewhere (checkout, say): back there once signed in.
+  // Only a page of this site, never an address elsewhere.
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('next') ?? '';
+  useEffect(() => {
+    if (user && returnTo.startsWith('/') && !returnTo.startsWith('//')) navigate(returnTo, { replace: true });
+  }, [user, returnTo, navigate]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 

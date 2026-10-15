@@ -11,8 +11,7 @@ const TURNSTILE_SECRET_KEY = Deno.env.get('TURNSTILE_SECRET_KEY') ?? '';
 const REQUIRE_TURNSTILE = (Deno.env.get('REQUIRE_TURNSTILE') ?? '').toLowerCase() === 'true';
 // Same app-only secret initiate-paymob-payment and create-digital-download-link
 // already check. Lets the mobile app (no browser, can't solve Turnstile) skip
-// the challenge; the website still goes through it. Also used below to require
-// a signed-in account for app-originated orders only (2026-08-10).
+// the challenge; the website still goes through it.
 const APP_KEY_SECRET = Deno.env.get('APP_DOWNLOAD_SECRET') ?? '';
 const RATE_LIMIT_WINDOW_MS = 10 * 60 * 1000;
 const RATE_LIMIT_MAX = 12;
@@ -74,6 +73,35 @@ async function verifyTurnstile(token: string | null | undefined, clientIp: strin
   }
 }
 
+// ── Who is buying ────────────────────────────────────────────────────────
+// A customer can buy without an account (2026-10, reversing 2026-08-20): a
+// name and a mobile number, an email if they want the order emails. A guest's
+// number is checked (an Egyptian mobile for Egypt) and stored in one form, so
+// it can be counted: a number with too many open orders today gets no more
+// (fake orders would otherwise hold stock). Digital books still need an
+// account — they are downloaded from it.
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EGYPT_MOBILE_RE = /^01[0125]\d{8}$/;
+const GUEST_OPEN_ORDERS_MAX = 3;
+
+function normalizePhone(raw: unknown): string {
+  let p = String(raw ?? '')
+    .replace(/[\u0660-\u0669]/g, (d) => String(d.charCodeAt(0) - 0x0660))
+    .replace(/[\u06F0-\u06F9]/g, (d) => String(d.charCodeAt(0) - 0x06F0))
+    .replace(/[\s\-().]/g, '');
+  if (p.startsWith('+20')) p = '0' + p.slice(3);
+  else if (p.startsWith('0020')) p = '0' + p.slice(4);
+  else if (/^20\d{10}$/.test(p)) p = '0' + p.slice(2);
+  return p;
+}
+
+function guestPhoneError(phone: string, countryCode: string | null | undefined): string | null {
+  const egypt = !countryCode || countryCode.toUpperCase() === 'EG';
+  if (egypt ? EGYPT_MOBILE_RE.test(phone) : /^\+?\d{7,15}$/.test(phone)) return null;
+  return egypt ? 'رقم الموبايل غير صحيح: اكتبه 11 رقمًا يبدأ بـ 01.' : 'رقم الهاتف غير صحيح.';
+}
+const TOO_MANY_GUEST_ORDERS = 'يوجد عدد كبير من الطلبات المفتوحة على رقم الهاتف هذا اليوم. تواصل معنا إذا كنت تحتاج طلبًا جديدًا.';
+
 function jsonError(message: string, status = 400) {
   return new Response(JSON.stringify({ error: message }), {
     status,
@@ -122,11 +150,13 @@ Deno.serve(async (req) => {
       return jsonError('عدد المنتجات في الطلب كبير جداً.');
     }
 
-    if (!customer?.fullName || !customer?.email || !customer?.phone) {
+    const fullName = String(customer?.fullName ?? '').trim();
+    let phone = String(customer?.phone ?? '').trim();
+    const customerEmail = String(customer?.email ?? '').trim();
+    if (!fullName || !phone) {
       return jsonError('بيانات العميل غير مكتملة.');
     }
-    const customerEmail = String(customer.email ?? '').trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+    if (customerEmail && !EMAIL_RE.test(customerEmail)) {
       return jsonError('البريد الإلكتروني غير صالح.');
     }
     if (!isTrustedApp && !(await verifyTurnstile(turnstileToken, getClientIp(req)))) {
@@ -136,12 +166,7 @@ Deno.serve(async (req) => {
       return jsonError('الدفع الإلكتروني يجب أن يبدأ عبر بوابة Paymob فقط.');
     }
 
-    // ── Resolve authenticated user ────────────────────────────────────────
-    // A signed-in account is required to purchase — on the website and the
-    // app alike (product decision, 2026-08-20: every order needs an owner
-    // who can see it in "طلباتي" and get the order-status emails). This is
-    // the real enforcement; the storefront/app UI gating a logged-out
-    // checkout is just the friendly front door.
+    // ── Resolve the user: signed in, or a guest (see "Who is buying") ─────
     let userId: string | null = null;
     const authHeader = req.headers.get('Authorization');
     if (authHeader?.startsWith('Bearer ')) {
@@ -150,22 +175,33 @@ Deno.serve(async (req) => {
       userId = userData?.user?.id ?? null;
     }
     if (!userId) {
-      return jsonError('يجب تسجيل الدخول لإتمام عملية الشراء.', 401);
+      phone = normalizePhone(phone);
+      const phoneError = guestPhoneError(phone, country?.code);
+      if (phoneError) return jsonError(phoneError);
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const { count: openOrders } = await supabase
+        .from('orders')
+        .select('id', { count: 'exact', head: true })
+        .is('user_id', null)
+        .eq('shipping_address->>phone', phone)
+        .gte('created_at', since)
+        .not('status', 'in', '("ملغي","مرتجع")');
+      if ((openOrders ?? 0) >= GUEST_OPEN_ORDERS_MAX) return jsonError(TOO_MANY_GUEST_ORDERS, 429);
     }
 
     // ── Upsert profile so admin sees the customer's real name/phone/email ────
-    // Runs in the background — never blocks the order.
+    // Runs in the background — never blocks the order. Never touches the role or
+    // the active flag: an admin placing an order stays an admin, and a disabled
+    // account isn't switched back on by ordering.
     if (userId) {
       supabase
         .from('profiles')
         .upsert(
           {
             id:         userId,
-            full_name:  customer.fullName,
-            email:      customer.email,
-            phone:      customer.phone,
-            role:       'user',
-            is_active:  true,
+            full_name:  fullName,
+            ...(customerEmail ? { email: customerEmail } : {}),
+            phone,
             updated_at: new Date().toISOString(),
           },
           { onConflict: 'id', ignoreDuplicates: false },
@@ -278,7 +314,7 @@ Deno.serve(async (req) => {
     // روتيني. is_digital هنا محسوبة من variant_type في قاعدة البيانات، لا من
     // بيانات العميل، فلا يمكن تجاوز هذا الفحص بالتلاعب بالطلب.
     if (verifiedItems.some((i) => i.is_digital)) {
-      return jsonError('الكتب الرقمية تتطلب الدفع الإلكتروني (Paymob) — لا يتوفر الدفع عند الاستلام لها.');
+      return jsonError('الكتب الرقمية لا تتوفر بالدفع عند الاستلام. اختر وسيلة دفع إلكترونية متاحة.');
     }
 
     // ── حساب الشحن server-side (لا نثق بقيمة العميل) ─────────────────────
@@ -354,9 +390,9 @@ Deno.serve(async (req) => {
       p_payment_method_id: paymentMethodId,
       p_shipping_cost: serverShipping,
       p_shipping_address: {
-        name: customer.fullName,
-        email: customer.email,
-        phone: customer.phone,
+        name: fullName,
+        email: customerEmail,
+        phone,
         governorate: customer.governorate ?? '',
         city: customer.city,
         street: customer.address,
