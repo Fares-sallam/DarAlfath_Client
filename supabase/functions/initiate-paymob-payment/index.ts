@@ -307,6 +307,14 @@ Deno.serve(async (req) => {
       const { data: userData } = await supabase.auth.getUser(token);
       userId = userData?.user?.id ?? null;
     }
+    // The app sells to signed-in accounts only, with an email (the user's decision, 2026-10-15): only
+    // the website takes guests. The app is told apart by its x-app-key.
+    if (isTrustedApp && !userId) {
+      return jsonError('يجب تسجيل الدخول بالبريد الإلكتروني لإتمام الشراء من التطبيق.', 401);
+    }
+    if (isTrustedApp && !customerEmail) {
+      return jsonError('البريد الإلكتروني مطلوب لإتمام الشراء من التطبيق.');
+    }
     if (!userId) {
       phone = normalizePhone(phone);
       const phoneError = guestPhoneError(phone, countryCode);
