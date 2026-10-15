@@ -3,6 +3,9 @@ import { Facebook, Globe, Instagram, Mail, MapPin, MessageCircle, Phone, Youtube
 import Logo from '@/components/Logo';
 import type { StoreSettings } from '@/types/store';
 
+/** The line under the logo until one is written in the dashboard (الإعدادات → إعدادات المتجر). */
+const DEFAULT_TAGLINE = 'ننشر المعرفة الهادفة ونبني جسرًا واسعًا من الكتب الأصيلة بين القارئ والعلم والثقافة والقيم.';
+
 export default function Footer({ settings }: { settings: StoreSettings }) {
   // Admin-editable from the dashboard (الإعدادات → روابط التواصل الاجتماعي)
   // instead of hardcoded — only entries an admin actually filled in render,
@@ -20,7 +23,7 @@ export default function Footer({ settings }: { settings: StoreSettings }) {
       <div className="container site-footer__grid">
         <div className="site-footer__brand">
           <Logo small />
-          <p>ننشر المعرفة الهادفة ونبني جسرًا واسعًا من الكتب الأصيلة بين القارئ والعلم والثقافة والقيم.</p>
+          <p>{settings.footer_tagline?.trim() || DEFAULT_TAGLINE}</p>
 
           {socialLinks.length > 0 && (
             <div className="site-footer__socials">

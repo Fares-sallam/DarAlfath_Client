@@ -4,7 +4,7 @@ test.describe('الصفحة الرئيسية', () => {
   test('الكتالوج يظهر للزائر بدون تسجيل دخول', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'أقسام المتجر' })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('heading', { name: 'من رفوف الدار' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'وصل حديثًا' })).toBeVisible();
 
     // على الأقل كتاب واحد قابل للفتح من الكتالوج.
     const firstBook = page.getByRole('button', { name: /^فتح صفحة/ }).first();
@@ -16,7 +16,7 @@ test.describe('الصفحة الرئيسية', () => {
     await page.goto('/');
     // الصفحة فيها نشاط شبكة مستمر (React Query) قد لا يصل لـ"idle" أبدًا؛
     // ننتظر عنصرًا فعليًا بدل ذلك (أكثر موثوقية من waitForLoadState).
-    await expect(page.getByText('من رفوف الدار')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('وصل حديثًا')).toBeVisible({ timeout: 15_000 });
 
     const { scrollWidth, clientWidth } = await page.evaluate(() => ({
       scrollWidth: document.documentElement.scrollWidth,

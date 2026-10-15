@@ -22,6 +22,8 @@ export interface StoreSettings {
   whatsapp_url?: string | null;
   youtube_url?: string | null;
   website_url?: string | null;
+  /** The footer's line under the logo (الإعدادات → إعدادات المتجر); empty means the store's own line. */
+  footer_tagline?: string | null;
 }
 
 export interface CountryItem {

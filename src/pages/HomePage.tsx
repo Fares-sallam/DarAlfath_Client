@@ -1,4 +1,3 @@
-import { BookOpenText, CreditCard, Headphones, Truck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
@@ -10,12 +9,29 @@ import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
-import { useDiscountedProducts, useHomeCategorySections, useIntroVideos, useNewArrivals, useProducts } from '@/hooks/useStorefront';
+import {
+  useBestSellers,
+  useDiscountedProducts,
+  useFeatureBoxes,
+  useHomeCategorySections,
+  useIntroVideos,
+  useNewArrivals,
+  useSiteContent,
+} from '@/hooks/useStorefront';
+import { featureIcon } from '@/lib/featureIcons';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { staticSeo } from '@/lib/seo';
 
 /** An offers row with one or two books in it looks unfinished: it appears from three on (the "offers only" filter works for any number). */
 const MIN_OFFERS_ROW = 3;
+
+/** The boxes above the footer, as they were before the dashboard managed them: shown only if those can't be read. */
+const FALLBACK_FEATURES = [
+  { id: 'support', title: 'دعم العملاء', description: 'فريق دار الفتح جاهز لمساعدتك في أي وقت قبل الشراء وبعده.', icon_key: 'headphones', image_url: null },
+  { id: 'prices', title: 'أسعار حسب دولتك', description: 'العملة والأسعار تتكيف تلقائيًا حسب الدولة التي تختارها.', icon_key: 'credit-card', image_url: null },
+  { id: 'stock', title: 'مخزون دقيق ومحدّث', description: 'عدد النسخ المتاحة يظهر لك قبل الشراء لضمان وصول طلبك.', icon_key: 'book-open-text', image_url: null },
+  { id: 'delivery', title: 'تسليم موثوق', description: 'نتعاون مع شركات شحن معتمدة لضمان وصول كتبك بأمان وسرعة.', icon_key: 'truck', image_url: null },
+];
 
 /** Sections fade up as they arrive; the hook no-ops under reduced motion. */
 function Reveal({ children, className = '', 'data-testid': testId }: { children: React.ReactNode; className?: string; 'data-testid'?: string }) {
@@ -29,13 +45,15 @@ function Reveal({ children, className = '', 'data-testid': testId }: { children:
 
 export default function HomePage() {
   useSeo(staticSeo('home', siteOrigin()));
-  const { data: products = [] } = useProducts();
+  const { data: bestSellers } = useBestSellers();
+  const { data: siteContent } = useSiteContent();
+  const { data: featureRows, isError: featuresFailed } = useFeatureBoxes();
+  const features = featuresFailed ? FALLBACK_FEATURES : featureRows ?? [];
   const { data: categorySections = [] } = useHomeCategorySections();
   const { data: newArrivals = [] } = useNewArrivals(12);
   const { data: discounted = [] } = useDiscountedProducts();
   const { data: introVideoRows = [] } = useIntroVideos();
 
-  const railProducts = products.slice(0, 12);
   const introVideos = introVideoRows.map((v) => ({
     id: v.id,
     title: v.title,
@@ -64,19 +82,13 @@ export default function HomePage() {
              unlike the sections below, it isn't wrapped in <Reveal> here. ── */}
       <StoreDepartments />
 
-      {/* ── The shelf: horizontal, because a shelf is horizontal. Also the
-             pattern the per-book galleries will reuse once books carry
-             several images each. ── */}
-      {railProducts.length > 0 && (
-        <Reveal className="shelf-section">
-          <SectionHeader
-            title="من رفوف الدار"
-            subtitle="مرّر لتستعرض الإصدارات"
-            href="/books"
-            linkLabel="عرض الكل"
-          />
-          <ScrollRail ariaLabel="إصدارات دار الفتح" className="shelf-rail">
-            {railProducts.map((product, i) => (
+      {/* ── Best sellers: the books picked in the dashboard (إدارة الإعلانات والأشرطة → الأكثر مبيعًا),
+             where each book's sales are shown to choose by. Not drawn until some are picked. ── */}
+      {bestSellers.length > 0 && (
+        <Reveal className="shelf-section" data-testid="best-sellers">
+          <SectionHeader title="الأكثر مبيعًا" subtitle="الكتب الأكثر طلبًا من قرّاء الدار" />
+          <ScrollRail ariaLabel="الأكثر مبيعًا" className="shelf-rail">
+            {bestSellers.map((product, i) => (
               <div className="shelf-rail__item" key={product.product_id}>
                 <ProductCard product={product} index={i} />
               </div>
@@ -154,35 +166,28 @@ export default function HomePage() {
 
       {introVideos.length > 0 && (
         <Reveal>
-          <SectionHeader title="فيديوهات تعريفية" subtitle="مقاطع مختارة من دار الفتح" />
-          <VideoRail videos={introVideos} ariaLabel="فيديوهات تعريفية" />
+          <SectionHeader title={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} subtitle="مقاطع مختارة من دار الفتح" />
+          <VideoRail videos={introVideos} ariaLabel={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} />
         </Reveal>
       )}
 
-      <Reveal className="features-section">
-        <div className="features-grid">
-          <FeatureCard
-            title="دعم العملاء"
-            description="فريق دار الفتح جاهز لمساعدتك في أي وقت قبل الشراء وبعده."
-            icon={<Headphones size={18} />}
-          />
-          <FeatureCard
-            title="أسعار حسب دولتك"
-            description="العملة والأسعار تتكيف تلقائيًا حسب الدولة التي تختارها."
-            icon={<CreditCard size={18} />}
-          />
-          <FeatureCard
-            title="مخزون دقيق ومحدّث"
-            description="عدد النسخ المتاحة يظهر لك قبل الشراء لضمان وصول طلبك."
-            icon={<BookOpenText size={18} />}
-          />
-          <FeatureCard
-            title="تسليم موثوق"
-            description="نتعاون مع شركات شحن معتمدة لضمان وصول كتبك بأمان وسرعة."
-            icon={<Truck size={18} />}
-          />
-        </div>
-      </Reveal>
+      {features.length > 0 && (
+        <Reveal className="features-section">
+          <div className="features-grid" data-testid="feature-boxes">
+            {features.map((box) => {
+              const Icon = featureIcon(box.icon_key);
+              return (
+                <FeatureCard
+                  key={box.id}
+                  title={box.title}
+                  description={box.description ?? ''}
+                  icon={box.image_url ? <img src={box.image_url} alt="" loading="lazy" /> : <Icon size={18} />}
+                />
+              );
+            })}
+          </div>
+        </Reveal>
+      )}
     </div>
   );
 }

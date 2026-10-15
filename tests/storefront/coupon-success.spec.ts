@@ -1,9 +1,13 @@
 import { test, expect } from '../fixtures';
-import { addFirstBookToCart, signIn } from './helpers';
+import { signIn } from './helpers';
 
 test('كوبون خصم صحيح (DARALFATH20) يُطبَّق ويقلّل الإجمالي', async ({ page }) => {
   await signIn(page);
-  await addFirstBookToCart(page);
+  // The coupon needs an order of at least 100: the dearest book that goes straight in from its card.
+  await page.goto('/books?sort=price-desc');
+  const add = page.locator('article.book-card .book-card__main', { hasText: 'أضف للسلة' }).first();
+  await expect(add).toBeVisible({ timeout: 20_000 });
+  await add.click();
 
   await page.goto('/checkout');
   // Prices and country settle right after arrival; an applied coupon made

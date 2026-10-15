@@ -24,6 +24,7 @@ const fallbackSettings: StoreSettings = {
   whatsapp_url: null,
   youtube_url: null,
   website_url: null,
+  footer_tagline: null,
 };
 
 type PublicCatalogRow = {
@@ -248,7 +249,7 @@ export function useStoreSettings() {
       try {
         const { data, error } = await supabase
           .from('store_settings')
-          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, default_shipping_company_id, logo_url, updated_at, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url')
+          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, default_shipping_company_id, logo_url, updated_at, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url, footer_tagline')
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();
@@ -950,4 +951,152 @@ export function useIntroVideos() {
       return (data ?? []) as VideoItemRow[];
     },
   });
+}
+
+/* ── What the dashboard's "إدارة الإعلانات والأشرطة" page controls ─────────── */
+
+export interface SiteContent {
+  /** "كل الكتب" at the head of the category strip. */
+  all_books_in_bar: boolean;
+  /** The home page videos section's title. */
+  intro_videos_title: string;
+}
+
+const DEFAULT_SITE_CONTENT: SiteContent = { all_books_in_bar: true, intro_videos_title: 'فيديوهات تعريفية' };
+
+export function useSiteContent() {
+  return useQuery({
+    queryKey: ['site-content-settings'],
+    queryFn: async (): Promise<SiteContent> => {
+      if (!isSupabaseConfigured) return DEFAULT_SITE_CONTENT;
+      const { data, error } = await supabase
+        .from('site_content_settings')
+        .select('all_books_in_bar, intro_videos_title')
+        .maybeSingle();
+      if (error || !data) return DEFAULT_SITE_CONTENT;
+      return { ...DEFAULT_SITE_CONTENT, ...(data as Partial<SiteContent>) };
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+export interface AnnouncementItem {
+  id: string;
+  message: string;
+  link_url: string | null;
+}
+
+/** The messages in the strip under the header: only live ones reach here (on, and inside their dates). */
+export function useAnnouncements() {
+  return useQuery({
+    queryKey: ['site-announcements'],
+    queryFn: async (): Promise<AnnouncementItem[]> => {
+      if (!isSupabaseConfigured) return [];
+      const { data, error } = await supabase
+        .from('site_announcements')
+        .select('id, message, link_url')
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true });
+      if (error || !data) return [];
+      return data as AnnouncementItem[];
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+/**
+ * The categories the strip under the header shows, in order: those with books in them (as their
+ * own category or an extra one), minus any switched off in the dashboard; the ones given a place
+ * first, the rest after them alphabetically.
+ */
+export function useCategoryBar() {
+  const productsQuery = useProducts();
+  const { data: extraSlugs } = useProductExtraCategorySlugs();
+  const settingsQuery = useQuery({
+    queryKey: ['category-bar'],
+    queryFn: async () => {
+      if (!isSupabaseConfigured) return { categories: [], items: [] };
+      const [cats, items] = await Promise.all([
+        supabase.from('categories').select('id, slug, name'),
+        supabase.from('category_bar_items').select('category_id, is_visible, sort_order'),
+      ]);
+      return {
+        categories: (cats.data ?? []) as { id: string; slug: string | null; name: string }[],
+        items: (items.data ?? []) as { category_id: string; is_visible: boolean; sort_order: number }[],
+      };
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const data = useMemo(() => {
+    const withBooks = new Set<string>();
+    for (const product of productsQuery.data ?? []) {
+      if (product.category_slug) withBooks.add(product.category_slug);
+      extraSlugs?.get(product.product_id)?.forEach((slug) => withBooks.add(slug));
+    }
+    const placed = new Map((settingsQuery.data?.items ?? []).map((item) => [item.category_id, item]));
+    return (settingsQuery.data?.categories ?? [])
+      .filter((c): c is { id: string; slug: string; name: string } => Boolean(c.slug) && withBooks.has(c.slug!))
+      .filter((c) => placed.get(c.id)?.is_visible !== false)
+      .sort((a, b) => {
+        const pa = placed.get(a.id);
+        const pb = placed.get(b.id);
+        if (pa && pb) return pa.sort_order - pb.sort_order;
+        if (pa) return -1;
+        if (pb) return 1;
+        return a.name.localeCompare(b.name, 'ar');
+      })
+      .map((c): CategoryItem => ({ id: c.slug, slug: c.slug, name: c.name.trim() }));
+  }, [productsQuery.data, extraSlugs, settingsQuery.data]);
+
+  return { data, isLoading: productsQuery.isLoading || settingsQuery.isLoading };
+}
+
+export interface FeatureBoxItem {
+  id: string;
+  title: string;
+  description: string | null;
+  icon_key: string | null;
+  image_url: string | null;
+}
+
+/** The boxes above the footer. Throws when they can't be read, so the page can fall back to its own four. */
+export function useFeatureBoxes() {
+  return useQuery({
+    queryKey: ['home-feature-boxes'],
+    queryFn: async (): Promise<FeatureBoxItem[]> => {
+      if (!isSupabaseConfigured) throw new Error('offline');
+      const { data, error } = await supabase
+        .from('home_feature_boxes')
+        .select('id, title, description, icon_key, image_url')
+        .order('sort_order', { ascending: true });
+      if (error || !data) throw error ?? new Error('no data');
+      return data as FeatureBoxItem[];
+    },
+    retry: 1,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** The "الأكثر مبيعًا" row: the books picked in the dashboard, in its order, that are on sale here. */
+export function useBestSellers() {
+  const productsQuery = useProducts();
+  const picksQuery = useQuery({
+    queryKey: ['home-best-sellers'],
+    queryFn: async (): Promise<string[]> => {
+      if (!isSupabaseConfigured) return [];
+      const { data, error } = await supabase
+        .from('home_best_sellers')
+        .select('product_id')
+        .order('sort_order', { ascending: true });
+      if (error || !data) return [];
+      return (data as { product_id: string }[]).map((row) => row.product_id);
+    },
+    staleTime: 5 * 60_000,
+  });
+  const data = useMemo(() => {
+    const byId = new Map((productsQuery.data ?? []).map((p) => [p.product_id, p]));
+    return (picksQuery.data ?? []).map((id) => byId.get(id)).filter((p): p is ProductItem => Boolean(p));
+  }, [productsQuery.data, picksQuery.data]);
+  return { data, isLoading: productsQuery.isLoading || picksQuery.isLoading };
 }

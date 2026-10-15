@@ -1,20 +1,21 @@
 import { NavLink } from 'react-router-dom';
-import { useCategories } from '@/hooks/useStorefront';
+import { useCategoryBar, useSiteContent } from '@/hooks/useStorefront';
 
 /**
- * Persistent category strip under the header, on every page — the explicit
- * always-visible list (attebyanstore-style), not the hover dropdown already
- * living in Header. That dropdown stays as-is for the full submenu with
- * per-category product previews; this is the one-click jump.
+ * Persistent category strip under the header, on every page — the one-click jump (the header's hover
+ * menus hold the full submenus).
  *
- * Categories come from useCategories(), which derives them from products
- * that actually have stock — so this bar only ever lists categories with
- * real books in them, and fills in on its own as the catalog grows.
+ * Which categories show, and in what order, is set in the dashboard (إدارة الإعلانات والأشرطة →
+ * شريط التصنيفات), as is "كل الكتب" at its head. Only categories with books in them are ever listed,
+ * so the strip fills in on its own as the catalog grows.
  */
 export default function CategoryBar() {
-  const { data: categories = [] } = useCategories();
+  const { data: categories, isLoading } = useCategoryBar();
+  const { data: content, isLoading: contentLoading } = useSiteContent();
+  const showAll = content?.all_books_in_bar ?? true;
 
-  if (categories.length === 0) return null;
+  // Drawn once it's known what goes in it, so nothing appears and then leaves.
+  if (isLoading || contentLoading || (categories.length === 0 && !showAll)) return null;
 
   const pillClass = ({ isActive }: { isActive: boolean }) =>
     `category-bar__pill${isActive ? ' active' : ''}`;
@@ -22,9 +23,11 @@ export default function CategoryBar() {
   return (
     <nav className="category-bar" aria-label="التصنيفات">
       <div className="container category-bar__track">
-        <NavLink to="/books" end className={pillClass}>
-          كل الكتب
-        </NavLink>
+        {showAll && (
+          <NavLink to="/books" end className={pillClass}>
+            كل الكتب
+          </NavLink>
+        )}
         {categories.map((category) => (
           <NavLink
             key={category.id}
