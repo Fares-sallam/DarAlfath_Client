@@ -46,6 +46,12 @@ async function openBook(page: Page, rows: (productId: string) => Record<string, 
   return { sent, productId: () => productId };
 }
 
+/** Where the store asks Cloudflare's "are you a person" check (the deployed site), a script can't send the form. */
+async function skipBehindTurnstile(page: Page) {
+  await page.waitForLoadState('networkidle');
+  test.skip((await page.locator('.turnstile-box').count()) > 0, 'التحقق الأمني شغال هنا: الإرسال بيتجرب على نسخة التطوير');
+}
+
 test('التعليقات: تبويب جنب المواصفات، والتعليقات الموافَق عليها بس بتظهر، بالاسم والتقييم و«مشتري موثّق»', async ({ page }) => {
   await openBook(page, () => [
     review({ reviewer_name: 'أم يوسف', rating: 5, comment: 'ابني حبه جدًا', is_verified_buyer: true }),
@@ -66,6 +72,7 @@ test('التعليقات: تبويب جنب المواصفات، والتعلي�
 
 test('زائر من غير حساب: الاسم والتقييم والتعليق مطلوبين، والإرسال بيقول إنه هيظهر بعد المراجعة', async ({ page }) => {
   const { sent, productId } = await openBook(page, () => []);
+  await skipBehindTurnstile(page);
   await expect(page.getByText('لا توجد تعليقات بعد')).toBeVisible();
   const form = page.getByRole('form', { name: 'اكتب تعليقك' });
   await expect(form).toBeVisible();
@@ -98,6 +105,7 @@ test('زائر من غير حساب: الاسم والتقييم والتعلي�
 
 test('لو السيرفر رفض (كتير في وقت قصير)، رسالته بتظهر والتعليق مش بيتعد اتبعت', async ({ page }) => {
   await openBook(page, () => [], (route) => json(route, { error: 'أرسلت تعليقات كثيرة في وقت قصير. حاول مرة أخرى بعد قليل.' }, 429));
+  await skipBehindTurnstile(page);
   const form = page.getByRole('form', { name: 'اكتب تعليقك' });
   await form.getByLabel('الاسم').fill('سارة');
   await form.getByRole('radio', { name: '5 من 5' }).click();
@@ -132,6 +140,7 @@ test('عميل مسجّل: تعليقه المستني بيظهر له لوحد�
   await expect(form.getByLabel('الاسم')).toHaveValue('حسابي');
   await expect(form.getByLabel('التعليق')).toHaveValue('تعليقي');
   await expect(form.getByRole('radio', { name: '4 من 5' })).toHaveAttribute('aria-checked', 'true');
+  await skipBehindTurnstile(page);
   await form.getByLabel('التعليق').fill('تعليقي بعد التعديل');
   await form.getByRole('button', { name: 'إرسال التعديل' }).click();
   await expect(page.getByTestId('review-sent')).toBeVisible();
