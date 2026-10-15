@@ -1,4 +1,4 @@
-import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
+import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight, Share2, QrCode } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
@@ -18,7 +18,8 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { flyToCart } from '@/lib/flyToCart';
 import { editionsLabel } from '@/lib/editions';
-import { shareBook } from '@/lib/share';
+import { bookShareUrl, shareBook } from '@/lib/share';
+import BookQrDialog from '@/components/BookQrDialog';
 import BookCover from '@/components/BookCover';
 import ScrollRail from '@/components/ScrollRail';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
@@ -126,6 +127,7 @@ export default function BookDetailsPage() {
   const [activeTab, setActiveTab] = useState<DetailsTab>('about');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [qrOpen, setQrOpen] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
 
   const bookRef = useRef<HTMLDivElement>(null);
@@ -330,6 +332,16 @@ export default function BookDetailsPage() {
                 aria-label={`مشاركة رابط ${product.title}`}
               >
                 <Share2 size={16} />
+              </button>
+              <button
+                type="button"
+                className="bk3-heart bk3-share"
+                onClick={() => setQrOpen(true)}
+                aria-label={`عرض رمز QR لكتاب ${product.title}`}
+                aria-haspopup="dialog"
+                data-testid="book-qr-button"
+              >
+                <QrCode size={16} />
               </button>
             </div>
           </div>
@@ -619,6 +631,10 @@ export default function BookDetailsPage() {
             ))}
           </div>
         </section>
+      )}
+
+      {qrOpen && (
+        <BookQrDialog url={bookShareUrl(product.id)} title={product.title} onClose={() => setQrOpen(false)} />
       )}
 
       {/* ── Lightbox — a gallery, not a single frame: the open image can be

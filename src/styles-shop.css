@@ -82,6 +82,80 @@ html.dark .book-card__price del.price-was { color: var(--price-was); }
 .bk3-share:hover { border-color: var(--blue-700); color: var(--blue-800); }
 html.dark .bk3-share:hover { border-color: #d4a520; color: #d4a520; }
 
+/* ── Book page: the QR code, large ── */
+.bk3-qr {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 20, 40, 0.85);
+  backdrop-filter: blur(10px);
+  animation: bk3FadeIn 0.25s ease;
+  cursor: zoom-out;
+}
+.bk3-qr__card {
+  width: min(100%, 440px);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: 22px 22px 20px;
+  border-radius: 22px;
+  background: #fff;
+  color: #0b1b4d;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
+  cursor: default;
+  animation: bk3QrIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bk3-qr__code {
+  width: min(100%, 360px, 62vh);
+  aspect-ratio: 1;
+  margin-inline: auto;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: #f1f4fa;
+}
+.bk3-qr__code img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  border-radius: 12px;
+  animation: bk3FadeIn 0.25s ease;
+}
+.bk3-qr__error {
+  margin: 0;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #5b6482;
+}
+.bk3-qr__title {
+  margin: 16px 0 4px;
+  font-size: 18px;
+  line-height: 1.5;
+  font-weight: 800;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.bk3-qr__hint {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: #5b6482;
+}
+@keyframes bk3QrIn {
+  from { opacity: 0; transform: translateY(14px) scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bk3-qr, .bk3-qr__card, .bk3-qr__code img { animation: none; }
+}
+
 .bk3-price { flex-wrap: wrap; row-gap: 4px; }
 .bk3-price__from {
   font-size: 15px;

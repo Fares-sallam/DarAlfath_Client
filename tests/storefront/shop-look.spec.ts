@@ -104,7 +104,7 @@ test('صفحة الكتاب: المشاركة جنب القلب، و«اختر �
 
   await page.goto(`/book/${single!.product_id}`);
   const acts = page.locator('.bk3-info__acts');
-  await expect(acts.locator('.bk3-heart')).toHaveCount(2); // the heart and the share button, side by side
+  await expect(acts.locator('.bk3-heart')).toHaveCount(3); // the heart, the share button and the QR button, side by side
   await expect(acts.getByRole('button', { name: /^مشاركة رابط/ })).toBeVisible();
   await expect(page.locator('.bk3-variants__hd')).toContainText('اختر الطبعة');
   await expect(page.locator('.bk3-variants__hd small')).toHaveText('طبعة واحدة');
