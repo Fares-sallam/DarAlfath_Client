@@ -7,6 +7,7 @@ import { editionsLabel } from '@/lib/editions';
 import { shareBook } from '@/lib/share';
 import type { ProductItem } from '@/types/store';
 import BookCover from '@/components/BookCover';
+import CardBuyActions from '@/components/CardBuyActions';
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
@@ -26,6 +27,7 @@ export default function ProductCard({
   const navigate = useNavigate();
   const { isInWishlist, toggleWishlist } = useWishlist();
   const cardRef = useRef<HTMLElement | null>(null);
+  const coverRef = useRef<HTMLDivElement | null>(null);
   const rafId = useRef(0);
 
   const wished = isInWishlist(product.id);
@@ -113,7 +115,7 @@ export default function ProductCard({
         <Share2 size={15} />
       </button>
 
-      <div className="book-card__cover">
+      <div className="book-card__cover" ref={coverRef}>
         <BookCover
           title={product.title}
           author={product.author}
@@ -164,18 +166,7 @@ export default function ProductCard({
           <strong>{price.now}</strong>
         </div>
 
-        <div className="book-card__actions">
-          <button
-            type="button"
-            className="primary-button"
-            onClick={(e) => {
-              e.stopPropagation();
-              openBook();
-            }}
-          >
-            عرض التفاصيل
-          </button>
-        </div>
+        <CardBuyActions product={product} coverRef={coverRef} onOpen={openBook} />
       </div>
     </article>
   );

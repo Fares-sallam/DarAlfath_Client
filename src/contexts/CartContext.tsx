@@ -38,6 +38,8 @@ interface CartContextValue {
    *  governorate+weight shipping quote (useShippingRate) on checkout. */
   cartWeightKg: number;
   addToCart: (product: ProductItem, variant: ProductVariantItem, quantity?: number) => void;
+  /** The cart line for this edition, if it is in the cart. */
+  itemForVariant: (variantId: string) => CartItem | undefined;
   updateQuantity: (key: string, quantity: number) => void;
   removeFromCart: (key: string) => void;
   clearCart: () => void;
@@ -240,6 +242,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const clearCart = () => setItems([]);
 
+  const itemForVariant = (variantId: string) => items.find((item) => item.variant_id === variantId);
+
   const value = useMemo<CartContextValue>(() => {
     const subtotal = items.reduce(
       (acc, item) => acc + item.quantity * item.price,
@@ -273,6 +277,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       remainingForFreeShipping,
       cartWeightKg,
       addToCart,
+      itemForVariant,
       updateQuantity,
       removeFromCart,
       clearCart,

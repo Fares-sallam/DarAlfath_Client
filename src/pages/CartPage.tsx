@@ -77,6 +77,7 @@ export default function CartPage() {
                     <QuantitySelector
                       value={item.quantity}
                       onChange={(value) => updateQuantity(item.key, value)}
+                      max={item.available_stock}
                     />
                   )}
 

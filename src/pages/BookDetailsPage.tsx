@@ -485,7 +485,7 @@ export default function BookDetailsPage() {
                 so only offer a quantity when there's something to buy. */}
             {selectedVariant && !selectedVariant.is_digital && selectedVariant.is_available && (
               <div className="bk3-buy__qty">
-                <QuantitySelector value={quantity} onChange={updateQuantity} />
+                <QuantitySelector value={quantity} onChange={updateQuantity} max={selectedVariant.available_stock} />
               </div>
             )}
             {selectedVariant?.is_digital && (

@@ -254,3 +254,137 @@ html.dark .video-tile__body p { color: #8a93b8; }
   .video-tile:hover,
   .video-tile:hover .video-tile__poster img { transform: none; }
 }
+
+/* ── Card: the buttons (add / counter / details, then quick buy) ── */
+.book-card__actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 4px;
+}
+.book-card__main { width: 100%; }
+.book-card__main:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+.book-card__main--in {
+  background: linear-gradient(180deg, oklch(0.55 0.12 155), oklch(0.45 0.11 155));
+}
+.book-card__stepper { display: flex; }
+.qty-stepper--card {
+  width: 100%;
+  justify-content: space-between;
+  min-height: 38px;
+  border-radius: 12px;
+  animation: stepperIn 0.28s var(--ease-out-quart);
+}
+.qty-stepper--card button { cursor: pointer; transition: background 0.2s; }
+.qty-stepper--card button:hover:not(:disabled) { background: rgba(9, 47, 106, 0.12); }
+.qty-stepper button:disabled { opacity: 0.35; cursor: not-allowed; }
+@keyframes stepperIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+.book-card__quick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--gold) 70%, transparent);
+  background: color-mix(in srgb, var(--gold-soft) 45%, var(--surface));
+  color: var(--blue-900);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.2s var(--ease-out-quart);
+}
+.book-card__quick:hover { background: var(--gold-soft); border-color: var(--gold); transform: translateY(-1px); }
+.book-card__quick svg { color: var(--gold); }
+html.dark .book-card__quick {
+  background: rgba(212, 165, 32, 0.1);
+  border-color: rgba(212, 165, 32, 0.45);
+  color: #f0c842;
+}
+html.dark .book-card__quick:hover { background: rgba(212, 165, 32, 0.2); }
+html.dark .book-card__quick svg { color: #f0c842; }
+
+/* The edition list for a quick buy, over the card's lower half. */
+.book-card__picker {
+  position: absolute;
+  inset-inline: 6px;
+  bottom: 6px;
+  z-index: 6;
+  max-height: calc(100% - 12px);
+  overflow: auto;
+  padding: 10px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--gold) 55%, transparent);
+  background: var(--surface);
+  box-shadow: 0 18px 40px rgba(9, 20, 48, 0.25);
+  animation: pickerUp 0.3s var(--ease-out-quart);
+  cursor: default;
+}
+@keyframes pickerUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+.book-card__picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.book-card__picker-head button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(9, 47, 106, 0.06);
+  color: var(--muted);
+  cursor: pointer;
+}
+.book-card__picker ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.book-card__edition {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.book-card__edition span { font-size: 12.5px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.book-card__edition b { font-size: 12.5px; white-space: nowrap; }
+.book-card__edition small { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+.book-card__edition:hover:not(:disabled),
+.book-card__edition:focus-visible { border-color: var(--blue-700); background: color-mix(in srgb, var(--blue-700) 6%, var(--surface)); }
+.book-card__edition:disabled { opacity: 0.45; cursor: not-allowed; }
+html.dark .book-card__picker { background: #0d1847; border-color: rgba(212, 165, 32, 0.4); }
+html.dark .book-card__picker-head { color: #f0edff; }
+html.dark .book-card__picker-head button { background: rgba(255, 255, 255, 0.06); color: #8a93b8; }
+html.dark .book-card__edition { background: #060d2e; border-color: #1e2d6b; color: #f0edff; }
+html.dark .book-card__edition:hover:not(:disabled),
+html.dark .book-card__edition:focus-visible { border-color: #d4a520; background: rgba(212, 165, 32, 0.08); }
+
+@media (prefers-reduced-motion: reduce) {
+  .qty-stepper--card,
+  .book-card__picker { animation: none; }
+  .book-card__quick:hover { transform: none; }
+}

@@ -722,36 +722,58 @@ export function useHomeCategorySections(limitPerCategory = Infinity) {
 
 
 /**
- * The books that can be bought right now in the selected country (at least one copy in stock, or a
- * digital copy), for the "available only" filter. Null when it couldn't be read: the filter is then
- * left out rather than hiding everything.
+ * Every edition on sale in the selected country, by book: what a card needs to put a book sold in one
+ * edition straight in the cart, or to offer the editions for a quick buy. One read for the whole
+ * catalog (in pages, so a growing catalog is never cut short), shared by every card. Null when it
+ * couldn't be read: cards then just link to the book.
  */
-export function useAvailableProductIds() {
+export function useCatalogVariants() {
   const { selectedCountry } = useCountry();
   const countryCode = selectedCountry?.code || undefined;
 
   return useQuery({
-    queryKey: ['available-product-ids', countryCode ?? 'all'],
-    queryFn: async (): Promise<Set<string> | null> => {
+    queryKey: ['catalog-variants', countryCode ?? 'all'],
+    queryFn: async (): Promise<Map<string, ProductVariantItem[]> | null> => {
       if (!isSupabaseConfigured) return null;
-      const available = new Set<string>();
-      const PAGE = 1000; // the API's page size: read in pages so a growing catalog is never cut short
+      const byBook = new Map<string, ProductVariantItem[]>();
+      const PAGE = 1000; // the API's page size
       for (let page = 0; page < 20; page++) {
         let query = supabase
           .from('product_variants_public')
-          .select('product_id, is_available')
+          .select('*')
           .order('variant_id')
           .range(page * PAGE, page * PAGE + PAGE - 1);
         if (countryCode) query = query.eq('country_code', countryCode);
         const { data, error } = await query;
         if (error || !data) return null;
-        for (const row of data as { product_id: string; is_available: boolean | null }[]) if (row.is_available) available.add(row.product_id);
+        for (const row of data as PublicVariantRow[]) {
+          const variant = normalizeVariant(row);
+          const list = byBook.get(variant.product_id);
+          if (list) list.push(variant);
+          else byBook.set(variant.product_id, [variant]);
+        }
         if (data.length < PAGE) break;
       }
-      return available;
+      return byBook;
     },
     staleTime: 60_000,
   });
+}
+
+/**
+ * The books that can be bought right now in the selected country (at least one copy in stock, or a
+ * digital copy), for the "available only" filter. Null when it couldn't be read: the filter is then
+ * left out rather than hiding everything.
+ */
+export function useAvailableProductIds() {
+  const variantsQuery = useCatalogVariants();
+  const data = useMemo(() => {
+    if (!variantsQuery.data) return variantsQuery.data;
+    const available = new Set<string>();
+    for (const [productId, variants] of variantsQuery.data) if (variants.some((v) => v.is_available)) available.add(productId);
+    return available;
+  }, [variantsQuery.data]);
+  return { ...variantsQuery, data };
 }
 
 /** The newest books, for the home page's "وصل حديثًا" row. */
