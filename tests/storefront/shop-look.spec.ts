@@ -81,7 +81,7 @@ test('المشاركة من الكارت: بتنسخ رابط الكتاب وب�
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   const rows = await booksWithKnownCards(page);
   await card(page, 'كتاب اختبار طبعة واحدة').locator('.book-card__share').click();
-  await expect(page.locator('.site-toast')).toHaveText('اتنسخ رابط الكتاب');
+  await expect(page.locator('.site-toast')).toHaveText('تم نسخ رابط الكتاب');
   await expect(page).toHaveURL(/\/books$/);
   const copied = await page.evaluate(() => navigator.clipboard.readText());
   expect(copied).toMatch(new RegExp(`^https?://[^/]+/book/${rows[1].product_id}$`));
@@ -112,7 +112,7 @@ test('صفحة الكتاب: المشاركة جنب القلب، و«اختر �
   await expect(page.locator('.bk3-cart-btn')).not.toHaveText(/اختر (نسخة|طبعة)/);
 
   await acts.getByRole('button', { name: /^مشاركة رابط/ }).click();
-  await expect(page.locator('.site-toast')).toHaveText('اتنسخ رابط الكتاب');
+  await expect(page.locator('.site-toast')).toHaveText('تم نسخ رابط الكتاب');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`/book/${single!.product_id}$`));
 
   await page.getByRole('button', { name: 'المواصفات' }).click();

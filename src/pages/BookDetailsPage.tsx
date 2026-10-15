@@ -363,11 +363,11 @@ export default function BookDetailsPage() {
                 </div>
                 <span className="bk3-rating__val">{product.rating}</span>
                 <span className="bk3-rating__lbl">
-                  ({product.reviews_count} تقييم)
+                  ({product.reviews_count.toLocaleString('ar-EG')} {product.reviews_count === 1 ? 'تعليق' : product.reviews_count === 2 ? 'تعليقان' : product.reviews_count <= 10 ? 'تعليقات' : 'تعليقًا'})
                 </span>
               </>
             ) : (
-              <span className="bk3-rating__lbl">{isBundle ? 'كن أول من يقيّم هذه المجموعة' : 'كن أول من يقيّم هذا الكتاب'}</span>
+              <span className="bk3-rating__lbl">{isBundle ? 'كن أول من يعلّق على هذه المجموعة' : 'كن أول من يعلّق على هذا الكتاب'}</span>
             )}
           </button>
 
@@ -544,7 +544,7 @@ export default function BookDetailsPage() {
               className={`bk3-tab ${activeTab === tab ? 'bk3-tab--on' : ''}`}
               onClick={() => setActiveTab(tab)}
             >
-              {tab === 'about' ? (isBundle ? 'نبذة عن المجموعة' : 'نبذة عن الكتاب') : tab === 'specs' ? 'المواصفات' : 'التقييمات'}
+              {tab === 'about' ? (isBundle ? 'نبذة عن المجموعة' : 'نبذة عن الكتاب') : tab === 'specs' ? 'المواصفات' : 'التعليقات'}
               {tab === 'reviews' && product.reviews_count > 0 && ` (${product.reviews_count})`}
             </button>
           ))}

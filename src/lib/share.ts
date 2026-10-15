@@ -41,5 +41,5 @@ export async function shareBook(book: { id: string; title: string }): Promise<vo
       if ((err as DOMException)?.name === 'AbortError') return;
     }
   }
-  showToast((await copyText(url)) ? 'اتنسخ رابط الكتاب' : `رابط الكتاب: ${url}`);
+  showToast((await copyText(url)) ? 'تم نسخ رابط الكتاب' : `رابط الكتاب: ${url}`);
 }

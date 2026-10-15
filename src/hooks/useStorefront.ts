@@ -503,32 +503,34 @@ export function useProductDetails(productId?: string) {
   return { ...productsQuery, data: product };
 }
 
-/* ── Product reviews (real, verified-purchase-gated) ───────────────────
- * Replaces the old fake rating/reviews_count (see normalizeProduct
- * above). A review can only be inserted for a product the reviewing
- * customer actually received — enforced server-side by product_reviews'
- * own RLS policy (order.status = تم التوصيل), one review per customer
- * per product (unique constraint; a resubmit is an update, not a dupe). */
+/* ── Customer comments ────────────────────────────────────────────────
+ * Anyone can leave one (a name, a rating, the comment); it shows once the store approves it in the
+ * dashboard. What comes back here is the approved ones, plus the signed-in customer's own while it
+ * waits (product_reviews' RLS). Sent through the submit-review edge function, which saves it as
+ * pending; a signed-in customer has one per book, and sending again edits it. */
 export interface ProductReview {
   id: string;
   product_id: string;
-  user_id: string;
+  user_id: string | null;
   reviewer_name: string;
   rating: number;
   comment: string | null;
+  status: 'pending' | 'approved' | 'hidden';
+  is_verified_buyer: boolean;
   created_at: string;
   updated_at: string;
 }
 
 export function useProductReviews(productId?: string) {
+  const { user } = useAuth();
   return useQuery({
-    queryKey: ['product-reviews', productId ?? 'missing'],
+    queryKey: ['product-reviews', productId ?? 'missing', user?.id ?? 'anon'],
     enabled: Boolean(productId),
     queryFn: async (): Promise<ProductReview[]> => {
       if (!isSupabaseConfigured || !productId) return [];
       const { data, error } = await supabase
         .from('product_reviews')
-        .select('id, product_id, user_id, reviewer_name, rating, comment, created_at, updated_at')
+        .select('id, product_id, user_id, reviewer_name, rating, comment, status, is_verified_buyer, created_at, updated_at')
         .eq('product_id', productId)
         .order('created_at', { ascending: false });
       if (error || !data) return [];
@@ -537,62 +539,44 @@ export function useProductReviews(productId?: string) {
   });
 }
 
-/** Whether the signed-in customer has a delivered order containing this
- *  product — gates showing the "write a review" form so the UI doesn't
- *  invite a submission that the server-side RLS check would just reject.
- *  Mirrors that check exactly (same status string, same join). */
-export function useCanReviewProduct(productId?: string) {
-  const { user } = useAuth();
-
-  return useQuery({
-    queryKey: ['can-review-product', productId ?? 'missing', user?.id ?? 'anon'],
-    enabled: Boolean(productId && user),
-    queryFn: async (): Promise<boolean> => {
-      if (!isSupabaseConfigured || !productId || !user) return false;
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id, order_items!inner(product_id)')
-        .eq('user_id', user.id)
-        .eq('status', 'تم التوصيل')
-        .eq('order_items.product_id', productId)
-        .limit(1);
-      if (error) return false;
-      return (data?.length ?? 0) > 0;
-    },
-  });
-}
-
 export interface SubmitReviewInput {
   productId: string;
-  userId: string;
   reviewerName: string;
   rating: number;
-  comment: string | null;
+  comment: string;
+  turnstileToken?: string;
+  /** The field people can't see (a script fills it in). */
+  website?: string;
 }
 
-/** Insert or update — a customer can only ever have one review per
- *  product (unique(product_id, user_id)), so re-submitting after already
- *  reviewing edits the existing row rather than erroring. */
 export function useSubmitProductReview() {
   const qc = useQueryClient();
 
   return useMutation({
     mutationFn: async (input: SubmitReviewInput) => {
-      const { error } = await supabase.from('product_reviews').upsert(
-        {
+      const { data, error } = await supabase.functions.invoke('submit-review', {
+        body: {
           product_id: input.productId,
-          user_id: input.userId,
-          reviewer_name: input.reviewerName.trim() || 'قارئ',
+          reviewer_name: input.reviewerName.trim(),
           rating: input.rating,
-          comment: input.comment?.trim() || null,
+          comment: input.comment.trim(),
+          turnstileToken: input.turnstileToken || null,
+          website: input.website || '',
         },
-        { onConflict: 'product_id,user_id' }
-      );
-      if (error) throw error;
+      });
+      if (error) {
+        // The function's own Arabic message, when it sent one.
+        let message = 'تعذّر إرسال التعليق. حاول مرة أخرى بعد قليل.';
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          if (body?.error) message = String(body.error);
+        } catch { /* keep the general message */ }
+        throw new Error(message);
+      }
+      return data as { ok: boolean; status: string };
     },
     onSuccess: (_data, vars) => {
       qc.invalidateQueries({ queryKey: ['product-reviews', vars.productId] });
-      qc.invalidateQueries({ queryKey: ['products-public-catalog'] });
     },
   });
 }

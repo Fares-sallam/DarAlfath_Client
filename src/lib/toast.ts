@@ -1,5 +1,5 @@
 /**
- * A one-line note at the bottom of the screen ("اتنسخ الرابط"), read out by screen readers, gone after a
+ * A one-line note at the bottom of the screen ("تم نسخ رابط الكتاب"), read out by screen readers, gone after a
  * moment. One at a time: a new note replaces the one on screen.
  */
 let current: { el: HTMLElement; timer: number } | null = null;
