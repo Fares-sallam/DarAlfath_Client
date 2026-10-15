@@ -3,7 +3,6 @@ import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { staticSeo } from '@/lib/seo';
 import { ArrowLeft, ChevronDown, Layers3, LibraryBig } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { OrnamentDivider } from '@/components/Ornament';
 import { useCategories, useProductExtraCategorySlugs, useProducts } from '@/hooks/useStorefront';
 
 export default function CategoriesPage() {
@@ -48,23 +47,13 @@ export default function CategoriesPage() {
 
   return (
     <div className="page-sections">
-      <section className="taxonomy-hero">
-        <span className="page-kicker">التصنيفات والسلاسل</span>
-        <h1>وصول أسرع للكتب حسب التصنيف أو المجموعة</h1>
-        <p>
-          افتح أي تصنيف بمجرد الوقوف عليه، ثم انتقل مباشرة إلى الكتب أو إلى
-          صفحة عرض التصنيف بالكامل.
-        </p>
-        <OrnamentDivider />
-      </section>
-
       {isLoading ? <section className="page-card page-card--loading" /> : null}
 
       {!isLoading ? (
         <section className="taxonomy-section">
           <div className="section-heading">
             <div>
-              <h2>التصنيفات</h2>
+              <h1>التصنيفات</h1>
               <p>كل تصنيف يعرض الكتب الموجودة بداخله عند الوقوف عليه.</p>
             </div>
           </div>

@@ -208,11 +208,22 @@ export function formatMoney(value: number, currencySymbol: string) {
   return `${Number(value || 0).toLocaleString('ar-EG')} ${currencySymbol}`;
 }
 
+/**
+ * A book's price as a card shows it: the cheapest edition, with "يبدأ من" when there is more than one,
+ * and the price before the discount when it is on offer (struck through beside it).
+ */
+export function catalogPriceParts(product: ProductItem) {
+  const several = product.variant_count > 1 || product.min_price !== product.max_price;
+  return {
+    prefix: several ? 'يبدأ من' : '',
+    now: formatMoney(product.min_price || product.starting_price, product.currency_symbol),
+    was: product.compare_at_price ? formatMoney(product.compare_at_price, product.currency_symbol) : null,
+  };
+}
+
 export function formatCatalogPrice(product: ProductItem) {
-  if (product.min_price !== product.max_price) {
-    return `من ${formatMoney(product.min_price, product.currency_symbol)} إلى ${formatMoney(product.max_price, product.currency_symbol)}`;
-  }
-  return `يبدأ من ${formatMoney(product.starting_price, product.currency_symbol)}`;
+  const { prefix, now } = catalogPriceParts(product);
+  return prefix ? `${prefix} ${now}` : now;
 }
 
 // The dashboard uploads the logo to a fixed storage path (upsert, same

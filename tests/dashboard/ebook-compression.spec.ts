@@ -126,7 +126,8 @@ test('كتاب ممسوح أكبر من 50 م.ب: يتضغط تلقائيًا ل
   const status = page.getByText(/اتضغط من/);
   await expect(status).toBeVisible();
 
-  await page.getByRole('button', { name: /معاينة/ }).first().click();
+  // The file's own preview button ("معاينة الكتاب" at the top of the form opens the store instead).
+  await page.getByRole('button', { name: 'معاينة', exact: true }).first().click();
   const bytes = await sizeOf(page);
   expect(bytes).not.toBeNull();
   expect(bytes!).toBeLessThanOrEqual(LIMIT);

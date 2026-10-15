@@ -3,7 +3,6 @@ import { useSearchParams } from 'react-router-dom';
 import BooksFilterBar from '@/components/BooksFilterBar';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
-import { OrnamentDivider } from '@/components/Ornament';
 import { applyFilters, authorOptions, parseFilters, priceBounds } from '@/lib/catalogFilters';
 import {
   useAvailableProductIds,
@@ -111,18 +110,6 @@ export default function BooksPage() {
 
   return (
     <div className="page-sections">
-      <section className="catalog-hero">
-        <div>
-          <span className="page-kicker">الكتالوج العام</span>
-          <h1>كل كتب دار الفتح في مكان واحد</h1>
-          <p>
-            هذه صفحة الكتب فقط: ابحث، صفِّ النتائج، وافتح صفحة أي كتاب لاختيار
-            النسخة المناسبة قبل الإضافة إلى السلة.
-          </p>
-          <OrnamentDivider />
-        </div>
-      </section>
-
       <BooksFilterBar filters={filters} options={options} setParams={setParams} clearFilters={clearFilters} />
 
       {isLoading || (filters.series && loadingSeriesIds) ? (
@@ -132,6 +119,7 @@ export default function BooksPage() {
       {!isLoading && !(filters.series && loadingSeriesIds) ? (
         <section>
           <SectionHeader
+            as="h1"
             title={selectedSeries?.name || selectedCategory?.name || 'كل الكتب'}
             subtitle={`${filtered.length} كتاب مطابق للعرض الحالي`}
           />

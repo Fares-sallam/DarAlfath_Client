@@ -28,8 +28,8 @@ test.describe('صفحة المجموعة', () => {
       await expect(page.locator('.bk3-variants')).toHaveCount(0);
     }
 
-    // Always a copy selected — never "اختر نسخة أولًا".
-    await expect(page.locator('.bk3-cart-btn')).not.toHaveText(/اختر نسخة/);
+    // Always a copy selected — never "اختر طبعة أولًا".
+    await expect(page.locator('.bk3-cart-btn')).not.toHaveText(/اختر (نسخة|طبعة)/);
   });
 
   test('لا يوجد سكرول أفقي في صفحة المجموعة على سطح المكتب', async ({ page }) => {

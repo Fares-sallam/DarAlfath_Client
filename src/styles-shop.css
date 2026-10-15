@@ -1,0 +1,256 @@
+/* ──────────────────────────────────────────────────────────────────────────
+   SHOP LAYER — the book card's share button and price, the book page's
+   share button, the copied-link note, and the video shelf. Loaded last, so
+   where it restates an older rule it is the one that holds.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* a price before its discount: struck through, in red */
+  --price-was: oklch(0.53 0.19 27);
+}
+html.dark {
+  --price-was: oklch(0.74 0.15 24);
+}
+
+/* ── Card: share, opposite the heart ── */
+.book-card__share {
+  position: absolute;
+  top: 12px;
+  inset-inline-end: 12px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 37, 66, 0.08);
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--muted);
+  display: grid;
+  place-items: center;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: color 0.2s, transform 0.25s var(--ease-out-quart);
+}
+.book-card__share:hover { color: var(--blue-800); transform: scale(1.08); }
+.book-card__share:focus-visible,
+.book-card__fav:focus-visible { outline: 2px solid var(--blue-700); outline-offset: 2px; }
+html.dark .book-card__share {
+  background: rgba(6, 13, 46, 0.85);
+  border: 1px solid rgba(30, 45, 107, 0.7);
+  color: #8a93b8;
+  backdrop-filter: blur(6px);
+}
+html.dark .book-card__share:hover { color: #d4a520; border-color: rgba(212, 165, 32, 0.35); }
+
+/* The discount sat where the share button now is: it moves to the cover's lower corner. */
+.book-card__discount-badge {
+  top: auto;
+  bottom: 10px;
+  inset-inline-end: 10px;
+}
+
+/* How many editions: was navy on the navy card in dark mode, so it couldn't be read. */
+html.dark .book-card__variants-count { color: #f0c842; }
+
+/* ── Card: price ── */
+.book-card__price {
+  align-items: baseline;
+  gap: 4px 7px;
+}
+.book-card__from {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.price-was {
+  color: var(--price-was);
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  font-weight: 700;
+  font-size: 13px;
+}
+.book-card__price strong { color: var(--text); }
+html.dark .book-card__price strong { color: var(--text); }
+html.dark .book-card__price del.price-was { color: var(--price-was); }
+
+/* ── Book page: share beside the heart, and the price ── */
+.bk3-info__acts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.bk3-share:hover { border-color: var(--blue-700); color: var(--blue-800); }
+html.dark .bk3-share:hover { border-color: #d4a520; color: #d4a520; }
+
+.bk3-price { flex-wrap: wrap; row-gap: 4px; }
+.bk3-price__from {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.bk3-price del.price-was { font-size: 18px; }
+.bk3-price strong,
+html.dark .bk3-price strong { color: var(--text); }
+html.dark .bk3-price del.price-was { color: var(--price-was); }
+
+/* ── The copied-link note ── */
+.site-toast {
+  position: fixed;
+  inset-inline: 0;
+  bottom: max(20px, env(safe-area-inset-bottom));
+  z-index: 10000;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin-inline: auto;
+  padding: 11px 20px;
+  border-radius: 999px;
+  background: var(--blue-900);
+  color: oklch(0.98 0.01 260);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  box-shadow: 0 12px 32px rgba(9, 20, 48, 0.28);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 0.25s ease-out, transform 0.35s var(--ease-out-quart);
+}
+.site-toast--in { opacity: 1; transform: none; }
+html.dark .site-toast { background: #d4a520; color: #060d2e; }
+@media (prefers-reduced-motion: reduce) {
+  .site-toast { transform: none; transition: opacity 0.2s; }
+}
+
+/* ── The page's own heading, when it is the results heading (books, categories) ── */
+.section-heading h1 {
+  margin: 0;
+  font-family: "Cairo", "Noto Kufi Arabic", sans-serif;
+  font-size: 29px;
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+html.dark .section-heading h1 { color: #f0edff; }
+@media (max-width: 640px) {
+  .section-heading h1 { font-size: 24px; }
+}
+
+/* ── Videos: a shelf like the books ── */
+.video-rail__item {
+  flex: 0 0 auto;
+  width: clamp(250px, 74vw, 330px);
+  scroll-snap-align: start;
+}
+.video-tile {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgba(177, 146, 101, 0.4);
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--surface), #fcf6ec);
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.3s var(--ease-out-quart), box-shadow 0.3s var(--ease-out-quart), border-color 0.3s;
+}
+.video-tile:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  border-color: rgba(177, 146, 101, 0.75);
+}
+.video-tile__frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: linear-gradient(180deg, #1a2f57, #0e2246);
+}
+.video-tile__frame iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  display: block;
+}
+.video-tile__poster {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.video-tile__poster img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: transform 0.5s var(--ease-out-quart);
+}
+.video-tile:hover .video-tile__poster img { transform: scale(1.04); }
+.video-tile__play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  padding-inline-start: 3px; /* the triangle's weight sits off-centre */
+  background: rgba(9, 25, 60, 0.72);
+  color: oklch(0.98 0.01 260);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  transition: transform 0.3s var(--ease-out-quart), background 0.3s;
+}
+.video-tile__poster:hover .video-tile__play,
+.video-tile__poster:focus-visible .video-tile__play {
+  transform: scale(1.1);
+  background: var(--gold);
+}
+.video-tile__poster:focus-visible { outline: 3px solid var(--gold); outline-offset: -3px; }
+.video-tile__duration {
+  position: absolute;
+  bottom: 10px;
+  inset-inline-start: 10px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: oklch(0.98 0.01 260);
+  font-size: 12px;
+}
+.video-tile__body {
+  padding: 13px 15px 15px;
+  display: grid;
+  gap: 5px;
+}
+.video-tile__body h3 {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.video-tile__body p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+html.dark .video-tile {
+  background: linear-gradient(180deg, #0d1a50, #070f38);
+  border-color: #1e2d6b;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.4);
+}
+html.dark .video-tile:hover { border-color: rgba(212, 165, 32, 0.4); }
+html.dark .video-tile__body h3 { color: #f0edff; }
+html.dark .video-tile__body p { color: #8a93b8; }
+@media (prefers-reduced-motion: reduce) {
+  .video-tile,
+  .video-tile__poster img,
+  .video-tile__play { transition: none; }
+  .video-tile:hover,
+  .video-tile:hover .video-tile__poster img { transform: none; }
+}

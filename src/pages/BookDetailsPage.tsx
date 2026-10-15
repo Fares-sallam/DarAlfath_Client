@@ -1,11 +1,11 @@
-import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight, Share2 } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
 import ProductReviews from '@/components/ProductReviews';
 import QuantitySelector from '@/components/QuantitySelector';
 import {
-  formatCatalogPrice,
+  catalogPriceParts,
   formatMoney,
   useBundleContents,
   useProductDetails,
@@ -17,6 +17,8 @@ import {
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { flyToCart } from '@/lib/flyToCart';
+import { editionsLabel } from '@/lib/editions';
+import { shareBook } from '@/lib/share';
 import BookCover from '@/components/BookCover';
 import ScrollRail from '@/components/ScrollRail';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
@@ -149,11 +151,12 @@ export default function BookDetailsPage() {
   useEffect(() => { setQuantity(1); }, [selectedVariantId]);
 
   // A bundle always has a copy selected (the first in stock, else the
-  // first), so its books and price show straight away. Selected even when
+  // first), so its books and price show straight away; so does a book sold
+  // in one edition only, since there's nothing to choose. Selected even when
   // out of stock, so the button reads "غير متوفر" rather than
-  // "اختر نسخة أولًا".
+  // "اختر طبعة أولًا".
   useEffect(() => {
-    if (isBundle && !selectedVariantId && variants.length > 0) {
+    if ((isBundle || variants.length === 1) && !selectedVariantId && variants.length > 0) {
       setSelectedVariantId((variants.find((v) => v.is_available) ?? variants[0]).variant_id);
     }
   }, [isBundle, selectedVariantId, variants]);
@@ -219,6 +222,7 @@ export default function BookDetailsPage() {
   const wished = isInWishlist(product.id);
   const categoryLabel = product.category_name || product.category?.name || 'غير محدد';
   const canAddToCart = Boolean(selectedVariant?.is_available);
+  const listPrice = catalogPriceParts(product);
   const mainImage = selectedImage || product.cover_url || null;
   const descriptionText = product.description ||
     'هذا الإصدار مصمم بعناية ليمنح القارئ تجربة قراءة مريحة، مع عرض واضح ونسخ متعددة تناسب الاستخدامات المختلفة.';
@@ -310,14 +314,24 @@ export default function BookDetailsPage() {
                 </Link>
               ))}
             </div>
-            <button
-              type="button"
-              className={`bk3-heart ${wished ? 'bk3-heart--on' : ''}`}
-              onClick={() => toggleWishlist(product.id)}
-              aria-label={wished ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}
-            >
-              <Heart size={16} fill={wished ? 'currentColor' : 'none'} />
-            </button>
+            <div className="bk3-info__acts">
+              <button
+                type="button"
+                className={`bk3-heart ${wished ? 'bk3-heart--on' : ''}`}
+                onClick={() => toggleWishlist(product.id)}
+                aria-label={wished ? 'إزالة من المفضلة' : 'إضافة للمفضلة'}
+              >
+                <Heart size={16} fill={wished ? 'currentColor' : 'none'} />
+              </button>
+              <button
+                type="button"
+                className="bk3-heart bk3-share"
+                onClick={() => void shareBook({ id: product.id, title: product.title })}
+                aria-label={`مشاركة رابط ${product.title}`}
+              >
+                <Share2 size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Title */}
@@ -359,14 +373,22 @@ export default function BookDetailsPage() {
 
           {/* Price */}
           <div className="bk3-price" style={{ '--i': 6 } as React.CSSProperties}>
-            <strong key={selectedVariantId || 'range'}>
-              {selectedVariant
-                ? formatMoney(selectedVariant.display_price, selectedVariant.currency_symbol)
-                : formatCatalogPrice(product)}
-            </strong>
-            {selectedVariant?.compare_at_price ? (
-              <del>{formatMoney(selectedVariant.compare_at_price, selectedVariant.currency_symbol)}</del>
-            ) : null}
+            {selectedVariant ? (
+              <>
+                {selectedVariant.compare_at_price ? (
+                  <del className="price-was">{formatMoney(selectedVariant.compare_at_price, selectedVariant.currency_symbol)}</del>
+                ) : null}
+                <strong key={selectedVariantId}>
+                  {formatMoney(selectedVariant.display_price, selectedVariant.currency_symbol)}
+                </strong>
+              </>
+            ) : (
+              <>
+                {listPrice.prefix ? <small className="bk3-price__from">{listPrice.prefix}</small> : null}
+                {listPrice.was ? <del className="price-was">{listPrice.was}</del> : null}
+                <strong key="range">{listPrice.now}</strong>
+              </>
+            )}
           </div>
 
           {/* A bundle's struck-through price is its books bought one by one
@@ -389,8 +411,8 @@ export default function BookDetailsPage() {
           <div className="bk3-variants" style={{ '--i': 8 } as React.CSSProperties}>
             <div className="bk3-variants__hd">
               <Layers size={14} />
-              <span>اختر النسخة</span>
-              <small>{variantsLoading ? '...' : `${variants.length || product.variant_count} نسخة`}</small>
+              <span>اختر الطبعة</span>
+              <small>{variantsLoading ? '...' : editionsLabel(variants.length || product.variant_count)}</small>
             </div>
             <div className="bk3-variants__grid">
               {variants.map((v) => (
@@ -409,7 +431,7 @@ export default function BookDetailsPage() {
                 </button>
               ))}
               {!variantsLoading && variants.length === 0 && (
-                <p className="bk3-variants__empty">لا توجد نسخ متاحة حاليًا.</p>
+                <p className="bk3-variants__empty">لا توجد طبعات متاحة حاليًا.</p>
               )}
             </div>
           </div>
@@ -472,7 +494,7 @@ export default function BookDetailsPage() {
               </span>
             )}
             {!selectedVariant && (
-              <span className="bk3-chip bk3-chip--muted">اختر نسخة لتحديد الكمية</span>
+              <span className="bk3-chip bk3-chip--muted">اختر طبعة لتحديد الكمية</span>
             )}
 
             <button
@@ -486,7 +508,7 @@ export default function BookDetailsPage() {
                 {addedToCart
                   ? 'تمت الإضافة ✓'
                   : !selectedVariant
-                    ? 'اختر نسخة أولًا'
+                    ? 'اختر طبعة أولًا'
                     : canAddToCart
                       ? 'أضف إلى السلة'
                       : 'غير متوفر'}
@@ -507,7 +529,7 @@ export default function BookDetailsPage() {
           <div className="bk3-trust" style={{ '--i': 10 } as React.CSSProperties}>
             <div className="bk3-trust__i"><ShieldCheck size={14} /><span>منتج أصلي</span></div>
             <div className="bk3-trust__i"><Truck size={14} /><span>شحن سريع</span></div>
-            <div className="bk3-trust__i"><BookOpenText size={14} /><span>نسخ متعددة</span></div>
+            <div className="bk3-trust__i"><BookOpenText size={14} /><span>طبعات متعددة</span></div>
           </div>
         </div>
       </section>
@@ -546,11 +568,11 @@ export default function BookDetailsPage() {
                   <dd>{shownBundleContents.reduce((sum, item) => sum + item.quantity, 0) || '—'}</dd>
                 </div>
               ) : (
-                <div className="bk3-specs__r"><dt>النسخ المتاحة</dt><dd>{variants.length || product.variant_count}</dd></div>
+                <div className="bk3-specs__r"><dt>عدد الطبعات</dt><dd>{editionsLabel(variants.length || product.variant_count)}</dd></div>
               )}
               {selectedVariant && (
                 <div className="bk3-specs__r">
-                  <dt>النسخة المختارة</dt>
+                  <dt>الطبعة المختارة</dt>
                   <dd>{selectedVariant.variant_name}</dd>
                 </div>
               )}
@@ -558,7 +580,7 @@ export default function BookDetailsPage() {
                 // Weight drives the real shipping cost (governorate + weight
                 // rate table), so this needs to be visible even before the
                 // customer has clicked a specific copy — not gated behind
-                // "النسخة المختارة" above, which only ever shows post-pick.
+                // "الطبعة المختارة" above, which only ever shows post-pick.
                 if (selectedVariant && !selectedVariant.is_digital && selectedVariant.weight_kg != null) {
                   return (
                     <div className="bk3-specs__r">
@@ -573,7 +595,7 @@ export default function BookDetailsPage() {
                 if (physicalWeights.length === 0) return null;
                 const min = Math.min(...physicalWeights);
                 const max = Math.max(...physicalWeights);
-                const label = min === max ? `${min} كجم` : `${min}–${max} كجم حسب النسخة`;
+                const label = min === max ? `${min} كجم` : `${min}–${max} كجم حسب الطبعة`;
                 return (
                   <div className="bk3-specs__r">
                     <dt>الوزن</dt>

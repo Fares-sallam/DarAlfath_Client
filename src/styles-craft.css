@@ -22,8 +22,7 @@
    TYPOGRAPHY — three deliberate voices:
    Reem Kufi (marketing display) · Amiri (literary / book titles) · Cairo (UI)
    ────────────────────────────────────────────────────────────────────────── */
-.hero-banner h1,
-.catalog-hero h1 {
+.hero-banner h1 {
   font-family: 'Reem Kufi', 'Cairo', sans-serif;
   font-weight: 700;
   letter-spacing: -0.01em;

@@ -16,10 +16,16 @@ export interface FilterOptions {
   canFilterAvailability: boolean;
 }
 
+/** Whether this visitor last left the panel open (per browser; unreadable storage counts as closed). */
+const OPEN_KEY = 'daralfath-filters-open';
+const readOpen = () => {
+  try { return localStorage.getItem(OPEN_KEY) === '1'; } catch { return false; }
+};
+
 /**
- * The books page's search and filters: search and order always on view; the rest in a panel that is
- * open on a wide screen and behind a "فلاتر" button on a phone. What is on shows as chips below, each
- * removable, with one button to clear them all.
+ * The books page's search and filters: search and order always on view; the rest in a panel behind a
+ * "فلاتر" button, closed until the visitor wants it (and remembered the next time). What is on shows as
+ * chips below, each removable, with one button to clear them all, whether the panel is open or not.
  */
 export default function BooksFilterBar({
   filters,
@@ -35,7 +41,12 @@ export default function BooksFilterBar({
 }) {
   const setParam = (key: string, value: string, replace = false) => setParams({ [key]: value }, replace);
   const panelId = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(readOpen);
+  const toggleOpen = () =>
+    setOpen((was) => {
+      try { localStorage.setItem(OPEN_KEY, was ? '0' : '1'); } catch { /* not remembered, still works */ }
+      return !was;
+    });
   const count = activeFilterCount(filters);
 
   // The price fields are typed in: keep what is typed, send it on once the typing pauses.
@@ -101,7 +112,7 @@ export default function BooksFilterBar({
           className="catalog-filters__toggle"
           aria-expanded={open}
           aria-controls={panelId}
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggleOpen}
         >
           <SlidersHorizontal size={16} />
           فلاتر

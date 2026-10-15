@@ -14,6 +14,7 @@ import './styles-craft.css';        // ✦ Craft layer — covers, motion, typog
 import './styles-home.css';         // ✦ Home layer — frontispiece, shelf rails, ornaments
 import './styles-filters.css';      // ✦ Catalog filters — the books page's search and filter panel
 import './styles-search.css';       // ✦ Live search — the results list under the header box
+import './styles-shop.css';         // ✦ Shop layer — card price/share, book page share, toast, video shelf
 
 const queryClient = new QueryClient({
   defaultOptions: {

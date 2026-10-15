@@ -5,13 +5,15 @@ interface SectionHeaderProps {
   subtitle?: string;
   href?: string;
   linkLabel?: string;
+  /** The page's own heading (h1) where nothing above it is one. */
+  as?: 'h1' | 'h2';
 }
 
-export default function SectionHeader({ title, subtitle, href, linkLabel = 'عرض الكل' }: SectionHeaderProps) {
+export default function SectionHeader({ title, subtitle, href, linkLabel = 'عرض الكل', as: Heading = 'h2' }: SectionHeaderProps) {
   return (
     <div className="section-heading">
       <div>
-        <h2>{title}</h2>
+        <Heading>{title}</Heading>
         {subtitle ? <p>{subtitle}</p> : null}
       </div>
       {href ? <Link to={href}>{linkLabel}</Link> : null}

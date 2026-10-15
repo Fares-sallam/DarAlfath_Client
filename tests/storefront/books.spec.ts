@@ -3,7 +3,7 @@ import { test, expect } from '../fixtures';
 test.describe('صفحة الكتب والبحث', () => {
   test('صفحة الكتب تعرض الكتالوج', async ({ page }) => {
     await page.goto('/books');
-    await expect(page.getByRole('heading', { name: 'كل كتب دار الفتح في مكان واحد' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'كل الكتب' })).toBeVisible();
     await expect(page.getByRole('button', { name: /^فتح صفحة/ }).first()).toBeVisible({ timeout: 15_000 });
   });
 

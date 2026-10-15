@@ -46,6 +46,13 @@ async function openWithRows(page: Page, path: string, rewrite?: (rows: Row[]) =>
   return rows;
 }
 
+/** The panel is closed until asked for (on every screen): open it before using its fields. */
+async function openFilters(page: Page) {
+  const button = page.locator('.catalog-filters__toggle');
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+  await expect(page.locator('.catalog-filters__panel')).toBeVisible();
+}
+
 /** The on/off chips are checkboxes laid under their label: click the checkbox itself. */
 const toggle = (page: Page, name: string) => page.getByLabel(name, { exact: true }).evaluate((el) => (el as HTMLInputElement).click());
 
@@ -108,6 +115,7 @@ test('السعر: الحقول بتفلتر النتيجة، والعنوان ب
   const rows = await openWithRows(page, '/books');
   const all = await shownCount(page);
   expect(all).toBe(rows.length);
+  await openFilters(page);
 
   const [from, to] = [50, 150];
   await page.getByLabel('أقل سعر').fill(String(from));
@@ -121,9 +129,9 @@ test('السعر: الحقول بتفلتر النتيجة، والعنوان ب
 
   // Typing didn't leave a history entry per keystroke: one back goes to where we came from.
   expect(await page.evaluate(() => history.length)).toBeLessThanOrEqual(3);
-  await expect(page.getByTestId('filters-count')).toHaveText('1').catch(() => undefined); // the badge shows on a phone only
+  await expect(page.getByTestId('filters-count')).toHaveText('1');
 
-  // Reloading keeps it, fields included.
+  // Reloading keeps it, fields included (and the panel, opened before, opens again).
   await page.reload();
   await expect(page.getByLabel('أقل سعر')).toHaveValue('50');
   await expect(page.getByLabel('أعلى سعر')).toHaveValue('150');
@@ -141,6 +149,7 @@ test('المؤلف: الإملاءين بيتدمجوا في اختيار واح
   const byKey = new Map<string, Row[]>();
   for (const r of rows) byKey.set(norm(r.author ?? ''), [...(byKey.get(norm(r.author ?? '')) ?? []), r]);
   const [key, group] = [...byKey.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+  await openFilters(page);
 
   const select = page.getByLabel('المؤلف');
   const options = await select.locator('option').allTextContents();
@@ -198,6 +207,7 @@ test('عروض فقط والأحدث: بالضبط الكتب اللي عليه�
 
 test('الشارات: كل فلتر ليه شارة بتتشال لوحدها، ومسح الفلاتر بيشيلهم وبيسيب البحث والترتيب', async ({ page }) => {
   await openWithRows(page, '/books?q=%D9%83%D8%AA%D8%A7%D8%A8&sort=newest');
+  await openFilters(page);
   await page.getByLabel('التصنيف', { exact: true }).selectOption({ index: 1 });
   await toggle(page, 'متاح فقط');
   await page.getByLabel('أقل سعر').fill('20');
@@ -232,10 +242,36 @@ test('الموبايل: الفلاتر مقفولة ورا زرار فيه عد�
   // Still nothing sideways on a phone.
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
-  // A wide screen has no button: the panel is always there.
+  // A wide screen has the same button.
   await page.setViewportSize({ width: 1280, height: 800 });
-  await expect(toggle).toBeHidden();
+  await expect(toggle).toBeVisible();
   await expect(panel).toBeVisible();
+});
+
+test('الكمبيوتر: الفلاتر مقفولة لحد ما العميل يفتحها، والمتصفح بيفتكر اختياره، والشارات ظاهرة وهي مقفولة', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await openWithRows(page, '/books?sale=1');
+  const toggle = page.locator('.catalog-filters__toggle');
+  const panel = page.locator('.catalog-filters__panel');
+  await expect(toggle).toBeVisible();
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  await expect(panel).toBeHidden();
+  // What is on still shows, panel closed or not.
+  await expect(page.getByRole('button', { name: 'إزالة عروض فقط' })).toBeVisible();
+  await expect(page.getByTestId('filters-count')).toHaveText('1');
+
+  await toggle.click();
+  await expect(panel).toBeVisible();
+  // From here on the real catalog is enough: reloads mustn't race the rewrite above.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+  await page.reload();
+  await expect(page.locator('.catalog-filters__panel')).toBeVisible();
+
+  await page.locator('.catalog-filters__toggle').click();
+  await expect(page.locator('.catalog-filters__panel')).toBeHidden();
+  await page.reload();
+  await expect(page.locator('.catalog-filters__toggle')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('.catalog-filters__panel')).toBeHidden();
 });
 
 test('الرئيسية: «وصل حديثًا» بأحدث الكتب، و«عروض وخصومات» بالكتب اللي عليها خصم', async ({ page }) => {

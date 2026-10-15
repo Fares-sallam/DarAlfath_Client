@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { useHomeHeroSlides } from '@/hooks/useStorefront';
 import { useTheme } from '@/contexts/ThemeContext';
 
-const AUTO_ADVANCE_MS = 10000;
+const AUTO_ADVANCE_MS = 5000;
 const FADE_MS = 420;
 
 /**
@@ -16,7 +16,7 @@ const FADE_MS = 420;
  *
  * Each slide is its own natural width, no card/shadow wrapper around it —
  * the banner graphics the admin uploads already carry their own framing.
- * With more than one slide, it auto-advances every 10s with a cross-fade
+ * With more than one slide, it auto-advances every 5s with a cross-fade
  * (paused on hover), plus arrows and dots for manual control.
  *
  * Slides come from home_hero_slides (see useHomeHeroSlides), fully

@@ -372,14 +372,8 @@ html.dark .books-section__more   { color: #D4A520; }
 html.dark .books-section__more:hover { color: #F0C842; }
 
 /* ═══════════════════════════════════════════════════════════════
-   CATALOG HERO & FILTERS
+   FILTERS
    ═══════════════════════════════════════════════════════════════ */
-html.dark .catalog-hero {
-  background: linear-gradient(180deg, #0D1847, #060D2E);
-  border-bottom: 1px solid #1E2D6B;
-}
-html.dark .catalog-hero h1 { color: #F0EDFF; }
-html.dark .catalog-hero p  { color: #8A93B8; }
 
 html.dark .story-hero {
   background: linear-gradient(180deg, #0D1847, #060D2E);
@@ -1678,19 +1672,6 @@ html.dark .policy-card__body ul li::marker { color: #D4A520; }
    CATEGORIES PAGE (taxonomy)
    ═══════════════════════════════════════════════════════════════ */
 
-/* Taxonomy hero */
-html.dark .taxonomy-hero {
-  background:
-    radial-gradient(circle at 16% 10%, rgba(212, 165, 32, 0.12), transparent 30%),
-    linear-gradient(135deg, #0D1847 0%, #060D2E 100%);
-  border: 1px solid rgba(212, 165, 32, 0.20);
-  border-radius: 30px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.35);
-  color: #F0EDFF;
-}
-html.dark .taxonomy-hero h1 { color: #F0EDFF; }
-html.dark .taxonomy-hero p  { color: #8A93B8; }
-
 html.dark .taxonomy-section { background: transparent; }
 html.dark .taxonomy-grid    { background: transparent; }
 
@@ -1799,22 +1780,8 @@ html.dark .free-shipping-bar__fill {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BOOKS PAGE — catalog hero + filters bar
+   BOOKS PAGE — filters bar
    ═══════════════════════════════════════════════════════════════ */
-
-html.dark .catalog-hero {
-  background: linear-gradient(160deg, #0D1847 0%, #080F38 60%, #060D2E 100%);
-  border: 1px solid #1E2D6B;
-  border-radius: 20px;
-  color: #F0EDFF;
-}
-html.dark .catalog-hero h1 { color: #F0EDFF; }
-html.dark .catalog-hero p  { color: #8A93B8; }
-html.dark .catalog-hero .page-kicker {
-  background: rgba(212,165,32,0.12);
-  color: #F0C842;
-  border: 1px solid rgba(212,165,32,0.25);
-}
 
 /* Filters bar */
 html.dark .filters-bar {
@@ -1991,27 +1958,6 @@ html.dark .qty-stepper--soft button:hover {
 html.dark .qty-stepper span,
 html.dark .qty-stepper--soft span {
   color: #F0EDFF;
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   VIDEO CARD — بطاقة الفيديو
-   ═══════════════════════════════════════════════════════════════ */
-html.dark .video-card {
-  background: linear-gradient(180deg, #0D1A50, #070F38);
-  border: 1px solid #1E2D6B;
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.40);
-}
-
-html.dark .video-card__frame {
-  border-bottom: 1px solid #1E2D6B;
-}
-
-html.dark .video-card__body h3 {
-  color: #F0EDFF;
-}
-
-html.dark .video-card__body p {
-  color: #8A93B8;
 }
 
 /* ═══════════════════════════════════════════════════════════════

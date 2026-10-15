@@ -1,8 +1,10 @@
-import { Heart, Star } from 'lucide-react';
+import { Heart, Share2, Star } from 'lucide-react';
 import { useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWishlist } from '@/contexts/WishlistContext';
-import { formatCatalogPrice } from '@/hooks/useStorefront';
+import { catalogPriceParts } from '@/hooks/useStorefront';
+import { editionsLabel } from '@/lib/editions';
+import { shareBook } from '@/lib/share';
 import type { ProductItem } from '@/types/store';
 import BookCover from '@/components/BookCover';
 
@@ -27,8 +29,8 @@ export default function ProductCard({
   const rafId = useRef(0);
 
   const wished = isInWishlist(product.id);
-  const variantLabel =
-    product.variant_count > 1 ? `${product.variant_count} نسخ` : 'نسخة واحدة';
+  const variantLabel = editionsLabel(product.variant_count);
+  const price = catalogPriceParts(product);
   const categoryLabel = product.category_name || product.category?.name || product.type;
 
   const discountPct = product.discount_percent && product.discount_percent > 0
@@ -99,6 +101,18 @@ export default function ProductCard({
         <Heart size={15} fill={wished ? 'currentColor' : 'none'} />
       </button>
 
+      <button
+        type="button"
+        className="book-card__share"
+        onClick={(e) => {
+          e.stopPropagation();
+          void shareBook({ id: product.id, title: product.title });
+        }}
+        aria-label={`مشاركة رابط ${product.title}`}
+      >
+        <Share2 size={15} />
+      </button>
+
       <div className="book-card__cover">
         <BookCover
           title={product.title}
@@ -145,7 +159,9 @@ export default function ProductCard({
         </div>
 
         <div className="book-card__price">
-          <strong>{formatCatalogPrice(product)}</strong>
+          {price.prefix ? <small className="book-card__from">{price.prefix}</small> : null}
+          {price.was ? <del className="price-was">{price.was}</del> : null}
+          <strong>{price.now}</strong>
         </div>
 
         <div className="book-card__actions">

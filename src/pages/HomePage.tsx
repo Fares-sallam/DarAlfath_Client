@@ -4,7 +4,7 @@ import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
 import ScrollRail from '@/components/ScrollRail';
-import VideoCarousel from '@/components/VideoCarousel';
+import VideoRail from '@/components/VideoRail';
 import HeroShowcase from '@/components/HeroShowcase';
 import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
@@ -154,8 +154,8 @@ export default function HomePage() {
 
       {introVideos.length > 0 && (
         <Reveal>
-          <SectionHeader title="من الدار" subtitle="مقاطع تعريفية مختارة" />
-          <VideoCarousel videos={introVideos} />
+          <SectionHeader title="فيديوهات تعريفية" subtitle="مقاطع مختارة من دار الفتح" />
+          <VideoRail videos={introVideos} ariaLabel="فيديوهات تعريفية" />
         </Reveal>
       )}
 
