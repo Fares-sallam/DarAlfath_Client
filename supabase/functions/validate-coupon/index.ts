@@ -2,9 +2,20 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-app-key',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
+
+// The same app-only secret the order functions check. A request that carries it is the mobile app; every
+// other caller (the website) is the web. A coupon can be for either, or both (coupons.channel).
+const APP_KEY_SECRET = Deno.env.get('APP_DOWNLOAD_SECRET') ?? '';
+
+/** Why a coupon of this channel can't be used by the caller's channel (null when it can). */
+function channelError(couponChannel: string | null | undefined, caller: 'web' | 'app'): string | null {
+  if (couponChannel === 'app' && caller !== 'app') return 'كود الخصم متاح داخل التطبيق فقط.';
+  if (couponChannel === 'web' && caller !== 'web') return 'كود الخصم متاح على الموقع فقط.';
+  return null;
+}
 
 const RL_WINDOW_MS = 5 * 60 * 1000;
 const RL_MAX = 40;
@@ -38,6 +49,7 @@ type CouponRow = {
   valid_from: string | null;
   valid_to: string | null;
   is_active: boolean;
+  channel: string | null;
 };
 
 type ItemInput = { product_id: string; variant_id?: string; quantity: number; price?: number };
@@ -100,6 +112,10 @@ Deno.serve(async (req) => {
 
     const c = coupon as CouponRow;
     const now = new Date();
+
+    const caller: 'web' | 'app' = !!APP_KEY_SECRET && req.headers.get('x-app-key') === APP_KEY_SECRET ? 'app' : 'web';
+    const wrongChannel = channelError(c.channel, caller);
+    if (wrongChannel) return jsonOk({ valid: false, error: wrongChannel });
 
     // ── إعادة حساب المبالغ server-side من أسعار DB (لا نثق بالعميل) ──────────
     // نطابق منطق initiate-paymob-payment: سعر النسخة من product_variants

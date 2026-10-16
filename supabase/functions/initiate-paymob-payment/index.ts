@@ -126,6 +126,15 @@ async function verifyTurnstile(token: string | null | undefined, clientIp: strin
   }
 }
 
+// ── Coupons per channel ──────────────────────────────────────────────────
+// A coupon is for the website, for the app, or for both (coupons.channel: web / app / all). The caller
+// is the app when it sends the x-app-key (isTrustedApp), the website otherwise.
+function channelError(couponChannel: string | null | undefined, caller: 'web' | 'app'): string | null {
+  if (couponChannel === 'app' && caller !== 'app') return 'كود الخصم متاح داخل التطبيق فقط.';
+  if (couponChannel === 'web' && caller !== 'web') return 'كود الخصم متاح على الموقع فقط.';
+  return null;
+}
+
 // ── Who is buying ────────────────────────────────────────────────────────
 // A customer can buy without an account (2026-10, reversing 2026-08-20): a
 // name and a mobile number, an email if they want the order emails. A guest's
@@ -339,6 +348,19 @@ Deno.serve(async (req) => {
       if ((openOrders ?? 0) + (openPayments ?? 0) >= GUEST_OPEN_ORDERS_MAX) return jsonError(TOO_MANY_GUEST_ORDERS, 429);
     }
 
+    // ── A coupon that isn't for this channel stops the request here, before anything is created or
+    //    reserved: the customer was shown a discount the server won't give, and should hear why. ──
+    if (couponCode) {
+      const { data: couponRow } = await supabase
+        .from('coupons')
+        .select('channel')
+        .eq('code', String(couponCode).trim().toUpperCase())
+        .eq('is_active', true)
+        .maybeSingle();
+      const wrongChannel = channelError(couponRow?.channel, isTrustedApp ? 'app' : 'web');
+      if (wrongChannel) return jsonError(wrongChannel);
+    }
+
     // ── Re-fetch real prices from DB (don't trust client-supplied price) ───
     // `is_digital` is NOT a column — it's derived from variant_type elsewhere.
     // So we read price columns from DB and derive is_digital from variant_type.
@@ -481,6 +503,7 @@ Deno.serve(async (req) => {
           if (coupon.country_id && coupon.country_id !== (country?.id ?? null)) isValid = false;
           if (coupon.user_id && coupon.user_id !== userId) isValid = false;
           if (coupon.product_id && !normalizedItems.some((i) => i.product_id === coupon.product_id)) isValid = false;
+          if (channelError(coupon.channel, isTrustedApp ? 'app' : 'web')) isValid = false;
 
           if (isValid) {
             switch (coupon.type) {
