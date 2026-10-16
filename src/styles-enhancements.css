@@ -683,8 +683,7 @@ html.dark .status-chip--cancelled { background: rgba(200, 60, 60, 0.14);  color:
 /* ═══════════════════════════════════════════════════════════════
    ACCOUNT & WISHLIST
    ═══════════════════════════════════════════════════════════════ */
-html.dark .account-card,
-html.dark .story-card {
+html.dark .account-card {
   background: #0D1847;
   border: 1px solid #1E2D6B;
   border-top: 3px solid #D4A520;
@@ -695,10 +694,6 @@ html.dark .story-card {
 html.dark .account-card h2,
 html.dark .account-card h3 { color: #F0EDFF; }
 html.dark .account-card p  { color: #8A93B8; }
-html.dark .timeline__item  { border-inline-start-color: rgba(212, 165, 32, 0.50); }
-html.dark .timeline__dot   { background: #D4A520; }
-html.dark .timeline__title { color: #F0EDFF; }
-html.dark .timeline__sub   { color: #8A93B8; }
 html.dark .wishlist-empty       { color: #8A93B8; }
 html.dark .wishlist-empty__icon { color: #1E2D6B; }
 

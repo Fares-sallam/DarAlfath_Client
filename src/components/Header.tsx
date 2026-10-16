@@ -15,7 +15,6 @@ import type { StoreSettings } from '@/types/store';
 const navItems = [
   { label: 'الرئيسية', to: '/' },
   { label: 'الكتب', to: '/books' },
-  { label: 'عنّا', to: '/about' },
   { label: 'سياستنا', to: '/policies' },
   { label: 'تواصل معنا', to: '/contact' },
 ];
@@ -173,9 +172,9 @@ export default function Header({ settings }: { settings: StoreSettings }) {
 
       {/* Desktop nav — الرئيسية/الكتب/كل التصنيفات as plain links, then one
           dropdown per series (سلسلة الفتح الرباني، قصص وموسوعات...), each
-          expanding to its own categories → books, then تواصل معنا. عنّا/
-          سياستنا stay out of this row (still reachable from the footer and
-          the mobile drawer) — with up to 5 series dropdowns sharing the
+          expanding to its own categories → books, then تواصل معنا. سياستنا
+          stays out of this row (still reachable from the footer and the
+          mobile drawer) — with up to 5 series dropdowns sharing the
           row, flex-wrap on .site-header__nav is the safety net if it ever
           doesn't fit on one line (see that rule's own comment). */}
       <div className="container site-header__nav" ref={navRef}>

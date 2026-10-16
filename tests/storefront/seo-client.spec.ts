@@ -92,7 +92,7 @@ test('صفحة تصنيف: عنوان التصنيف، والبحث والترت
 });
 
 test('الصفحات الثابتة: لكل واحدة عنوان ووصف خاص بيها', async ({ page }) => {
-  for (const [path, word] of [['/about', 'عن الدار'], ['/contact', 'تواصل معنا'], ['/policies', 'سياسة المتجر'], ['/categories', 'التصنيفات']] as const) {
+  for (const [path, word] of [['/contact', 'تواصل معنا'], ['/policies', 'سياسة المتجر'], ['/categories', 'التصنيفات']] as const) {
     await page.goto(path);
     await expect.poll(async () => (await head(page)).title, { message: path }).toContain(word);
     const h = await head(page);

@@ -15,7 +15,7 @@ export default async function handler(request: Request): Promise<Response> {
   const seen = new Set<string>();
   const entries: SitemapEntry[] = [
     { path: '/', priority: 1.0 },
-    ...(['books', 'categories', 'about', 'contact', 'policies'] as const).map((key) => ({ path: STATIC_SEO[key].path, priority: key === 'books' ? 0.9 : 0.5 })),
+    ...(['books', 'categories', 'contact', 'policies'] as const).map((key) => ({ path: STATIC_SEO[key].path, priority: key === 'books' ? 0.9 : 0.5 })),
     ...(categories ?? [])
       .filter((c): c is { slug: string } => !!c.slug)
       .map((c) => ({ path: `/books?category=${encodeURIComponent(c.slug)}`, priority: 0.7 })),

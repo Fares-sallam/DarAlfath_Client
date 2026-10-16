@@ -923,7 +923,7 @@ button {
   transform: translateY(-1px);
 }
 
-/* Story hero (about, policies) */
+/* Story hero (policies) */
 .story-hero {
   min-height: 130px;
   border-radius: 24px;
@@ -1721,16 +1721,14 @@ button {
   color: #1f6a3c;
 }
 
-/* About */
-.account-grid,
-.story-grid {
+/* Account */
+.account-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
-.account-card,
-.story-card {
+.account-card {
   border: 1px solid var(--line);
   background: #fff;
   border-radius: 20px;
@@ -1738,38 +1736,14 @@ button {
   box-shadow: var(--shadow-sm);
 }
 
-.account-card h3,
-.story-card h3 {
+.account-card h3 {
   margin: 0 0 10px;
   font-size: 20px;
 }
 
-.account-card p,
-.story-card p {
+.account-card p {
   color: var(--muted);
   line-height: 1.9;
-}
-
-.timeline {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
-}
-
-.timeline__item {
-  border-inline-start: 2px solid var(--gold);
-  padding-inline-start: 14px;
-  display: grid;
-  gap: 8px;
-}
-
-.timeline__item b {
-  font-size: 18px;
-}
-
-.timeline__item span {
-  color: var(--muted);
-  line-height: 1.8;
 }
 
 /* Policies */
@@ -2006,8 +1980,6 @@ button {
   .video-grid,
   .site-footer__grid,
   .account-grid,
-  .story-grid,
-  .timeline,
   .filters-bar,
   .contact-layout,
   .cart-layout,
@@ -2041,8 +2013,6 @@ button {
   .video-grid,
   .site-footer__grid,
   .account-grid,
-  .story-grid,
-  .timeline,
   .contact-layout,
   .cart-layout,
   .filters-bar,

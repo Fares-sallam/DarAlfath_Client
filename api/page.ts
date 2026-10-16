@@ -84,7 +84,7 @@ async function seoFor(kind: string, params: URLSearchParams, origin: string): Pr
     return { seo: booksListSeo(origin, { categorySlug: category, categoryName, seriesName, seriesId: series, searched }), status: 200 };
   }
 
-  if (kind === 'categories' || kind === 'about' || kind === 'contact' || kind === 'policies' || kind === 'home') {
+  if (kind === 'categories' || kind === 'contact' || kind === 'policies' || kind === 'home') {
     return { seo: staticSeo(kind, origin), status: 200 };
   }
   return null;

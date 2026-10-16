@@ -11,7 +11,6 @@ import CheckoutPage from '@/pages/CheckoutPage';
 import AccountPage from '@/pages/AccountPage';
 import OrdersPage from '@/pages/OrdersPage';
 import DownloadsPage from '@/pages/DownloadsPage';
-import AboutPage from '@/pages/AboutPage';
 import PoliciesPage from '@/pages/PoliciesPage';
 import ContactPage from '@/pages/ContactPage';
 import NotFoundPage from '@/pages/NotFoundPage';
@@ -34,7 +33,6 @@ export default function App() {
         <Route path="account" element={<AccountPage />} />
         <Route path="account/orders" element={<OrdersPage />} />
         <Route path="account/downloads" element={<DownloadsPage />} />
-        <Route path="about" element={<AboutPage />} />
         <Route path="policies" element={<PoliciesPage />} />
         <Route path="contact" element={<ContactPage />} />
       </Route>

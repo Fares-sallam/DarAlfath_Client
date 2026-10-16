@@ -80,11 +80,6 @@ export const STATIC_SEO: Record<string, { title: string; description: string; pa
     description: 'تصنيفات كتب دار الفتح: منهج الدورة الصيفية، كتب المعلم، كتب القراءة، سلسلة النحو بين يديك وغيرها.',
     path: '/categories',
   },
-  about: {
-    title: titleFor('عن الدار'),
-    description: 'تعرّف على دار الفتح للنشر والتوزيع: دار تختار إصداراتها بعناية وتقدّم كتبًا تعليمية وإسلامية بنسخ ورقية ورقمية.',
-    path: '/about',
-  },
   contact: {
     title: titleFor('تواصل معنا'),
     description: 'تواصل مع فريق دار الفتح للنشر والتوزيع للاستفسار عن الكتب والطلبات والشحن.',

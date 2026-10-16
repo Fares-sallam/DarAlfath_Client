@@ -199,7 +199,7 @@ test('تصنيف وسلسلة والبحث: عنوان التصنيف، وراب
 test('الصفحات الأساسية: لكل صفحة عنوان ووصف ورابط', async () => {
   const world = mockWorld({});
   try {
-    for (const [kind, title, canonicalPath] of [['about', 'عن الدار', '/about'], ['contact', 'تواصل معنا', '/contact'], ['policies', 'سياسة المتجر', '/policies'], ['categories', 'التصنيفات', '/categories']] as const) {
+    for (const [kind, title, canonicalPath] of [['contact', 'تواصل معنا', '/contact'], ['policies', 'سياسة المتجر', '/policies'], ['categories', 'التصنيفات', '/categories']] as const) {
       const html = await (await pageHandler(request(`/api/page?kind=${kind}`))).text();
       expect(html, kind).toContain(`<title>${title} — دار الفتح للنشر والتوزيع</title>`);
       expect(meta(html, 'property', 'og:url'), kind).toBe(`https://dar-alfath-client.vercel.app${canonicalPath}`);
