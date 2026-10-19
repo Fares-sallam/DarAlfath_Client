@@ -2699,6 +2699,13 @@ h3,
   transform: rotate(180deg);
 }
 
+/* The menus open on hover, so the way to them has to stay "hovered". Two things hold it:
+   - a see-through bridge over the few pixels between a name and its menu (and between a category and
+     its book list), which belongs to the menu, so a mouse crossing it is still on the menu;
+   - a grace period on closing: the menu stays put (and reachable) for a moment after the mouse leaves,
+     then fades. Closed means `visibility: hidden`, which can't be hit, so no `pointer-events` rule is
+     needed; one would make the menu unreachable during the grace period, which was the bug.
+   Opening has no delay. */
 .nav-dropdown__menu {
   position: absolute;
   top: calc(100% + 8px);
@@ -2711,17 +2718,32 @@ h3,
   box-shadow: 0 24px 60px rgba(16, 37, 66, 0.16);
   opacity: 0;
   visibility: hidden;
-  pointer-events: none;
   transform: translateY(8px);
-  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+  transition: opacity 0.18s ease 0.2s, transform 0.18s ease 0.2s, visibility 0s linear 0.38s;
+}
+
+.nav-dropdown__menu::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: -10px;
+  height: 10px;
 }
 
 .nav-dropdown:hover .nav-dropdown__menu,
 .nav-dropdown:focus-within .nav-dropdown__menu {
   opacity: 1;
   visibility: visible;
-  pointer-events: auto;
   transform: translateY(0);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s;
+}
+
+/* One menu at a time: going to another series closes this one at once instead of leaving it
+   underneath, where it would be in the way of the mouse. */
+.site-header__nav:has(.nav-dropdown:hover) .nav-dropdown:not(:hover) .nav-dropdown__menu {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
 }
 
 .nav-dropdown__all,
@@ -2818,9 +2840,18 @@ h3,
   box-shadow: 0 22px 48px rgba(16, 37, 66, 0.14);
   opacity: 0;
   visibility: hidden;
-  pointer-events: none;
   transform: translateX(8px);
-  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+  transition: opacity 0.18s ease 0.2s, transform 0.18s ease 0.2s, visibility 0s linear 0.38s;
+}
+
+/* The bridge over the space between the category and this list (see the note on the menu above). */
+.nav-dropdown__submenu::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -10px;
+  width: 10px;
 }
 
 /* Series at the far end of the row: the book list opens on the other side
@@ -2831,12 +2862,40 @@ h3,
   transform: translateX(-8px);
 }
 
+.nav-dropdown--flip .nav-dropdown__submenu::before {
+  right: auto;
+  left: -10px;
+}
+
 .nav-dropdown__item:hover .nav-dropdown__submenu,
 .nav-dropdown__item:focus-within .nav-dropdown__submenu {
   opacity: 1;
   visibility: visible;
-  pointer-events: auto;
   transform: translateX(0);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s;
+}
+
+/* One book list at a time: moving to another category closes the previous one at once. */
+.nav-dropdown__menu:has(.nav-dropdown__item:hover) .nav-dropdown__item:not(:hover) .nav-dropdown__submenu {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+/* No fade for people who ask for less motion; the grace period stays (it is about reaching the menu,
+   not decoration), with the menu fully visible until it ends. */
+@media (prefers-reduced-motion: reduce) {
+  .nav-dropdown__menu,
+  .nav-dropdown__submenu {
+    transition: opacity 0s linear 0.2s, transform 0s linear 0.2s, visibility 0s linear 0.2s;
+  }
+
+  .nav-dropdown:hover .nav-dropdown__menu,
+  .nav-dropdown:focus-within .nav-dropdown__menu,
+  .nav-dropdown__item:hover .nav-dropdown__submenu,
+  .nav-dropdown__item:focus-within .nav-dropdown__submenu {
+    transition: none;
+  }
 }
 
 .nav-dropdown__submenu a {
