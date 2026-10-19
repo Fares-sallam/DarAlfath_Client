@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '../fixtures';
+import { test, expect, type Locator, type Page, type Route } from '../fixtures';
 
 // The card and book page's wording and price ("طبعة", "يبدأ من", the old price struck in red), the share
 // buttons, the banner's 5 seconds, the title boxes gone from the books and categories pages, and the
@@ -60,6 +60,31 @@ test('الكارت: «طبعة» بدل «نسخة»، و«يبدأ من» بأ�
   await expect(page.locator('.book-card__variants-count').filter({ hasText: /طبعة واحدة|طبعتان|طبعات/ })).toHaveCount(0);
   // No "نسخ" left on any card.
   await expect(page.locator('.book-card__variants-count').filter({ hasText: 'نسخ' })).toHaveCount(0);
+});
+
+test('الكارت: نسبة الخصم بنفس أحمر السعر المشطوب اللي تحتها (مش دهبي)، في الفاتح والداكن', async ({ page }) => {
+  await booksWithKnownCards(page);
+  const three = card(page, 'كتاب اختبار ثلاث طبعات');
+  const badge = three.locator('.book-card__discount-badge');
+  const was = three.locator('del.price-was');
+  await expect(badge).toBeVisible();
+  await expect(was).toBeVisible();
+
+  // A colour as drawn (the stylesheet writes it in oklch), read back as red/green/blue.
+  const rgb = (el: Locator, prop: 'color' | 'backgroundColor') => el.evaluate((node, name) => {
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    ctx.fillStyle = getComputedStyle(node)[name as 'color' | 'backgroundColor'];
+    ctx.fillRect(0, 0, 1, 1);
+    return Array.from(ctx.getImageData(0, 0, 1, 1).data.slice(0, 3));
+  }, prop);
+
+  for (const dark of [false, true]) {
+    await page.evaluate((on) => document.documentElement.classList.toggle('dark', on), dark);
+    const [r, g, b] = await rgb(badge, 'backgroundColor');
+    expect([r, g, b], dark ? 'dark' : 'light').toEqual(await rgb(was, 'color'));
+    expect(r, 'red, not gold').toBeGreaterThan(g + 50);
+    expect(r).toBeGreaterThan(b + 50);
+  }
 });
 
 test('الكارت: زرار المشاركة قصاد القلب، وعلامة الخصم نزلت تحت فمش بتغطي عليه', async ({ page }) => {
