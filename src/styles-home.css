@@ -338,6 +338,27 @@ html.dark .book-card:focus-visible .book-card__cover {
     0 0 22px rgba(240, 200, 66, 0.35);
 }
 
+/* ── Book card hover: the picture moves inside its frame ─────────────
+   The frame (clipped by .book-card__cover) stays put; the picture in it grows a little and slides the
+   other way from the pointer (--mx/--my come from ProductCard: -1 … 1 across the frame), like a zoom
+   you pan with the mouse. Only where there is a real hover (a phone would leave it stuck after a tap),
+   and not for people who ask for less motion. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .book-card__cover > .book-cover__img,
+  .book-card__cover > .book-cover__gen {
+    transform: translate3d(0, 0, 0) scale(1);
+    transition: transform 0.5s var(--ease-out-quint);
+  }
+
+  .book-card:hover .book-card__cover > .book-cover__img,
+  .book-card:hover .book-card__cover > .book-cover__gen,
+  .book-card:focus-visible .book-card__cover > .book-cover__img,
+  .book-card:focus-visible .book-card__cover > .book-cover__gen {
+    transform: translate3d(calc(var(--mx, 0) * -7px), calc(var(--my, 0) * -5px), 0) scale(1.07);
+    will-change: transform;
+  }
+}
+
 .scroll-rail__arrow {
   position: absolute;
   top: 38%;

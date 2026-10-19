@@ -44,6 +44,8 @@ export default function ProductCard({
   // ── 3D tilt: write --rx/--ry onto the cover element directly ──
   // (Setting them on the card and relying on custom-property inheritance
   //  proved unreliable; targeting the cover that owns the transform is robust.)
+  // The picture inside the frame follows the pointer too (--mx/--my, -1 … 1 across the frame): it is
+  // grown a little on hover (see styles-home.css) and slid the other way, as a zoom you pan with the mouse.
   const onMove = useCallback((e: React.MouseEvent<HTMLElement>) => {
     const el = cardRef.current;
     if (!el || featured || prefersReducedMotion()) return;
@@ -57,6 +59,10 @@ export default function ProductCard({
       const y = (clientY - rect.top) / rect.height;
       cover.style.setProperty('--ry', `${(x - 0.5) * 16}deg`);  // max ±8°
       cover.style.setProperty('--rx', `${(y - 0.5) * -12}deg`); // max ±6°
+      const frame = cover.getBoundingClientRect();
+      const clamp = (n: number) => Math.max(-1, Math.min(1, n));
+      cover.style.setProperty('--mx', clamp(((clientX - frame.left) / frame.width - 0.5) * 2).toFixed(3));
+      cover.style.setProperty('--my', clamp(((clientY - frame.top) / frame.height - 0.5) * 2).toFixed(3));
     });
   }, [featured]);
 
@@ -67,6 +73,8 @@ export default function ProductCard({
     cancelAnimationFrame(rafId.current);
     cover?.style.setProperty('--ry', '0deg');
     cover?.style.setProperty('--rx', '0deg');
+    cover?.style.setProperty('--mx', '0');
+    cover?.style.setProperty('--my', '0');
   }, []);
 
   const className =
