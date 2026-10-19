@@ -222,6 +222,8 @@ export default function BookDetailsPage() {
   }
 
   const wished = isInWishlist(product.id);
+  // "عدة خيارات" for a book in several editions, nothing for a book in one.
+  const manyEditions = editionsLabel(variants.length || product.variant_count);
   const categoryLabel = product.category_name || product.category?.name || 'غير محدد';
   const canAddToCart = Boolean(selectedVariant?.is_available);
   const listPrice = catalogPriceParts(product);
@@ -424,7 +426,7 @@ export default function BookDetailsPage() {
             <div className="bk3-variants__hd">
               <Layers size={14} />
               <span>اختر الطبعة</span>
-              <small>{variantsLoading ? '...' : editionsLabel(variants.length || product.variant_count)}</small>
+              {variantsLoading ? <small>...</small> : manyEditions ? <small>{manyEditions}</small> : null}
             </div>
             <div className="bk3-variants__grid">
               {variants.map((v) => (
@@ -541,7 +543,7 @@ export default function BookDetailsPage() {
           <div className="bk3-trust" style={{ '--i': 10 } as React.CSSProperties}>
             <div className="bk3-trust__i"><ShieldCheck size={14} /><span>منتج أصلي</span></div>
             <div className="bk3-trust__i"><Truck size={14} /><span>شحن سريع</span></div>
-            <div className="bk3-trust__i"><BookOpenText size={14} /><span>طبعات متعددة</span></div>
+            {manyEditions ? <div className="bk3-trust__i"><BookOpenText size={14} /><span>{manyEditions}</span></div> : null}
           </div>
         </div>
       </section>
@@ -579,9 +581,9 @@ export default function BookDetailsPage() {
                   <dt>عدد الكتب</dt>
                   <dd>{shownBundleContents.reduce((sum, item) => sum + item.quantity, 0) || '—'}</dd>
                 </div>
-              ) : (
-                <div className="bk3-specs__r"><dt>عدد الطبعات</dt><dd>{editionsLabel(variants.length || product.variant_count)}</dd></div>
-              )}
+              ) : manyEditions ? (
+                <div className="bk3-specs__r"><dt>الطبعات</dt><dd>{manyEditions}</dd></div>
+              ) : null}
               {selectedVariant && (
                 <div className="bk3-specs__r">
                   <dt>الطبعة المختارة</dt>

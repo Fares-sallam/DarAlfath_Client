@@ -1,11 +1,9 @@
 /**
- * How many editions a book is sold in, said the way Arabic counts: one and two have their own words,
- * three to ten take the plural, eleven on the singular. Digits in Arabic, like every price on the site.
+ * What a book says about the editions it is sold in. A book in one edition says nothing about it; a book in
+ * several says "عدة خيارات" (it used to count them: "طبعة واحدة", "طبعتان", "٣ طبعات").
  */
-export function editionsLabel(count: number): string {
-  const n = Math.max(1, Math.floor(Number(count) || 0));
-  if (n === 1) return 'طبعة واحدة';
-  if (n === 2) return 'طبعتان';
-  const digits = n.toLocaleString('ar-EG');
-  return n <= 10 ? `${digits} طبعات` : `${digits} طبعة`;
+export const MANY_EDITIONS_LABEL = 'عدة خيارات';
+
+export function editionsLabel(count: number): string | null {
+  return Math.floor(Number(count) || 0) > 1 ? MANY_EDITIONS_LABEL : null;
 }

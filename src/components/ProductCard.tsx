@@ -165,7 +165,7 @@ export default function ProductCard({
           ) : (
             <span className="book-card__no-rating">لا يوجد تقييم بعد</span>
           )}
-          <small className="book-card__variants-count">{variantLabel}</small>
+          {variantLabel ? <small className="book-card__variants-count">{variantLabel}</small> : null}
         </div>
 
         <div className="book-card__price">

@@ -33,7 +33,7 @@ test('الكارت: «طبعة» بدل «نسخة»، و«يبدأ من» بأ�
   await booksWithKnownCards(page);
 
   const three = card(page, 'كتاب اختبار ثلاث طبعات');
-  await expect(three.locator('.book-card__variants-count')).toHaveText('٣ طبعات');
+  await expect(three.locator('.book-card__variants-count')).toHaveText('عدة خيارات');
   await expect(three.locator('.book-card__from')).toHaveText('يبدأ من');
   await expect(three.locator('.book-card__price strong')).toContainText('٨٠');
   const was = three.locator('del.price-was');
@@ -50,12 +50,14 @@ test('الكارت: «طبعة» بدل «نسخة»، و«يبدأ من» بأ�
   expect(await was.evaluate((el) => getComputedStyle(el).textDecorationLine)).toContain('line-through');
 
   const one = card(page, 'كتاب اختبار طبعة واحدة');
-  await expect(one.locator('.book-card__variants-count')).toHaveText('طبعة واحدة');
+  await expect(one.locator('.book-card__variants-count')).toHaveCount(0); // one edition: nothing written
   await expect(one.locator('.book-card__from')).toHaveCount(0);
   await expect(one.locator('del')).toHaveCount(0);
   await expect(one.locator('.book-card__price strong')).toContainText('٥٠');
 
-  await expect(card(page, 'كتاب اختبار طبعتين').locator('.book-card__variants-count')).toHaveText('طبعتان');
+  await expect(card(page, 'كتاب اختبار طبعتين').locator('.book-card__variants-count')).toHaveText('عدة خيارات');
+  // No counting words left on any card.
+  await expect(page.locator('.book-card__variants-count').filter({ hasText: /طبعة واحدة|طبعتان|طبعات/ })).toHaveCount(0);
   // No "نسخ" left on any card.
   await expect(page.locator('.book-card__variants-count').filter({ hasText: 'نسخ' })).toHaveCount(0);
 });
@@ -107,7 +109,8 @@ test('صفحة الكتاب: المشاركة جنب القلب، و«اختر �
   await expect(acts.locator('.bk3-heart')).toHaveCount(3); // the heart, the share button and the QR button, side by side
   await expect(acts.getByRole('button', { name: /^مشاركة رابط/ })).toBeVisible();
   await expect(page.locator('.bk3-variants__hd')).toContainText('اختر الطبعة');
-  await expect(page.locator('.bk3-variants__hd small')).toHaveText('طبعة واحدة');
+  await expect(page.locator('.bk3-variants__hd small')).toHaveCount(0); // one edition: nothing written next to the title
+  await expect(page.locator('.bk3-trust')).not.toContainText('عدة خيارات');
   await expect(page.locator('.bk3-var--on')).toHaveCount(1);
   await expect(page.locator('.bk3-cart-btn')).not.toHaveText(/اختر (نسخة|طبعة)/);
 
@@ -116,8 +119,32 @@ test('صفحة الكتاب: المشاركة جنب القلب، و«اختر �
   expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(new RegExp(`/book/${single!.product_id}$`));
 
   await page.getByRole('button', { name: 'المواصفات' }).click();
-  await expect(page.locator('.bk3-specs')).toContainText('عدد الطبعات');
+  await expect(page.locator('.bk3-specs')).not.toContainText('الطبعات');
   await expect(page.locator('.bk3-specs')).not.toContainText('النسخ المتاحة');
+});
+
+test('صفحة الكتاب: الكتاب اللي ليه أكتر من طبعة بيكتب «عدة خيارات» جنب «اختر الطبعة» وفي الشارة وفي المواصفات', async ({ page }) => {
+  // A real book sold in several editions (in the country the site opens on).
+  let multi: Row | undefined;
+  await page.route('**/rest/v1/products_public_catalog*', async (route: Route) => {
+    const response = await route.fetch();
+    const json = (await response.json()) as Row[];
+    multi ??= json.find((r) => Number(r.variant_count) > 1 && !r.is_bundle);
+    return route.fulfill({ response, json });
+  });
+  await page.goto('/books');
+  await expect(page.locator('article.book-card').first()).toBeVisible({ timeout: 20_000 });
+  test.skip(!multi, 'مفيش كتاب بأكتر من طبعة');
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
+
+  await page.goto(`/book/${multi!.product_id}`);
+  await expect(page.locator('.bk3-variants__hd')).toContainText('اختر الطبعة', { timeout: 20_000 });
+  await expect(page.locator('.bk3-variants__hd small')).toHaveText('عدة خيارات');
+  await expect(page.locator('.bk3-trust')).toContainText('عدة خيارات');
+  await page.getByRole('button', { name: 'المواصفات' }).click();
+  await expect(page.locator('.bk3-specs')).toContainText('عدة خيارات');
+  // No counting words anywhere on the page.
+  await expect(page.locator('.bk3-variants__hd')).not.toContainText(/طبعة واحدة|طبعتان|طبعات/);
 });
 
 test('البانر بيتغير كل 5 ثواني', async ({ page }) => {
