@@ -725,3 +725,68 @@ html.dark .checkout-recap__edit { color: #f0c842; }
   .checkout-step { animation: none; }
 }
 .checkout-field textarea { min-height: 90px; }
+
+/* ── Checkout, one screen (Apple Pay devices): the delivery details together, then Apple Pay ── */
+.express-pay__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 720px) {
+  .express-pay__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* name | mobile, email, governorate | city, address, notes: the email, address and notes take a row each */
+  .express-pay__grid > :nth-child(3),
+  .express-pay__grid > :nth-child(6),
+  .express-pay__grid > :nth-child(7) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Apple's own button, in the colour that suits the theme (it draws its own label, in the page's language).
+   A browser that doesn't know the style gets the same shape and words. */
+.apple-pay-button {
+  display: block;
+  width: 100%;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  -webkit-appearance: -apple-pay-button;
+  appearance: -apple-pay-button;
+  -apple-pay-button-type: buy;
+  -apple-pay-button-style: black;
+}
+
+html.dark .apple-pay-button {
+  -apple-pay-button-style: white;
+}
+
+.apple-pay-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@supports not (-webkit-appearance: -apple-pay-button) {
+  .apple-pay-button {
+    -webkit-appearance: none;
+    appearance: none;
+    background: #000;
+    color: #fff;
+    font: inherit;
+    font-weight: 800;
+  }
+
+  .apple-pay-button::before {
+    content: 'ادفع عبر Apple Pay';
+  }
+
+  html.dark .apple-pay-button {
+    background: #fff;
+    color: #000;
+  }
+}

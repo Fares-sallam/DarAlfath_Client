@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Check, CheckCircle2, CreditCard, ExternalLink, Loader2, LogIn, PackageCheck, Phone, Tag, Truck, UserRound, X } from 'lucide-react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, CheckCircle2, CreditCard, ExternalLink, Loader2, LogIn, PackageCheck, Phone, Tag, Truck, UserRound, X, Zap } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OrnamentDivider } from '@/components/Ornament';
 import TurnstileWidget, { TURNSTILE_SITE_KEY, type TurnstileHandle } from '@/components/TurnstileWidget';
@@ -9,6 +9,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCountry } from '@/contexts/CountryContext';
 import { formatMoney, usePaymentMethods, useStoreSettings, useShippingRate } from '@/hooks/useStorefront';
+import { isApplePaySupported } from '@/lib/applePay';
 import { supabase } from '@/lib/supabase';
 import {
   EMPTY_CHECKOUT,
@@ -23,31 +24,6 @@ import {
   formatStorefrontOrderDate,
   type StorefrontOrder,
 } from '@/lib/storefrontOrders';
-
-declare global {
-  interface Window {
-    // Only ever defined by Safari on an Apple device — used purely as a
-    // presence/capability check, never actually invoked (Paymob's own hosted
-    // checkout page drives the real Apple Pay sheet).
-    ApplePaySession?: {
-      canMakePayments: () => boolean;
-    };
-  }
-}
-
-/** True only in a browser that can plausibly complete an Apple Pay sheet
- *  (Safari on macOS/iOS/iPadOS with Apple Pay set up). Every other browser —
- *  Chrome, Firefox, Edge, Android/desktop anything — never defines
- *  `window.ApplePaySession`, so the option stays hidden there instead of
- *  leading to a checkout page with no way to actually pay. */
-function isApplePaySupported(): boolean {
-  if (typeof window === 'undefined' || !window.ApplePaySession) return false;
-  try {
-    return window.ApplePaySession.canMakePayments();
-  } catch {
-    return false;
-  }
-}
 
 // ── بيانات المحافظات والمدن المصرية ───────────────────────────────────────
 const EGYPT_REGIONS: Record<string, string[]> = {
@@ -110,7 +86,10 @@ export default function CheckoutPage() {
   } = useCart();
   const { user } = useAuth();
   const { selectedCountry } = useCountry();
-  const { data: paymentMethods = [] } = usePaymentMethods();
+  const { data: paymentMethods = [], isLoading: methodsLoading } = usePaymentMethods();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const wantsExpress = searchParams.get('express') === 'applepay';
   const { data: storeSettings } = useStoreSettings();
 
   const [form, setForm] = useState<CheckoutForm>({ ...EMPTY_CHECKOUT, email: user?.email ?? '' });
@@ -222,7 +201,22 @@ export default function CheckoutPage() {
 
   const countryCode = selectedCountry?.code ?? null;
   const errors = stepErrors(step, form, countryCode);
+  // In the one-screen form every field is on show, so every field's problem is.
+  const expressErrors = { ...stepErrors(1, form, countryCode), ...stepErrors(2, form, countryCode) };
+  const activeErrors = wantsExpress && applePaySupported ? expressErrors : errors;
   const digitalNeedsAccount = hasDigitalItem && !user;
+
+  // The one-screen form ("شراء سريع" on a device that can pay with Apple Pay): the delivery details together,
+  // then Apple Pay straight away. It needs Apple Pay to be offered here (an Apple device, an active Apple Pay
+  // method, Egypt: Paymob takes EGP only) and a cart that can be bought now (a digital book needs an account).
+  // Anything else quietly gets the usual three steps.
+  const applePayMethod = paymentMethods.find((m) => m.provider.toLowerCase().trim() === 'paymob_apple_pay') ?? null;
+  const inEgypt = !countryCode || countryCode.toUpperCase() === 'EG';
+  const expressEligible = wantsExpress && applePaySupported && Boolean(applePayMethod) && items.length > 0 && !digitalNeedsAccount && inEgypt;
+  const expressLoading = wantsExpress && applePaySupported && methodsLoading && items.length > 0;
+  useEffect(() => {
+    if (expressEligible && applePayMethod && selectedPaymentId !== applePayMethod.id) setSelectedPaymentId(applePayMethod.id);
+  }, [expressEligible, applePayMethod, selectedPaymentId]);
 
   const canSubmit = Boolean(
     items.length > 0 &&
@@ -452,6 +446,15 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setSubmitError('');
 
+    // The payment page opens in a tab of its own. Safari lets a page open one only while it is answering a
+    // tap, and the payment is created on the server first, so the tab is opened here, empty, and sent to
+    // Paymob when the address comes back. Opened after the wait, it was blocked on an iPhone.
+    let payTab: Window | null = null;
+    if (isPaymob && selectedMethod) {
+      payTab = window.open('about:blank', '_blank');
+      try { if (payTab) payTab.opener = null; } catch { /* a tab that won't let go of its opener is still a tab */ }
+    }
+
     const customer = {
       fullName:    form.fullName.trim(),
       email:       form.email.trim(),
@@ -517,7 +520,8 @@ export default function CheckoutPage() {
         setSubmitting(false);
         setPaymobStatusMsg('فتحنا نافذة الدفع في تبويب جديد. أكمل الدفع هناك...');
 
-        window.open(data.paymentUrl, '_blank', 'noopener,noreferrer');
+        if (payTab && !payTab.closed) payTab.location.href = data.paymentUrl;
+        else window.open(data.paymentUrl, '_blank', 'noopener,noreferrer');
         void pollPaymobTransaction(data.merchantOrderId);
         return;
       }
@@ -539,11 +543,28 @@ export default function CheckoutPage() {
 
       finish(order);
     } catch (error) {
+      payTab?.close();
       setSubmitError(error instanceof Error ? error.message : 'تعذر إرسال الطلب إلى قاعدة البيانات.');
       turnstileRef.current?.reset();
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleExpressPay = () => {
+    if (Object.keys(expressErrors).length) {
+      setShowErrors(true);
+      requestAnimationFrame(() => document.querySelector<HTMLElement>('.express-pay [aria-invalid="true"]')?.focus());
+      return;
+    }
+    void handleSubmit();
+  };
+
+  // Back to the usual steps with what was typed kept, at the first step still to do.
+  const leaveExpress = () => {
+    setShowErrors(false);
+    setStep(firstIncompleteStep(form, countryCode));
+    navigate('/checkout', { replace: true });
   };
 
   if (submitted) {
@@ -594,8 +615,171 @@ export default function CheckoutPage() {
     );
   }
 
-  const fieldClass = (key: keyof CheckoutForm) => (showErrors && errors[key] ? 'checkout-field checkout-field--error' : 'checkout-field');
-  const describedBy = (key: keyof CheckoutForm) => (showErrors && errors[key] ? `err-${key}` : undefined);
+  const fieldClass = (key: keyof CheckoutForm) => (showErrors && activeErrors[key] ? 'checkout-field checkout-field--error' : 'checkout-field');
+  const describedBy = (key: keyof CheckoutForm) => (showErrors && activeErrors[key] ? `err-${key}` : undefined);
+
+  // The delivery fields, the coupon and the security check are used by the three steps and by the one-screen form.
+  const contactFields = (
+    <>
+      <label className={fieldClass('fullName')}>
+        <span>الاسم ثلاثيًا *</span>
+        <input
+          value={form.fullName}
+          onChange={(e) => updateField('fullName', e.target.value)}
+          placeholder="الاسم الأول واسم الأب واسم العائلة"
+          autoComplete="name"
+          aria-invalid={Boolean(showErrors && activeErrors.fullName)}
+          aria-describedby={describedBy('fullName')}
+        />
+        <FieldError id="err-fullName" message={showErrors ? activeErrors.fullName : undefined} />
+      </label>
+      <label className={fieldClass('phone')}>
+        <span>رقم الموبايل *</span>
+        <input
+          type="tel"
+          inputMode="tel"
+          dir="ltr"
+          value={form.phone}
+          onChange={(e) => updateField('phone', e.target.value)}
+          placeholder="01xxxxxxxxx"
+          autoComplete="tel"
+          aria-invalid={Boolean(showErrors && activeErrors.phone)}
+          aria-describedby={describedBy('phone')}
+        />
+        <FieldError id="err-phone" message={showErrors ? activeErrors.phone : undefined} />
+      </label>
+      <label className={fieldClass('email')}>
+        <span>البريد الإلكتروني {user ? '' : '(اختياري)'}</span>
+        <input
+          type="email"
+          dir="ltr"
+          value={form.email}
+          onChange={(e) => updateField('email', e.target.value)}
+          placeholder="name@example.com"
+          autoComplete="email"
+          aria-invalid={Boolean(showErrors && activeErrors.email)}
+          aria-describedby={describedBy('email')}
+        />
+        <small className="checkout-field__hint">لتصلك رسالة تأكيد الطلب وتحديثات حالته.</small>
+        <FieldError id="err-email" message={showErrors ? activeErrors.email : undefined} />
+      </label>
+    </>
+  );
+
+  const shippingFields = (
+    <>
+      <label className={fieldClass('governorate')}>
+        <span>المحافظة *</span>
+        <select
+          value={form.governorate}
+          onChange={(e) => updateField('governorate', e.target.value)}
+          autoComplete="address-level1"
+          aria-invalid={Boolean(showErrors && activeErrors.governorate)}
+          aria-describedby={describedBy('governorate')}
+        >
+          <option value="">اختر المحافظة</option>
+          {GOVERNORATES.map((gov) => (
+            <option key={gov} value={gov}>{gov}</option>
+          ))}
+        </select>
+        <FieldError id="err-governorate" message={showErrors ? activeErrors.governorate : undefined} />
+      </label>
+      <label className={fieldClass('city')}>
+        <span>المدينة *</span>
+        <select
+          value={form.city}
+          onChange={(e) => updateField('city', e.target.value)}
+          autoComplete="address-level2"
+          disabled={!form.governorate}
+          aria-invalid={Boolean(showErrors && activeErrors.city)}
+          aria-describedby={describedBy('city')}
+        >
+          <option value="">{form.governorate ? 'اختر المدينة' : 'اختر المحافظة أولًا'}</option>
+          {availableCities.map((city) => (
+            <option key={city} value={city}>{city}</option>
+          ))}
+        </select>
+        <FieldError id="err-city" message={showErrors ? activeErrors.city : undefined} />
+      </label>
+      <label className={fieldClass('address')}>
+        <span>العنوان بالتفصيل *</span>
+        <input
+          value={form.address}
+          onChange={(e) => updateField('address', e.target.value)}
+          placeholder="الشارع، رقم المبنى، الدور، علامة مميزة"
+          autoComplete="street-address"
+          aria-invalid={Boolean(showErrors && activeErrors.address)}
+          aria-describedby={describedBy('address')}
+        />
+        <FieldError id="err-address" message={showErrors ? activeErrors.address : undefined} />
+      </label>
+      <label className="checkout-field">
+        <span>ملاحظات (اختياري)</span>
+        <textarea value={form.notes} onChange={(e) => updateField('notes', e.target.value)} placeholder="أي تفاصيل تساعد المندوب" />
+      </label>
+    </>
+  );
+
+  const couponCard = (
+    <div className="contact-card">
+      <h3><Tag size={16} /> كود الخصم</h3>
+
+      {appliedCoupon ? (
+        <div className="coupon-applied">
+          <div className="coupon-applied__info">
+            <span className="coupon-applied__code">{appliedCoupon.code}</span>
+            <span className="coupon-applied__desc">{appliedCoupon.description}</span>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={handleRemoveCoupon}
+            aria-label="إزالة الكوبون"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      ) : (
+        <>
+          <div className="coupon-input-row">
+            <input
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+              placeholder="أدخل كود الخصم"
+              disabled={couponLoading}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleApplyCoupon();
+                }
+              }}
+            />
+            <button
+              type="button"
+              className="ghost-button"
+              onClick={handleApplyCoupon}
+              disabled={couponLoading || !couponCode.trim()}
+            >
+              {couponLoading ? 'جاري التحقق...' : 'تطبيق'}
+            </button>
+          </div>
+          {couponError ? (
+            <div className="auth-alert auth-alert--error" style={{ marginTop: 8 }}>
+              {couponError}
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
+  );
+
+  const securityCard = captchaEnabled ? (
+    <div className="contact-card">
+      <h3>التحقق الأمني</h3>
+      <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
+    </div>
+  ) : null;
+
 
   return (
     <div className="page-sections">
@@ -603,8 +787,12 @@ export default function CheckoutPage() {
         <div className="page-card__head">
           <div>
             <span className="page-kicker">إتمام الطلب</span>
-            <h1>إتمام الطلب في 3 خطوات</h1>
-            <p>{user ? 'راجع بياناتك وعنوانك، ثم اختر طريقة الدفع.' : 'بدون إنشاء حساب: بياناتك، ثم العنوان، ثم الدفع.'}</p>
+            <h1>{expressEligible ? 'الدفع السريع عبر Apple Pay' : 'إتمام الطلب في 3 خطوات'}</h1>
+            <p>
+              {expressEligible
+                ? 'بيانات التوصيل في شاشة واحدة، وبعدها تدفع مباشرةً عبر Apple Pay.'
+                : (user ? 'راجع بياناتك وعنوانك، ثم اختر طريقة الدفع.' : 'بدون إنشاء حساب: بياناتك، ثم العنوان، ثم الدفع.')}
+            </p>
           </div>
         </div>
         <OrnamentDivider />
@@ -619,6 +807,32 @@ export default function CheckoutPage() {
         ) : (
           <div className="cart-layout">
             <div className="contact-form checkout-steps-wrap">
+              {expressLoading ? (
+                <div className="contact-card checkout-step" data-testid="express-pay-loading">
+                  <p className="checkout-step__hint">جاري تجهيز الدفع السريع...</p>
+                </div>
+              ) : expressEligible ? (
+                <>
+                  {/* ── One screen: the delivery details, then Apple Pay ──────────────── */}
+                  <div className="contact-card checkout-step express-pay" data-testid="express-pay">
+                    <h3><Zap size={17} /> بيانات التوصيل</h3>
+                    <p className="checkout-step__hint">
+                      اكتب بياناتك، أو املأها بلمسة من Safari (من بطاقة جهات الاتصال)، ثم ادفع عبر Apple Pay.
+                      {!user && <> عندك حساب؟ <Link to="/account?next=/checkout">سجّل الدخول</Link>.</>}
+                    </p>
+                    <div className="express-pay__grid">
+                      {contactFields}
+                      {shippingFields}
+                    </div>
+                  </div>
+                  {couponCard}
+                  {securityCard}
+                  <div className="checkout-step__nav">
+                    <button type="button" className="ghost-button" onClick={leaveExpress}>الدفع بطريقة أخرى</button>
+                  </div>
+                </>
+              ) : (
+              <>
               {/* ── The three steps ─────────────────────────────── */}
               <ol className="checkout-stepper" aria-label="خطوات إتمام الطلب">
                 {STEPS.map(({ step: n, label }) => {
@@ -657,48 +871,7 @@ export default function CheckoutPage() {
                       عندك حساب؟ <Link to="/account?next=/checkout">سجّل الدخول</Link> لتتابع طلباتك من حسابك. أو أكمل بدون حساب.
                     </p>
                   )}
-                  <label className={fieldClass('fullName')}>
-                    <span>الاسم ثلاثيًا *</span>
-                    <input
-                      value={form.fullName}
-                      onChange={(e) => updateField('fullName', e.target.value)}
-                      placeholder="الاسم الأول واسم الأب واسم العائلة"
-                      autoComplete="name"
-                      aria-invalid={Boolean(showErrors && errors.fullName)}
-                      aria-describedby={describedBy('fullName')}
-                    />
-                    <FieldError id="err-fullName" message={showErrors ? errors.fullName : undefined} />
-                  </label>
-                  <label className={fieldClass('phone')}>
-                    <span>رقم الموبايل *</span>
-                    <input
-                      type="tel"
-                      inputMode="tel"
-                      dir="ltr"
-                      value={form.phone}
-                      onChange={(e) => updateField('phone', e.target.value)}
-                      placeholder="01xxxxxxxxx"
-                      autoComplete="tel"
-                      aria-invalid={Boolean(showErrors && errors.phone)}
-                      aria-describedby={describedBy('phone')}
-                    />
-                    <FieldError id="err-phone" message={showErrors ? errors.phone : undefined} />
-                  </label>
-                  <label className={fieldClass('email')}>
-                    <span>البريد الإلكتروني {user ? '' : '(اختياري)'}</span>
-                    <input
-                      type="email"
-                      dir="ltr"
-                      value={form.email}
-                      onChange={(e) => updateField('email', e.target.value)}
-                      placeholder="name@example.com"
-                      autoComplete="email"
-                      aria-invalid={Boolean(showErrors && errors.email)}
-                      aria-describedby={describedBy('email')}
-                    />
-                    <small className="checkout-field__hint">لتصلك رسالة تأكيد الطلب وتحديثات حالته.</small>
-                    <FieldError id="err-email" message={showErrors ? errors.email : undefined} />
-                  </label>
+                  {contactFields}
                   <div className="checkout-step__nav">
                     <button type="button" className="primary-button" onClick={next} disabled={digitalNeedsAccount}>
                       التالي: الشحن والعنوان
@@ -710,53 +883,7 @@ export default function CheckoutPage() {
               {step === 2 && (
                 <div className="contact-card checkout-step" data-testid="checkout-step-2">
                   <h3 ref={stepHeading} tabIndex={-1}><Truck size={17} /> الشحن والعنوان</h3>
-                  <label className={fieldClass('governorate')}>
-                    <span>المحافظة *</span>
-                    <select
-                      value={form.governorate}
-                      onChange={(e) => updateField('governorate', e.target.value)}
-                      aria-invalid={Boolean(showErrors && errors.governorate)}
-                      aria-describedby={describedBy('governorate')}
-                    >
-                      <option value="">اختر المحافظة</option>
-                      {GOVERNORATES.map((gov) => (
-                        <option key={gov} value={gov}>{gov}</option>
-                      ))}
-                    </select>
-                    <FieldError id="err-governorate" message={showErrors ? errors.governorate : undefined} />
-                  </label>
-                  <label className={fieldClass('city')}>
-                    <span>المدينة *</span>
-                    <select
-                      value={form.city}
-                      onChange={(e) => updateField('city', e.target.value)}
-                      disabled={!form.governorate}
-                      aria-invalid={Boolean(showErrors && errors.city)}
-                      aria-describedby={describedBy('city')}
-                    >
-                      <option value="">{form.governorate ? 'اختر المدينة' : 'اختر المحافظة أولًا'}</option>
-                      {availableCities.map((city) => (
-                        <option key={city} value={city}>{city}</option>
-                      ))}
-                    </select>
-                    <FieldError id="err-city" message={showErrors ? errors.city : undefined} />
-                  </label>
-                  <label className={fieldClass('address')}>
-                    <span>العنوان بالتفصيل *</span>
-                    <input
-                      value={form.address}
-                      onChange={(e) => updateField('address', e.target.value)}
-                      placeholder="الشارع، رقم المبنى، الدور، علامة مميزة"
-                      autoComplete="street-address"
-                      aria-invalid={Boolean(showErrors && errors.address)}
-                      aria-describedby={describedBy('address')}
-                    />
-                    <FieldError id="err-address" message={showErrors ? errors.address : undefined} />
-                  </label>
-                  <label className="checkout-field">
-                    <span>ملاحظات (اختياري)</span>
-                    <textarea value={form.notes} onChange={(e) => updateField('notes', e.target.value)} placeholder="أي تفاصيل تساعد المندوب" />
-                  </label>
+                  {shippingFields}
                   <div className="checkout-step__nav">
                     <button type="button" className="ghost-button" onClick={() => goTo(1)}>رجوع</button>
                     <button type="button" className="primary-button" onClick={next}>التالي: الدفع</button>
@@ -804,69 +931,16 @@ export default function CheckoutPage() {
                     )}
                   </div>
 
-                  {/* ── كود الخصم ──────────────────────────────────── */}
-                  <div className="contact-card">
-                    <h3><Tag size={16} /> كود الخصم</h3>
+                  {couponCard}
 
-                    {appliedCoupon ? (
-                      <div className="coupon-applied">
-                        <div className="coupon-applied__info">
-                          <span className="coupon-applied__code">{appliedCoupon.code}</span>
-                          <span className="coupon-applied__desc">{appliedCoupon.description}</span>
-                        </div>
-                        <button
-                          type="button"
-                          className="icon-button"
-                          onClick={handleRemoveCoupon}
-                          aria-label="إزالة الكوبون"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div className="coupon-input-row">
-                          <input
-                            value={couponCode}
-                            onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                            placeholder="أدخل كود الخصم"
-                            disabled={couponLoading}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                handleApplyCoupon();
-                              }
-                            }}
-                          />
-                          <button
-                            type="button"
-                            className="ghost-button"
-                            onClick={handleApplyCoupon}
-                            disabled={couponLoading || !couponCode.trim()}
-                          >
-                            {couponLoading ? 'جاري التحقق...' : 'تطبيق'}
-                          </button>
-                        </div>
-                        {couponError ? (
-                          <div className="auth-alert auth-alert--error" style={{ marginTop: 8 }}>
-                            {couponError}
-                          </div>
-                        ) : null}
-                      </>
-                    )}
-                  </div>
-
-                  {captchaEnabled ? (
-                    <div className="contact-card">
-                      <h3>التحقق الأمني</h3>
-                      <TurnstileWidget ref={turnstileRef} onToken={setTurnstileToken} />
-                    </div>
-                  ) : null}
+                  {securityCard}
 
                   <div className="checkout-step__nav">
                     <button type="button" className="ghost-button" onClick={() => goTo(2)}>رجوع</button>
                   </div>
                 </>
+              )}
+              </>
               )}
             </div>
 
@@ -940,7 +1014,27 @@ export default function CheckoutPage() {
                 <div className="auth-alert auth-alert--error" role="alert">{submitError}</div>
               ) : null}
 
-              {step === 3 ? (
+              {expressEligible ? (
+                <>
+                  {captchaEnabled && !turnstileToken ? (
+                    <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.85rem' }}>
+                      انتظر حتى يكتمل التحقق الأمني.
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="apple-pay-button"
+                    lang="ar"
+                    aria-label="الدفع عبر Apple Pay"
+                    data-testid="apple-pay-button"
+                    onClick={handleExpressPay}
+                    disabled={submitting || (captchaEnabled && !turnstileToken)}
+                  />
+                  <p className="checkout-summary__note">
+                    {submitting ? 'جاري التحويل لصفحة الدفع الآمنة...' : 'ستنتقل لصفحة الدفع الآمنة وتؤكّد الدفع بالوجه أو البصمة.'}
+                  </p>
+                </>
+              ) : step === 3 ? (
                 <>
                   {captchaEnabled && !turnstileToken ? (
                     <div className="auth-alert auth-alert--warning" style={{ fontSize: '0.85rem' }}>

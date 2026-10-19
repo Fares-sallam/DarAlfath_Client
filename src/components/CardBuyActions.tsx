@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import QuantitySelector from '@/components/QuantitySelector';
 import { useCart } from '@/contexts/CartContext';
 import { formatMoney, useCatalogVariants } from '@/hooks/useStorefront';
+import { EXPRESS_CHECKOUT_PATH, isApplePaySupported } from '@/lib/applePay';
 import { flyToCart } from '@/lib/flyToCart';
 import type { ProductItem, ProductVariantItem } from '@/types/store';
 
@@ -11,7 +12,8 @@ import type { ProductItem, ProductVariantItem } from '@/types/store';
  * A book card's buttons. A book sold in one edition goes straight into the cart from here ("أضف للسلة"),
  * and once it is there the button becomes a counter (down to zero takes it out). A book in several
  * editions keeps "عرض التفاصيل", where they are compared. Under it, "شراء سريع" puts the book in the
- * cart and opens checkout; with several editions a short list asks which one first.
+ * cart and opens checkout; with several editions a short list asks which one first. On a device that can
+ * pay with Apple Pay, checkout opens in its one-screen form (delivery details, then Apple Pay).
  *
  * Until the editions are known the card just links to the book, so nothing is offered that can't be done.
  */
@@ -46,7 +48,7 @@ export default function CardBuyActions({
   const buyNow = (variant: ProductVariantItem) => {
     if (!variant.is_available) return;
     if (!itemForVariant(variant.variant_id)) addToCart(product, variant, 1);
-    navigate('/checkout');
+    navigate(isApplePaySupported() ? EXPRESS_CHECKOUT_PATH : '/checkout');
   };
 
   // The edition list opens on its first choice; a click outside closes it, and so does Escape
