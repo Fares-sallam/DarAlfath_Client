@@ -18,6 +18,7 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { flyToCart } from '@/lib/flyToCart';
 import { editionsLabel } from '@/lib/editions';
+import { galleryFor } from '@/lib/productGallery';
 import { bookShareUrl, shareBook } from '@/lib/share';
 import BookQrDialog from '@/components/BookQrDialog';
 import BookCover from '@/components/BookCover';
@@ -110,7 +111,7 @@ export default function BookDetailsPage() {
         ? null
         : { title: titleFor('الكتاب غير موجود'), description: DEFAULT_DESCRIPTION, path: '/books', noindex: true },
   );
-  const { data: galleryImages = [] } = useProductImageGallery(
+  const { data: galleryRows = [] } = useProductImageGallery(
     product?.product_id ?? productId
   );
   const isBundle = Boolean(product?.is_bundle);
@@ -133,13 +134,14 @@ export default function BookDetailsPage() {
   const bookRef = useRef<HTMLDivElement>(null);
   const tiltStyle = useBookTilt(bookRef);
 
-  // The cover leads, then the gallery's other photos (the cover may sit in
-  // the gallery too — it's shown once).
-  const displayedImages = useMemo(() => {
-    if (!product) return [];
-    const others = galleryImages.length > 0 ? galleryImages : product.images ?? [];
-    return [...new Set([product.cover_url, ...others].filter((url): url is string => Boolean(url)))];
-  }, [product, galleryImages]);
+  // The chosen edition's own pictures when it has some; otherwise what the book has: the cover first,
+  // then every picture (the cover may sit in the gallery too — it's shown once). Choosing another edition
+  // changes the pictures, and the list keeps its identity while its content stays the same, so moving
+  // between two editions that share the book's pictures doesn't send the viewer back to the first one.
+  const pictures = product ? galleryFor(product.cover_url, galleryRows, product.images ?? [], selectedVariantId || null) : [];
+  const picturesKey = pictures.join('\n');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const displayedImages = useMemo(() => pictures, [picturesKey]);
 
   const selectedVariant = useMemo<ProductVariantItem | null>(() => {
     return variants.find((item) => item.variant_id === selectedVariantId) ?? null;

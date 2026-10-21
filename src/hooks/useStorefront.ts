@@ -4,6 +4,7 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { useCountry } from '@/contexts/CountryContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { newestFirst } from '@/lib/catalogFilters';
+import type { GalleryImage } from '@/lib/productGallery';
 import type { BundleContentItem, CategoryItem, ProductItem, ProductVariantItem, SeriesItem, StoreSettings } from '@/types/store';
 
 const fallbackSettings: StoreSettings = {
@@ -807,21 +808,24 @@ export function useWishlistProducts(ids: string[]) {
   return { ...productsQuery, data: items };
 }
 
+/** A book's gallery pictures in display order, each with the edition it belongs to (see lib/productGallery). */
 export function useProductImageGallery(productId?: string) {
   return useQuery({
     queryKey: ['product-gallery', productId ?? 'missing'],
     enabled: Boolean(productId),
-    queryFn: async (): Promise<string[]> => {
+    queryFn: async (): Promise<GalleryImage[]> => {
       if (!isSupabaseConfigured || !productId) return [];
       try {
         const { data, error } = await supabase
           .from('product_images')
-          .select('url, is_primary, sort_order')
+          .select('url, variant_id, is_primary, sort_order')
           .eq('product_id', productId)
           .order('sort_order', { ascending: true });
 
         if (error || !data) return [];
-        return (data as { url: string }[]).map((img) => img.url).filter(Boolean);
+        return (data as { url: string; variant_id: string | null }[])
+          .filter((img) => Boolean(img.url))
+          .map((img) => ({ url: img.url, variant_id: img.variant_id ?? null }));
       } catch {
         return [];
       }
