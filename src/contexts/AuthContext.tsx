@@ -40,11 +40,15 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-function getArabicAuthError(message?: string) {
+function getArabicAuthError(message?: string, code?: string) {
   const value = String(message || '').toLowerCase();
 
   if (value.includes('invalid login credentials')) {
     return 'بيانات الدخول غير صحيحة. تأكد من البريد وكلمة المرور.';
+  }
+
+  if (code === 'over_email_send_rate_limit' || value.includes('email rate limit exceeded')) {
+    return 'تعذر إرسال رسالة التحقق الآن بسبب بلوغ حد رسائل البريد. حاول لاحقًا أو تواصل معنا.';
   }
 
   if (value.includes('rate') || value.includes('limit')) {
@@ -253,34 +257,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendResetOtp: async (email) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
-      const { error } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: {
-          shouldCreateUser: false,
-        },
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: getRedirectUrl('/account?mode=reset'),
       });
 
       if (error) {
         const msg = error.message.toLowerCase();
-
-        // Rate limit — tell the user clearly
-        if (msg.includes('rate') || msg.includes('limit')) {
-          return { error: getArabicAuthError(error.message) };
+        if (error.code === 'user_not_found' || msg.includes('user not found')) {
+          return { error: null, message: 'إذا كان هذا البريد مسجلاً لدينا، سيصلك كود إعادة التعيين.' };
         }
-
-        // For any other error (user not found, magic link failure, etc.)
-        // return a generic success-looking message to prevent email enumeration.
-        // An attacker should not be able to distinguish "user exists but email
-        // failed" from "user does not exist".
-        return {
-          error: null,
-          message: 'إذا كان هذا البريد مسجلاً لدينا، سيصلك كود التحقق خلال لحظات.',
-        };
+        if (error.code === 'over_email_send_rate_limit' || msg.includes('rate') || msg.includes('limit')) {
+          return { error: getArabicAuthError(error.message, error.code) };
+        }
+        return { error: 'تعذر إرسال رسالة إعادة التعيين الآن. حاول لاحقًا أو تواصل معنا.' };
       }
 
       return {
         error: null,
-        message: 'أرسلنا كود تحقق مكوّن من 6 أرقام إلى بريدك الإلكتروني.',
+        message: 'إذا كان هذا البريد مسجلاً لدينا، سيصلك كود إعادة التعيين.',
       };
     },
     verifyResetOtp: async (email, token) => {
@@ -290,7 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { error } = await supabase.auth.verifyOtp({
         email: email.trim(),
         token: cleanedToken,
-        type: 'email',
+        type: 'recovery',
       });
 
       if (error) {
