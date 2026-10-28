@@ -225,16 +225,11 @@ export default function AccountPage() {
         return;
       }
 
-      // Set mode to 'reset' BEFORE the async call to prevent profile page
-      // flash caused by verifyOtp signing the user in via onAuthStateChange.
-      setMode('reset');
-
       setSubmitting(true);
       const result = await verifyResetOtp(form.email, form.verificationCode);
       setSubmitting(false);
 
       if (result.error) {
-        // Verification failed — go back to forgot-verify mode
         setMode('forgot-verify');
         setError(result.error);
         return;
@@ -242,7 +237,8 @@ export default function AccountPage() {
 
       setError('');
       setNotice(result.message || 'تم التحقق بنجاح.');
-      setForm((prev) => ({ ...initialForm, email: prev.email }));
+      setForm((prev) => ({ ...prev, verificationCode: '' }));
+      setMode('reset');
       return;
     }
 
@@ -860,7 +856,7 @@ export default function AccountPage() {
                 {resendCooldown > 0 ? `إعادة الإرسال (${resendCooldown}ث)` : 'إعادة إرسال كود التحقق'}
               </button>
               <br />
-              <small className="auth-otp-expiry">صلاحية الكود 5 دقائق</small>
+              <small className="auth-otp-expiry">استخدم الكود قبل انتهاء صلاحيته</small>
             </p>
           ) : null}
 
