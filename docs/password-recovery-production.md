@@ -8,11 +8,14 @@ project, so every Auth email consumes the same project-wide sending quota.
 domain or an SMTP provider. Do not claim that production OTP delivery is fixed,
 or raise the Auth email rate limit, until both are in place and a real message
 has been received and verified end to end. Supabase's built-in sender is limited
-to 2 emails per hour per project, including on a Pro plan.
+to 2 emails per hour per project, including on a Pro plan, and only delivers to
+pre-authorized project-team addresses. It is not a production sender.
 
 ## Required Supabase configuration
 
-1. Configure a production SMTP provider in Authentication > SMTP Settings. Use
+1. Choose a transactional SMTP provider (for example, Resend), register or use
+   a domain you control, and verify the sending subdomain with that provider.
+   Configure it in Authentication > SMTP Settings. Use
    a verified sending domain and a dedicated sender such as
    `no-reply@auth.example.com`. Keep SMTP credentials in Supabase, never in
    the storefront, mobile app, repository, or Vercel client environment.
