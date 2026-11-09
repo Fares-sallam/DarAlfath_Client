@@ -3,7 +3,7 @@ export const QR_OPTIONS = {
   type: 'svg',
   errorCorrectionLevel: 'M',
   margin: 1,
-  color: { dark: '#0b1b4d', light: '#ffffff' },
+  color: { dark: '#002046', light: '#ffffff' },
 } as const;
 
 /**

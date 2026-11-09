@@ -8,66 +8,57 @@
 /* Both themes get the same geometry; only the surface and ink swap.
    Gold is the one constant — it's the brand, and it reads on both. */
 :root {
-  --home-gold: #b5863f;
-  --home-gold-bright: #d8b15b;
+  --home-gold: #398e81;
+  --home-gold-bright: #73c7cd;
   /* Gold as SMALL TEXT needs to clear 4.5:1; the ornament gold above only
      ever draws strokes and shapes, where 3:1 is the bar. Measured on the
-     frontispiece cream (#fdfaf3): ornament gold lands at 3.12 — fine for the
+     frontispiece cream (#f4fcfb): ornament gold lands at 3.12 — fine for the
      rules and rosettes, short for an 11px label — this one lands at 5.28. */
-  --home-gold-text: #8c6024;
-  --home-frame: rgba(181, 134, 63, 0.42);
+  --home-gold-text: #18675c;
+  --home-frame: rgba(57, 142, 129, 0.42);
   /* A plainly-visible frame for a lone image sitting on its own (the
      department photos) — --home-frame is deliberately faint for tracing
      a shape that already has other edges (the fallback icon's own box,
      ornament rules); on a bare photo that faintness read as no frame
      at all. */
-  --home-frame-strong: rgba(181, 134, 63, 0.75);
-  --home-ink: #102542;
-  --home-ink-soft: #5b6b84;
+  --home-frame-strong: rgba(57, 142, 129, 0.75);
+  --home-ink: #0e2542;
+  --home-ink-soft: #596c84;
   /* Warm centre falling off to a deeper cream at the edges — a flat fill
      read as empty space no matter what was layered on top of it. */
   --home-surface:
-    radial-gradient(ellipse 90% 70% at 50% 32%, #fffefb 0%, transparent 62%),
-    linear-gradient(168deg, #fdf9f0, #f4ead6);
+    radial-gradient(ellipse 90% 70% at 50% 32%, #fbfffe 0%, transparent 62%),
+    linear-gradient(168deg, #f1fcfa, #d9f1ee);
   /* Was 0.055 — effectively invisible. The lattice is meant to be seen. */
-  --home-motif: rgba(181, 134, 63, 0.16);
-  /* The arabesque photograph is a light beige wall: on cream it only needs
-     multiply to sink into the surface as carved relief. */
-  --home-wall-opacity: 0.36;
-  --home-wall-blend: multiply;
-  --home-page-wall-opacity: 0.17;
+  --home-motif: rgba(57, 142, 129, 0.16);
+  --home-page-wall-opacity: 0.1;
   --home-frame-shadow:
-    0 18px 44px rgba(70, 50, 20, 0.13),
-    0 2px 6px rgba(70, 50, 20, 0.07),
+    0 18px 44px rgba(38, 59, 56, 0.13),
+    0 2px 6px rgba(38, 59, 56, 0.07),
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    inset 0 -1px 0 rgba(140, 100, 40, 0.10);
+    inset 0 -1px 0 rgba(31, 105, 94, 0.10);
   --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html.dark {
-  --home-gold: #D4A520;
-  --home-gold-bright: #F0C842;
+  --home-gold: #2aa3ab;
+  --home-gold-bright: #93dbe0;
   /* On the dark surface the ornament gold already measures 7.99:1, so text
      and ornament share one value here. */
-  --home-gold-text: #D4A520;
-  --home-frame: rgba(212, 165, 32, 0.34);
-  --home-frame-strong: rgba(212, 165, 32, 0.65);
-  --home-ink: #F0EDFF;
-  --home-ink-soft: #9AA3C4;
+  --home-gold-text: #2aa3ab;
+  --home-frame: rgba(42, 163, 171, 0.34);
+  --home-frame-strong: rgba(42, 163, 171, 0.65);
+  --home-ink: #e6f3f1;
+  --home-ink-soft: #90a7c3;
   --home-surface:
-    radial-gradient(ellipse 90% 70% at 50% 32%, #16225c 0%, transparent 62%),
-    linear-gradient(168deg, #0D1847, #060B28);
-  --home-motif: rgba(212, 165, 32, 0.14);
-  /* On navy the same beige wall would blow the panel out, so it goes through
-     luminosity at a much lower opacity: the carving's light and shade survive
-     as texture while the surface keeps its own colour. */
-  --home-wall-opacity: 0.24;
-  --home-wall-blend: luminosity;
-  --home-page-wall-opacity: 0.09;
+    radial-gradient(ellipse 90% 70% at 50% 32%, #002855 0%, transparent 62%),
+    linear-gradient(168deg, #001d41, #000e26);
+  --home-motif: rgba(42, 163, 171, 0.14);
+  --home-page-wall-opacity: 0.12;
   --home-frame-shadow:
     0 18px 46px rgba(0, 0, 0, 0.46),
     0 2px 8px rgba(0, 0, 0, 0.30),
-    inset 0 1px 0 rgba(212, 165, 32, 0.16),
+    inset 0 1px 0 rgba(42, 163, 171, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.35);
 }
 
@@ -76,23 +67,22 @@ html.dark {
   position: relative;
 }
 
-/* The same carved wall behind the whole homepage, at roughly half the
-   frontispiece's strength — enough to give the page a room to sit in, weak
-   enough that the book cards keep all the contrast. Fixed so it behaves like
-   a wall the content scrolls past rather than a texture glued to the page,
-   and pinned behind everything (z-index -1) with pointer-events off. */
+/* The brand pattern behind the whole homepage, showing only toward the edges
+   of the viewport (the mask clears the centre) and faint enough that the book
+   cards keep all the contrast. Fixed so it behaves like a wall the content
+   scrolls past rather than a texture glued to the page, and pinned behind
+   everything (z-index -1) with pointer-events off. */
 .page-sections--home::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background-image: url('/branding/arabesque-wall.jpg');
-  background-size: cover;
-  background-position: center;
+  background-image: var(--pattern);
+  background-size: 260px auto;
+  background-position: center top;
   opacity: var(--home-page-wall-opacity);
-  mix-blend-mode: var(--home-wall-blend);
-  mask-image: radial-gradient(ellipse 120% 90% at 50% 40%, transparent 30%, #000 100%);
+  mask-image: radial-gradient(ellipse 120% 90% at 50% 40%, transparent 38%, #000 100%);
 }
 
 /* ── Page-wide cursor light ───────────────────────────────────────────
@@ -117,7 +107,7 @@ html.dark {
      under the finger, not a lamp covering whatever it passes over. */
   background: radial-gradient(
     circle 30px at var(--mx, 50%) var(--my, 50%),
-    rgba(181, 134, 63, 0.55),
+    rgba(57, 142, 129, 0.55),
     transparent 72%
   );
 }
@@ -126,7 +116,7 @@ html.dark .page-cursor-light {
   mix-blend-mode: screen;
   background: radial-gradient(
     circle 35px at var(--mx, 50%) var(--my, 50%),
-    rgba(240, 200, 66, 0.4),
+    rgba(147, 219, 224, 0.4),
     transparent 72%
   );
 }
@@ -218,7 +208,7 @@ html.dark .page-cursor-light {
   background: var(--home-surface);
   border: 1px solid var(--home-frame);
   color: var(--home-gold);
-  box-shadow: 0 8px 20px rgba(16, 37, 66, 0.10);
+  box-shadow: 0 8px 20px rgba(14, 37, 66, 0.10);
 }
 
 .department-card:hover .department-card__visual,
@@ -326,16 +316,16 @@ html.dark .page-cursor-light {
 .book-card:focus-visible .book-card__cover {
   outline-color: var(--home-gold);
   box-shadow:
-    0 26px 50px rgba(16, 37, 66, 0.30),
-    0 4px 10px rgba(16, 37, 66, 0.16),
-    0 0 22px rgba(181, 134, 63, 0.4);
+    0 26px 50px rgba(14, 37, 66, 0.30),
+    0 4px 10px rgba(14, 37, 66, 0.16),
+    0 0 22px rgba(57, 142, 129, 0.4);
 }
 html.dark .book-card:hover .book-card__cover,
 html.dark .book-card:focus-visible .book-card__cover {
   box-shadow:
-    0 26px 50px rgba(16, 37, 66, 0.30),
-    0 4px 10px rgba(16, 37, 66, 0.16),
-    0 0 22px rgba(240, 200, 66, 0.35);
+    0 26px 50px rgba(14, 37, 66, 0.30),
+    0 4px 10px rgba(14, 37, 66, 0.16),
+    0 0 22px rgba(147, 219, 224, 0.35);
 }
 
 /* ── Book card hover: the picture moves inside its frame ─────────────
@@ -373,7 +363,7 @@ html.dark .book-card:focus-visible .book-card__cover {
   background: var(--home-surface);
   color: var(--home-gold);
   cursor: pointer;
-  box-shadow: 0 6px 18px rgba(9, 20, 48, 0.16);
+  box-shadow: 0 6px 18px rgba(2, 22, 47, 0.16);
   transition: opacity 0.2s var(--ease-out-quint), transform 0.2s var(--ease-out-quint);
 }
 .scroll-rail__arrow--prev { inset-inline-start: -6px; }
@@ -775,7 +765,7 @@ a.home-hero-panel__viewport:hover {
    pasted on. Full width already runs the banner edge to edge, so the
    glow's sides fall off-viewport on their own; only top/bottom show. */
 html.dark .home-hero-panel__viewport {
-  box-shadow: 0 0 110px 26px rgba(255, 246, 220, 0.22);
+  box-shadow: 0 0 110px 26px rgba(227, 253, 249, 0.22);
 }
 
 /* Softens the banner's own brightness a notch on navy — full-strength
@@ -826,7 +816,7 @@ html.dark .home-hero-panel__img {
   background: var(--home-surface);
   color: var(--home-gold);
   cursor: pointer;
-  box-shadow: 0 6px 18px rgba(9, 20, 48, 0.16);
+  box-shadow: 0 6px 18px rgba(2, 22, 47, 0.16);
   transition: scale 0.2s var(--ease-out-quint);
 }
 /* `scale`, not `transform`: a transform would stack on top of `translate`
@@ -875,8 +865,8 @@ html.dark .home-hero-panel__img {
   background: var(--surface);
 }
 html.dark .category-bar {
-  border-bottom-color: #1E2D6B;
-  background: #0A1440;
+  border-bottom-color: #054180;
+  background: #001939;
 }
 
 .category-bar__track {
@@ -913,15 +903,15 @@ html.dark .category-bar {
 }
 
 html.dark .category-bar__pill {
-  color: #8A93B8;
-  border-color: #1E2D6B;
+  color: #7e97b7;
+  border-color: #054180;
 }
 html.dark .category-bar__pill:hover {
-  color: #D4A520;
-  border-color: rgba(212, 165, 32, 0.35);
+  color: #2aa3ab;
+  border-color: rgba(42, 163, 171, 0.35);
 }
 html.dark .category-bar__pill.active {
-  color: #F0EDFF;
-  background: rgba(212, 165, 32, 0.12);
-  border-color: rgba(212, 165, 32, 0.35);
+  color: #e6f3f1;
+  background: rgba(42, 163, 171, 0.12);
+  border-color: rgba(42, 163, 171, 0.35);
 }

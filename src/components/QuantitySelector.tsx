@@ -28,8 +28,8 @@ export default function QuantitySelector({
     <div
       className={`qty-stepper qty-stepper--soft${compact ? ' qty-stepper--card' : ''}`}
       style={isDark ? {
-        background: '#131F55',
-        border: '1px solid #1E2D6B',
+        background: '#00254f',
+        border: '1px solid #054180',
         boxShadow: 'none',
       } : undefined}
     >
@@ -39,14 +39,14 @@ export default function QuantitySelector({
         aria-label="تقليل الكمية"
         style={isDark ? {
           background: 'rgba(255,255,255,0.06)',
-          color: '#C8D0F0',
+          color: '#c0d7d4',
           border: '1px solid rgba(255,255,255,0.08)',
         } : undefined}
       >
         −
       </button>
 
-      <span aria-live="polite" aria-label={`الكمية ${value}`} style={isDark ? { color: '#F0EDFF' } : undefined}>
+      <span aria-live="polite" aria-label={`الكمية ${value}`} style={isDark ? { color: '#e6f3f1' } : undefined}>
         {value}
       </span>
 
@@ -58,7 +58,7 @@ export default function QuantitySelector({
         title={atMax ? 'دي كل الكمية المتاحة' : undefined}
         style={isDark ? {
           background: 'rgba(255,255,255,0.06)',
-          color: '#C8D0F0',
+          color: '#c0d7d4',
           border: '1px solid rgba(255,255,255,0.08)',
         } : undefined}
       >

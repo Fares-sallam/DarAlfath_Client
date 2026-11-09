@@ -6,7 +6,7 @@ export default function HeroBookStack() {
       <div className="hero-stack__card hero-stack__card--middle" />
       <div className="hero-stack__card hero-stack__card--front">
         <div className="hero-stack__cover">
-          <img src="/branding/dar-alfath-logo.jpeg" alt="دار الفتح" />
+          <img src="/branding/dar-alfath-logo-2026.jpg" alt="دار الفتح" />
         </div>
       </div>
     </div>

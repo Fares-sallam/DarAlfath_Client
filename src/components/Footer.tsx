@@ -22,7 +22,7 @@ export default function Footer({ settings }: { settings: StoreSettings }) {
     <footer className="site-footer">
       <div className="container site-footer__grid">
         <div className="site-footer__brand">
-          <Logo small />
+          <Logo small onDark />
           <p>{settings.footer_tagline?.trim() || DEFAULT_TAGLINE}</p>
 
           {socialLinks.length > 0 && (

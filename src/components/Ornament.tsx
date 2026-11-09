@@ -1,25 +1,20 @@
 /**
- * Manuscript-style gold ornaments, drawn as SVG so they stay crisp at any size
- * and pick up the theme's own gold rather than shipping a baked-in colour.
+ * Section ornaments, drawn as SVG so they stay crisp at any size and take
+ * the theme's colours instead of shipping baked-in ones.
  *
- * `divider` is the section separator: a centred rosette on a hairline rule.
+ * `divider` is the section separator: one unit of the house pattern (four
+ * crescents meeting at a point, from the brand files) on a hairline rule.
  * `corner` is the frame flourish used at the hero's four corners.
  */
 export function OrnamentDivider({ label }: { label?: string }) {
   return (
     <div className="ornament-divider" role="separator" aria-label={label ?? 'فاصل'}>
       <span className="ornament-divider__rule" />
-      <svg className="ornament-divider__mark" viewBox="0 0 48 24" aria-hidden="true" focusable="false">
-        {/* eight-point rosette: two squares at 45° — the base motif of the
-            geometric star patterns in Mamluk manuscript headpieces */}
-        <g fill="none" stroke="currentColor" strokeWidth="1.1" strokeLinejoin="round">
-          <rect x="17" y="5" width="14" height="14" />
-          <rect x="17" y="5" width="14" height="14" transform="rotate(45 24 12)" />
-          <circle cx="24" cy="12" r="2.1" fill="currentColor" stroke="none" />
-          <path d="M6 12h7M35 12h7" strokeLinecap="round" />
-          <circle cx="3.2" cy="12" r="1.3" fill="currentColor" stroke="none" />
-          <circle cx="44.8" cy="12" r="1.3" fill="currentColor" stroke="none" />
-        </g>
+      <svg className="ornament-divider__mark" viewBox="10 0 61 68" aria-hidden="true" focusable="false">
+        <path fill="currentColor" d="M 14.25 1.5 L 27.47 1.5 C 27.47 1.5 21.66 19.94 39.74 34.1 C 39.74 34.1 11.01 27.72 14.25 1.5 Z" />
+        <path className="ornament-divider__accent" d="M 66.55 1.5 L 53.33 1.5 C 53.33 1.5 59.14 19.94 41.06 34.1 C 41.06 34.1 69.79 27.72 66.55 1.5 Z" />
+        <path fill="currentColor" d="M 65.55 66.7 L 52.33 66.7 C 52.33 66.7 58.15 48.26 40.06 34.1 C 45.25 35.25 68.94 39.33 65.55 66.7 Z" />
+        <path fill="currentColor" d="M 14.25 66.7 L 27.47 66.7 C 27.47 66.7 21.66 48.26 39.74 34.1 C 39.74 34.1 11.01 40.48 14.25 66.7 Z" />
       </svg>
       <span className="ornament-divider__rule" />
     </div>

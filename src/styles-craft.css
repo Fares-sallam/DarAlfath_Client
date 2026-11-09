@@ -13,17 +13,14 @@
   --dur-state: 240ms;
   --dur-enter: 520ms;
 
-  /* On-brand accent in OKLCH (gold), used sparingly as the single accent */
-  --gold-oklch: oklch(0.78 0.11 85);
-  --navy-oklch: oklch(0.30 0.08 250);
 }
 
 /* ──────────────────────────────────────────────────────────────────────────
-   TYPOGRAPHY — three deliberate voices:
-   Reem Kufi (marketing display) · Amiri (literary / book titles) · Cairo (UI)
+   TYPOGRAPHY — the two brand voices:
+   DIN Next LT Arabic (display, headings, book titles) · Bahij TheSansArabic (text, UI)
    ────────────────────────────────────────────────────────────────────────── */
 .hero-banner h1 {
-  font-family: 'Reem Kufi', 'Cairo', sans-serif;
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.28;
@@ -34,7 +31,7 @@
 .book-cover__title,
 .bk3-title,
 .bk3-hero__title {
-  font-family: 'Amiri', 'Cairo', serif;
+  font-family: var(--font-display);
   font-weight: 700;
   letter-spacing: 0;
 }
@@ -78,7 +75,7 @@
   inset-inline-end: 0;
   width: 11px;
   background:
-    linear-gradient(180deg, #f3dca0, #d8b15b 45%, #b98e3c 100%);
+    linear-gradient(180deg, #b1eaee, #73c7cd 45%, #399587 100%);
   box-shadow:
     inset -1px 0 1px rgba(255, 255, 255, 0.5),
     -3px 0 8px rgba(0, 0, 0, 0.28);
@@ -99,25 +96,25 @@
 }
 .book-cover__gen--m0 .book-cover__motif {
   background-image:
-    repeating-conic-gradient(from 0deg, #e9c877 0deg 12deg, transparent 12deg 24deg);
+    repeating-conic-gradient(from 0deg, #92dae0 0deg 12deg, transparent 12deg 24deg);
   -webkit-mask: radial-gradient(circle, #000 58%, transparent 60%);
           mask: radial-gradient(circle, #000 58%, transparent 60%);
 }
 .book-cover__gen--m1 .book-cover__motif {
   background-image:
-    repeating-linear-gradient(45deg, #e9c877 0 2px, transparent 2px 13px),
-    repeating-linear-gradient(-45deg, #e9c877 0 2px, transparent 2px 13px);
+    repeating-linear-gradient(45deg, #92dae0 0 2px, transparent 2px 13px),
+    repeating-linear-gradient(-45deg, #92dae0 0 2px, transparent 2px 13px);
 }
 .book-cover__gen--m2 .book-cover__motif {
   background-image:
-    radial-gradient(circle at 50% 50%, transparent 30%, #e9c877 31% 34%, transparent 35%),
-    repeating-conic-gradient(from 22deg, #e9c877 0deg 8deg, transparent 8deg 45deg);
+    radial-gradient(circle at 50% 50%, transparent 30%, #92dae0 31% 34%, transparent 35%),
+    repeating-conic-gradient(from 22deg, #92dae0 0deg 8deg, transparent 8deg 45deg);
   -webkit-mask: radial-gradient(circle, #000 60%, transparent 62%);
           mask: radial-gradient(circle, #000 60%, transparent 62%);
 }
 .book-cover__gen--m3 .book-cover__motif {
   background-image:
-    repeating-conic-gradient(from 0deg, #e9c877 0deg 6deg, transparent 6deg 30deg);
+    repeating-conic-gradient(from 0deg, #92dae0 0deg 6deg, transparent 6deg 30deg);
   -webkit-mask: repeating-radial-gradient(circle, #000 0 6px, transparent 6px 13px);
           mask: repeating-radial-gradient(circle, #000 0 6px, transparent 6px 13px);
 }
@@ -138,25 +135,25 @@
   padding-inline-end: 20px;
   display: grid;
   gap: 5px;
-  background: linear-gradient(180deg, transparent, rgba(4, 12, 30, 0.55) 62%);
+  background: linear-gradient(180deg, transparent, rgba(2, 13, 30, 0.55) 62%);
 }
 
 .book-cover__kicker {
-  font-family: 'Reem Kufi', 'Cairo', sans-serif;
+  font-family: var(--font-display);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
-  color: #e9c877;
+  color: #92dae0;
   opacity: 0.92;
 }
 
 .book-cover__title {
   margin: 0;
-  font-family: 'Amiri', serif;
+  font-family: var(--font-display);
   font-weight: 700;
   font-size: 19px;
   line-height: 1.38;
-  color: #fbf4e3;
+  color: #e5f9f7;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -166,7 +163,7 @@
 
 .book-cover__author {
   font-size: 11.5px;
-  color: rgba(243, 233, 209, 0.72);
+  color: rgba(215, 240, 236, 0.72);
 }
 
 .book-cover__gen--compact .book-cover__title { font-size: 16px; }
@@ -182,7 +179,7 @@
      that leaves the card with no legible edge at all. Gold at real
      opacity gives it one back without reintroducing the old flat card
      look (no fill, no box-shadow on the card itself — just an outline). */
-  border: 1.5px solid rgba(216, 177, 91, 0.45);
+  border: 1.5px solid rgba(115, 199, 205, 0.45);
   box-shadow: none;
   border-radius: 16px;
   overflow: visible; /* let the cover's depth shadow + tilt breathe */
@@ -191,7 +188,7 @@
 .book-card:hover {
   transform: none; /* lift moves to the cover, not the whole card */
   box-shadow: none;
-  border-color: rgba(216, 177, 91, 0.8);
+  border-color: rgba(115, 199, 205, 0.8);
 }
 
 .book-card__cover {
@@ -199,7 +196,7 @@
      the cover's shape, so it can't drift out of sync with object-fit
      again the way the old @media(max-width:640px) overrides did. */
   border-radius: 14px;
-  box-shadow: 0 14px 30px rgba(16, 37, 66, 0.18), 0 2px 6px rgba(16, 37, 66, 0.12);
+  box-shadow: 0 14px 30px rgba(14, 37, 66, 0.18), 0 2px 6px rgba(14, 37, 66, 0.12);
   transform: perspective(820px) rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)) translateZ(0);
   transition: transform var(--dur-state) var(--ease-out-quart),
               box-shadow var(--dur-state) var(--ease-out-quart);
@@ -207,7 +204,7 @@
 /* Promote to a GPU layer only while interacting — not permanently, which
    would keep every catalog cover layered and inflate memory. */
 .book-card:hover .book-card__cover {
-  box-shadow: 0 26px 50px rgba(16, 37, 66, 0.30), 0 4px 10px rgba(16, 37, 66, 0.16);
+  box-shadow: 0 26px 50px rgba(14, 37, 66, 0.30), 0 4px 10px rgba(14, 37, 66, 0.16);
   will-change: transform;
 }
 
@@ -261,7 +258,7 @@
   z-index: 9999;
   border-radius: 8px;
   object-fit: cover;
-  box-shadow: 0 12px 30px rgba(16, 37, 66, 0.35);
+  box-shadow: 0 12px 30px rgba(14, 37, 66, 0.35);
   pointer-events: none;
   will-change: transform, opacity;
 }

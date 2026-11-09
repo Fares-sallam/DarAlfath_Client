@@ -1,32 +1,25 @@
 import { Link } from 'react-router-dom';
-import { useStoreSettings } from '@/hooks/useStorefront';
 
-const STATIC_LOGO = '/branding/dar-alfath-logo.jpeg';
+const LOCKUP = '/branding/logo-horizontal.svg';
+const LOCKUP_NIGHT = '/branding/logo-horizontal-dark.svg';
 
-export default function Logo({ small = false, disableLink = true }: { small?: boolean; disableLink?: boolean }) {
-  // Same store_settings.logo_url row the dashboard's Settings page writes
-  // to when the admin uploads a new logo — falls back to the bundled
-  // static file only when no custom logo has been uploaded (or on a
-  // fetch error, via useStoreSettings' own fallbackSettings). This was
-  // previously hardcoded to the static file only, so a logo change in the
-  // dashboard never reached the storefront.
-  const { data: settings } = useStoreSettings();
-  const logoSrc = settings?.logo_url || STATIC_LOGO;
-
+/**
+ * The house lockup (mark + Arabic and English names) from the brand files.
+ * The theme is a class on <html>, not a media query, so both drawings are in
+ * the page and CSS shows the one that matches: navy lettering on the light
+ * surface, mint lettering on the night one. `onDark` is for surfaces that are
+ * dark in both themes (the footer), which always take the mint drawing.
+ *
+ * store_settings.logo_url is no longer read here: an uploaded logo is one
+ * picture, and the lockup needs a light and a night version.
+ */
+export default function Logo({ small = false, disableLink = true, onDark = false }: { small?: boolean; disableLink?: boolean; onDark?: boolean }) {
+  const cls = ['brand-lockup', small && 'brand-lockup--small', onDark && 'brand-lockup--on-dark'].filter(Boolean).join(' ');
   const content = (
-    <div className="brand-logo">
-      <img
-        src={logoSrc}
-        alt="دار الفتح للنشر والتوزيع"
-        className={small ? 'brand-logo__image brand-logo__image--small' : 'brand-logo__image'}
-      />
-      <div className="brand-logo__text">
-        <div className={small ? 'brand-logo__title brand-logo__title--small' : 'brand-logo__title'}>
-          دار الفتح للنشر والتوزيع
-        </div>
-        <div className="brand-logo__sub">Dar Al-Fath Publishing & Distribution</div>
-      </div>
-    </div>
+    <span className={cls}>
+      {!onDark && <img src={LOCKUP} alt="دار الفتح للنشر والتوزيع" className="brand-lockup__img brand-lockup__img--day" width={3214} height={850} />}
+      <img src={LOCKUP_NIGHT} alt="دار الفتح للنشر والتوزيع" className="brand-lockup__img brand-lockup__img--night" width={3214} height={850} />
+    </span>
   );
-  return disableLink ? content : <Link to="/">{content}</Link>;
+  return disableLink ? content : <Link to="/" aria-label="دار الفتح للنشر والتوزيع، الصفحة الرئيسية">{content}</Link>;
 }

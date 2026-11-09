@@ -160,7 +160,7 @@ export default function PaymentResultPage() {
       <div className="page-sections">
         <section className="page-card">
           <div className="empty-state">
-            <Clock size={48} color="var(--gold, #d4a24a)" />
+            <Clock size={48} color="var(--gold, #62bcc3)" />
             <h3>لم نتمكن من تأكيد الدفع بعد</h3>
             <p>
               لو تم خصم المبلغ من حسابك، فطلبك محفوظ وسيتم تأكيده تلقائيًا خلال دقائق.

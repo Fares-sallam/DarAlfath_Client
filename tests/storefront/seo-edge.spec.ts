@@ -274,7 +274,7 @@ test('أدوات: اختصار الوصف، والصورة المصغّرة، و
   expect(shorten(null)).toBe('');
   expect(previewImage(`${SUPABASE}/storage/v1/object/public/book-covers/a b.jpg?v=3`, 'https://x.com')).toBe(`${SUPABASE}/storage/v1/render/image/public/book-covers/a b.jpg?width=600&height=600&resize=contain&quality=75`);
   expect(previewImage('https://cdn.example.com/a.png', 'https://x.com')).toBe('https://cdn.example.com/a.png');
-  expect(previewImage(null, 'https://x.com')).toBe('https://x.com/branding/dar-alfath-logo.jpeg');
+  expect(previewImage(null, 'https://x.com')).toBe('https://x.com/branding/dar-alfath-logo-2026.jpg');
   expect(jsonLdText({ a: '</script><!--' })).not.toMatch(/[<>]/);
 });
 

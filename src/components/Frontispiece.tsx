@@ -48,7 +48,7 @@ export default function Frontispiece({ children }: { children: React.ReactNode }
       >
         <img
           className="frontispiece__watermark"
-          src="/branding/dar-alfath-logo.jpeg"
+          src="/branding/dar-alfath-logo-2026.jpg"
           alt=""
           aria-hidden="true"
           draggable={false}

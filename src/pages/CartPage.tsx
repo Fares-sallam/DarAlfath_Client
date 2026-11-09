@@ -60,7 +60,7 @@ export default function CartPage() {
                   {item.image ? (
                     <img src={item.image} alt={item.title} loading="lazy" />
                   ) : (
-                    <img src="/branding/dar-alfath-logo.jpeg" alt="دار الفتح" />
+                    <img src="/branding/dar-alfath-logo-2026.jpg" alt="دار الفتح" />
                   )}
                 </div>
 

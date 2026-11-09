@@ -14,7 +14,7 @@
 export const SITE_NAME = 'دار الفتح للنشر والتوزيع';
 export const DEFAULT_DESCRIPTION =
   'المتجر الرسمي لدار الفتح للنشر والتوزيع: كتب تعليمية وإسلامية للأطفال والمعلمين، نسخ ورقية ورقمية، وشحن لجميع المحافظات.';
-export const LOGO_PATH = '/branding/dar-alfath-logo.jpeg';
+export const LOGO_PATH = '/branding/dar-alfath-logo-2026.jpg';
 
 export interface Seo {
   /** The whole document title. */

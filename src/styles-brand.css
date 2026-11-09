@@ -1,0 +1,122 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   BRAND LAYER — هوية دار الفتح
+   The house fonts, the four brand swatches, the lockup and the pattern.
+   Imported last. The older layers were re-coloured onto the same swatches
+   (navy and teal lead in the light theme, teal, sea green and mint lead in
+   the night theme), so this file only adds what they never had.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@font-face { font-family: 'DIN Next LT Arabic'; src: url('/fonts/din-next-arabic-400.woff2') format('woff2'); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DIN Next LT Arabic'; src: url('/fonts/din-next-arabic-500.woff2') format('woff2'); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DIN Next LT Arabic'; src: url('/fonts/din-next-arabic-700.woff2') format('woff2'); font-weight: 600 700; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DIN Next LT Arabic'; src: url('/fonts/din-next-arabic-800.woff2') format('woff2'); font-weight: 800; font-style: normal; font-display: swap; }
+@font-face { font-family: 'DIN Next LT Arabic'; src: url('/fonts/din-next-arabic-900.woff2') format('woff2'); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Bahij TheSansArabic'; src: url('/fonts/bahij-400.woff2') format('woff2'); font-weight: 300 500; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Bahij TheSansArabic'; src: url('/fonts/bahij-600.woff2') format('woff2'); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: 'Bahij TheSansArabic'; src: url('/fonts/bahij-700.woff2') format('woff2'); font-weight: 700 900; font-style: normal; font-display: swap; }
+
+:root {
+  --brand-navy: #054180;
+  --brand-teal: #2aa3ab;
+  --brand-green: #067e70;
+  --brand-mint: #dae8e6;
+
+  --font-display: 'DIN Next LT Arabic', 'Bahij TheSansArabic', Tahoma, sans-serif;
+  --font-text: 'Bahij TheSansArabic', 'DIN Next LT Arabic', Tahoma, sans-serif;
+
+  --pattern: url('/patterns/brand-pattern.svg');
+  --pattern-night: url('/patterns/brand-pattern-night.svg');
+  --brand-ornament: var(--brand-navy);
+  --brand-ornament-accent: var(--brand-teal);
+}
+
+html.dark {
+  --pattern: url('/patterns/brand-pattern-night.svg');
+  --brand-ornament: var(--brand-mint);
+  --brand-ornament-accent: var(--brand-teal);
+}
+
+body {
+  font-family: var(--font-text);
+}
+
+h1, h2, h3,
+.section-heading h2 {
+  font-family: var(--font-display);
+}
+
+/* ── Lockup ───────────────────────────────────────────────────────────── */
+
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+.brand-lockup__img {
+  display: block;
+  height: 54px;
+  width: auto;
+}
+
+.brand-lockup--small .brand-lockup__img { height: 48px; }
+
+.brand-lockup__img--night { display: none; }
+html.dark .brand-lockup__img--day { display: none; }
+html.dark .brand-lockup__img--night,
+.brand-lockup--on-dark .brand-lockup__img--night { display: block; }
+
+@media (max-width: 760px) {
+  .brand-lockup__img { height: 36px; }
+  .brand-lockup--small .brand-lockup__img { height: 44px; }
+}
+
+/* ── Ornament divider: one unit of the pattern ─────────────────────────── */
+
+.ornament-divider { color: var(--brand-ornament); }
+.ornament-divider__mark { width: 22px; height: 24px; }
+.ornament-divider__accent { fill: var(--brand-ornament-accent); }
+
+/* ── Pattern ──────────────────────────────────────────────────────────────
+   The tile is the four hand-cut crescents of the brand artwork, staggered in
+   rows as on the pattern sheet. It appears in three places, each at a
+   different strength so it never competes with a book cover:
+   1. a frieze, one row of crescents at full colour, where the page meets
+      the footer;
+   2. inside the footer, faint, under the links;
+   3. behind the home page, at the edges of the viewport only. */
+
+.site-footer {
+  position: relative;
+  isolation: isolate;
+}
+
+.site-footer::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  bottom: 100%;
+  height: 30px;
+  background-image: var(--pattern);
+  background-repeat: repeat-x;
+  /* the tile is 3 rows tall; 90px makes each row exactly the band's 30px */
+  background-size: auto 90px;
+  background-position: center top;
+  pointer-events: none;
+}
+
+.site-footer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--pattern-night);
+  background-size: 228px auto;
+  opacity: 0.09;
+  mask-image: linear-gradient(180deg, #000, transparent 85%);
+  pointer-events: none;
+}
+
+@media (max-width: 760px) {
+  .site-footer::before { height: 22px; background-size: auto 66px; }
+}

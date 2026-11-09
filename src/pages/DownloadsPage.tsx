@@ -54,7 +54,7 @@ export default function DownloadsPage() {
                     {item.products?.cover_url ? (
                       <img src={item.products.cover_url} alt={item.products.title} />
                     ) : (
-                      <img src="/branding/dar-alfath-logo.jpeg" alt="دار الفتح" />
+                      <img src="/branding/dar-alfath-logo-2026.jpg" alt="دار الفتح" />
                     )}
                   </div>
 

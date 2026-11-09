@@ -129,7 +129,7 @@
   color: var(--blue-800);
   white-space: nowrap;
 }
-html.dark .live-search__price { color: var(--gold-light, #f0c842); }
+html.dark .live-search__price { color: var(--gold-light, #93dbe0); }
 
 .live-search__all {
   display: block;
@@ -143,7 +143,7 @@ html.dark .live-search__price { color: var(--gold-light, #f0c842); }
   color: var(--blue-800);
   text-decoration: none;
 }
-html.dark .live-search__all { color: var(--gold-light, #f0c842); }
+html.dark .live-search__all { color: var(--gold-light, #93dbe0); }
 
 .live-search__empty {
   margin: 0;
@@ -154,7 +154,7 @@ html.dark .live-search__all { color: var(--gold-light, #f0c842); }
   color: var(--muted);
 }
 .live-search__empty a { color: var(--blue-800); font-weight: 800; }
-html.dark .live-search__empty a { color: var(--gold-light, #f0c842); }
+html.dark .live-search__empty a { color: var(--gold-light, #93dbe0); }
 
 @media (max-width: 560px) {
   .live-search__item { grid-template-columns: 38px minmax(0, 1fr); gap: 10px; }
