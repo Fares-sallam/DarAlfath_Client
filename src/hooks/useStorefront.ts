@@ -26,6 +26,7 @@ const fallbackSettings: StoreSettings = {
   youtube_url: null,
   website_url: null,
   footer_tagline: null,
+  footer_tagline_align: 'start',
 };
 
 type PublicCatalogRow = {
@@ -250,7 +251,7 @@ export function useStoreSettings() {
       try {
         const { data, error } = await supabase
           .from('store_settings')
-          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, default_shipping_company_id, logo_url, updated_at, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url, footer_tagline')
+          .select('store_name, store_description, store_email, store_phone, store_address, seo_title, seo_description, seo_keywords, default_shipping_cost, free_shipping_threshold, default_shipping_company_id, logo_url, updated_at, facebook_url, instagram_url, whatsapp_url, youtube_url, website_url, footer_tagline, footer_tagline_align')
           .order('updated_at', { ascending: false })
           .limit(1)
           .maybeSingle();

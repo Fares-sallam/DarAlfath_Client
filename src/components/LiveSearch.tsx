@@ -159,7 +159,7 @@ export default function LiveSearch({
                 onClick={done}
               >
                 <span className="live-search__thumb">
-                  <BookCover title={product.title} author={product.author} coverUrl={product.cover_url} compact />
+                  <BookCover title={product.title} author={product.author} coverUrl={product.cover_url} thumbnail />
                 </span>
                 <span className="live-search__text">
                   <strong className="live-search__title">{product.title}</strong>

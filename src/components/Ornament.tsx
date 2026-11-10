@@ -2,19 +2,32 @@
  * Section ornaments, drawn as SVG so they stay crisp at any size and take
  * the theme's colours instead of shipping baked-in ones.
  *
- * `divider` is the section separator: one unit of the house pattern (four
- * crescents meeting at a point, from the brand files) on a hairline rule.
- * `corner` is the frame flourish used at the hero's four corners.
+ * `divider` is the section separator: three units of the house pattern side
+ * by side (each four crescents meeting at a point, from the brand files, set
+ * at the pattern sheet's own pitch) on a hairline rule that fades out at both
+ * ends. `corner` is the frame flourish used at the hero's four corners.
  */
+const UNIT_PITCH = 56.7; // the pattern sheet's horizontal pitch
+const DIVIDER_UNITS = [0, 1, 2];
+
 export function OrnamentDivider({ label }: { label?: string }) {
   return (
     <div className="ornament-divider" role="separator" aria-label={label ?? 'فاصل'}>
       <span className="ornament-divider__rule" />
-      <svg className="ornament-divider__mark" viewBox="10 0 61 68" aria-hidden="true" focusable="false">
-        <path fill="currentColor" d="M 14.25 1.5 L 27.47 1.5 C 27.47 1.5 21.66 19.94 39.74 34.1 C 39.74 34.1 11.01 27.72 14.25 1.5 Z" />
-        <path className="ornament-divider__accent" d="M 66.55 1.5 L 53.33 1.5 C 53.33 1.5 59.14 19.94 41.06 34.1 C 41.06 34.1 69.79 27.72 66.55 1.5 Z" />
-        <path fill="currentColor" d="M 65.55 66.7 L 52.33 66.7 C 52.33 66.7 58.15 48.26 40.06 34.1 C 45.25 35.25 68.94 39.33 65.55 66.7 Z" />
-        <path fill="currentColor" d="M 14.25 66.7 L 27.47 66.7 C 27.47 66.7 21.66 48.26 39.74 34.1 C 39.74 34.1 11.01 40.48 14.25 66.7 Z" />
+      <svg
+        className="ornament-divider__mark"
+        viewBox={`10 0 ${61 + UNIT_PITCH * (DIVIDER_UNITS.length - 1)} 68`}
+        aria-hidden="true"
+        focusable="false"
+      >
+        {DIVIDER_UNITS.map((i) => (
+          <g key={i} transform={`translate(${i * UNIT_PITCH} 0)`}>
+            <path fill="currentColor" d="M 14.25 1.5 L 27.47 1.5 C 27.47 1.5 21.66 19.94 39.74 34.1 C 39.74 34.1 11.01 27.72 14.25 1.5 Z" />
+            <path className="ornament-divider__accent" d="M 66.55 1.5 L 53.33 1.5 C 53.33 1.5 59.14 19.94 41.06 34.1 C 41.06 34.1 69.79 27.72 66.55 1.5 Z" />
+            <path fill="currentColor" d="M 65.55 66.7 L 52.33 66.7 C 52.33 66.7 58.15 48.26 40.06 34.1 C 45.25 35.25 68.94 39.33 65.55 66.7 Z" />
+            <path fill="currentColor" d="M 14.25 66.7 L 27.47 66.7 C 27.47 66.7 21.66 48.26 39.74 34.1 C 39.74 34.1 11.01 40.48 14.25 66.7 Z" />
+          </g>
+        ))}
       </svg>
       <span className="ornament-divider__rule" />
     </div>

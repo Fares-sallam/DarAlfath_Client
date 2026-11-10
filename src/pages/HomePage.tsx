@@ -1,3 +1,4 @@
+import { Fragment, type ReactNode } from 'react';
 import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
@@ -61,6 +62,72 @@ export default function HomePage() {
     duration: v.duration ?? '',
   }));
 
+  const shelf = (key: string, title: string, subtitle: string, items: typeof bestSellers, extra: { href?: string; linkLabel?: string; testId?: string }) => (
+    <Reveal key={key} className="shelf-section" data-testid={extra.testId}>
+      <SectionHeader title={title} subtitle={subtitle} href={extra.href} linkLabel={extra.linkLabel} />
+      <ScrollRail ariaLabel={title} className="shelf-rail">
+        {items.map((product, i) => (
+          <div className="shelf-rail__item" key={product.product_id}>
+            <ProductCard product={product} index={i} />
+          </div>
+        ))}
+      </ScrollRail>
+    </Reveal>
+  );
+
+  const sections: { key: string; node: ReactNode }[] = [];
+  if (bestSellers.length > 0) {
+    sections.push({ key: 'best-sellers', node: shelf('best-sellers', 'الأكثر مبيعًا', 'الكتب الأكثر طلبًا من قرّاء الدار', bestSellers, { testId: 'best-sellers' }) });
+  }
+  if (newArrivals.length > 0) {
+    sections.push({ key: 'new-arrivals', node: shelf('new-arrivals', 'وصل حديثًا', 'أحدث إصدارات الدار', newArrivals, { href: '/books?sort=newest', linkLabel: 'عرض الكل', testId: 'new-arrivals' }) });
+  }
+  if (discounted.length >= MIN_OFFERS_ROW) {
+    sections.push({ key: 'offers', node: shelf('offers', 'عروض وخصومات', 'كتب بسعر أقل من سعرها المعتاد', discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers' }) });
+  }
+  for (const entry of categorySections.slice(0, 3)) {
+    sections.push({
+      key: `category-${entry.category.id}`,
+      node: shelf(`category-${entry.category.id}`, entry.category.name, 'كتب مختارة من هذا التصنيف', entry.products, {
+        href: `/books?category=${entry.category.id}`,
+        linkLabel: 'عرض التصنيف',
+      }),
+    });
+  }
+  if (introVideos.length > 0) {
+    sections.push({
+      key: 'intro-videos',
+      node: (
+        <Reveal key="intro-videos">
+          <SectionHeader title={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} subtitle="مقاطع مختارة من دار الفتح" />
+          <VideoRail videos={introVideos} ariaLabel={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} />
+        </Reveal>
+      ),
+    });
+  }
+  if (features.length > 0) {
+    sections.push({
+      key: 'features',
+      node: (
+        <Reveal key="features" className="features-section">
+          <div className="features-grid" data-testid="feature-boxes">
+            {features.map((box) => {
+              const Icon = featureIcon(box.icon_key);
+              return (
+                <FeatureCard
+                  key={box.id}
+                  title={box.title}
+                  description={box.description ?? ''}
+                  icon={box.image_url ? <img src={box.image_url} alt="" loading="lazy" /> : <Icon size={18} />}
+                />
+              );
+            })}
+          </div>
+        </Reveal>
+      ),
+    });
+  }
+
   return (
     <div className="page-sections page-sections--home">
       <PageCursorLight />
@@ -81,94 +148,17 @@ export default function HomePage() {
              unlike the sections below, it isn't wrapped in <Reveal> here. ── */}
       <StoreDepartments />
 
-      {/* ── Best sellers: the books picked in the dashboard (إدارة الإعلانات والأشرطة → الأكثر مبيعًا),
-             where each book's sales are shown to choose by. Not drawn until some are picked. ── */}
-      {bestSellers.length > 0 && (
-        <Reveal className="shelf-section" data-testid="best-sellers">
-          <SectionHeader title="الأكثر مبيعًا" subtitle="الكتب الأكثر طلبًا من قرّاء الدار" />
-          <ScrollRail ariaLabel="الأكثر مبيعًا" className="shelf-rail">
-            {bestSellers.map((product, i) => (
-              <div className="shelf-rail__item" key={product.product_id}>
-                <ProductCard product={product} index={i} />
-              </div>
-            ))}
-          </ScrollRail>
-        </Reveal>
-      )}
-
-      {/* ── What's new, and what is on offer. Both come from the catalog itself (the date a book was added,
-             and a copy priced below its list price), so they fill and empty as the catalog does; a row with
-             nothing to show is simply not drawn. ── */}
-      {newArrivals.length > 0 && (
-        <Reveal className="shelf-section" data-testid="new-arrivals">
-          <SectionHeader title="وصل حديثًا" subtitle="أحدث إصدارات الدار" href="/books?sort=newest" linkLabel="عرض الكل" />
-          <ScrollRail ariaLabel="وصل حديثًا" className="shelf-rail">
-            {newArrivals.map((product, i) => (
-              <div className="shelf-rail__item" key={product.product_id}>
-                <ProductCard product={product} index={i} />
-              </div>
-            ))}
-          </ScrollRail>
-        </Reveal>
-      )}
-
-      {discounted.length >= MIN_OFFERS_ROW && (
-        <Reveal className="shelf-section" data-testid="offers">
-          <SectionHeader title="عروض وخصومات" subtitle="كتب بسعر أقل من سعرها المعتاد" href="/books?sale=1&sort=discount" linkLabel="عرض الكل" />
-          <ScrollRail ariaLabel="عروض وخصومات" className="shelf-rail">
-            {discounted.map((product, i) => (
-              <div className="shelf-rail__item" key={product.product_id}>
-                <ProductCard product={product} index={i} />
-              </div>
-            ))}
-          </ScrollRail>
-        </Reveal>
-      )}
-
-      <OrnamentDivider />
-
-      {categorySections.slice(0, 3).map((entry) => (
-        <Reveal key={entry.category.id}>
-          <SectionHeader
-            title={entry.category.name}
-            subtitle="كتب مختارة من هذا التصنيف"
-            href={`/books?category=${entry.category.id}`}
-            linkLabel="عرض التصنيف"
-          />
-          <ScrollRail ariaLabel={entry.category.name} className="shelf-rail">
-            {entry.products.map((product, i) => (
-              <div className="shelf-rail__item" key={product.product_id}>
-                <ProductCard product={product} index={i} />
-              </div>
-            ))}
-          </ScrollRail>
-        </Reveal>
+      {/* ── The shelves, one after another with the pattern between each: the books picked in the dashboard
+             as best sellers (إدارة الإعلانات والأشرطة → الأكثر مبيعًا), what's new and what is on offer (both
+             come from the catalog itself, so they fill and empty as it does), a row per category, the intro
+             videos, and the boxes above the footer. A row with nothing to show is not drawn, and no divider
+             is left standing beside it. ── */}
+      {sections.map((section, i) => (
+        <Fragment key={section.key}>
+          {i > 0 && <OrnamentDivider />}
+          {section.node}
+        </Fragment>
       ))}
-
-      {introVideos.length > 0 && (
-        <Reveal>
-          <SectionHeader title={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} subtitle="مقاطع مختارة من دار الفتح" />
-          <VideoRail videos={introVideos} ariaLabel={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} />
-        </Reveal>
-      )}
-
-      {features.length > 0 && (
-        <Reveal className="features-section">
-          <div className="features-grid" data-testid="feature-boxes">
-            {features.map((box) => {
-              const Icon = featureIcon(box.icon_key);
-              return (
-                <FeatureCard
-                  key={box.id}
-                  title={box.title}
-                  description={box.description ?? ''}
-                  icon={box.image_url ? <img src={box.image_url} alt="" loading="lazy" /> : <Icon size={18} />}
-                />
-              );
-            })}
-          </div>
-        </Reveal>
-      )}
     </div>
   );
 }

@@ -18,10 +18,14 @@ export default function Footer({ settings }: { settings: StoreSettings }) {
     { name: 'يوتيوب', url: settings.youtube_url, icon: Youtube },
   ].filter((item): item is typeof item & { url: string } => !!item.url);
 
+  const align = settings.footer_tagline_align === 'center' || settings.footer_tagline_align === 'justify'
+    ? settings.footer_tagline_align
+    : 'start';
+
   return (
     <footer className="site-footer">
       <div className="container site-footer__grid">
-        <div className="site-footer__brand">
+        <div className={`site-footer__brand site-footer__brand--${align}`}>
           <Logo small onDark />
           <p>{settings.footer_tagline?.trim() || DEFAULT_TAGLINE}</p>
 

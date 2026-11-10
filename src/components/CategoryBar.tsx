@@ -6,7 +6,8 @@ import { useCategoryBar, useSiteContent } from '@/hooks/useStorefront';
  * menus hold the full submenus).
  *
  * Which categories show, and in what order, is set in the dashboard (إدارة الإعلانات والأشرطة →
- * شريط التصنيفات), as is "كل الكتب" at its head. Only categories with books in them are ever listed,
+ * شريط التصنيفات), as is "كل الكتب" at its head; "كل التصنيفات" (the page of every category) always
+ * follows it. Only categories with books in them are ever listed,
  * so the strip fills in on its own as the catalog grows.
  */
 export default function CategoryBar() {
@@ -28,6 +29,9 @@ export default function CategoryBar() {
             كل الكتب
           </NavLink>
         )}
+        <NavLink to="/categories" end className={pillClass}>
+          كل التصنيفات
+        </NavLink>
         {categories.map((category) => (
           <NavLink
             key={category.id}

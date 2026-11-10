@@ -170,16 +170,16 @@ export default function Header({ settings }: { settings: StoreSettings }) {
         </div>
       </div>
 
-      {/* Desktop nav — الرئيسية/الكتب/كل التصنيفات as plain links, then one
+      {/* Desktop nav — الرئيسية/الكتب as plain links, then one
           dropdown per series (سلسلة الفتح الرباني، قصص وموسوعات...), each
-          expanding to its own categories → books, then تواصل معنا. سياستنا
+          expanding to its own categories → books, then تواصل معنا. كل التصنيفات
+          lives in the strip below (CategoryBar), after كل الكتب. سياستنا
           stays out of this row (still reachable from the footer and the
           mobile drawer) — with up to 5 series dropdowns sharing the
           row, flex-wrap on .site-header__nav is the safety net if it ever
           doesn't fit on one line (see that rule's own comment). */}
       <div className="container site-header__nav" ref={navRef}>
         {navItems.slice(0, 2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
-        <NavLink to="/categories">كل التصنيفات</NavLink>
 
         {seriesMenu.map((series) => (
           <div

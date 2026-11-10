@@ -202,3 +202,44 @@ test('الإعدادات: خانة «نص الفوتر» في إعدادات ا�
   await field.fill('ا'.repeat(450));
   await expect(page.getByTestId('footer-tagline-count')).toHaveText('450 / 600');
 });
+
+test('الإعدادات: تنسيق نص الفوتر (معاينة + يمين / توسيط / ضبط الأطراف) وإزالة التمطيط اليدوي', async ({ page }) => {
+  const writes = await setUp(page);
+  await page.route('**/rest/v1/store_settings*', (route) => {
+    if (route.request().method() !== 'GET') return route.fallback();
+    return reply(route, [{
+      id: 's1', store_name: 'دار الفتح', updated_at: '2026-11-10T00:00:00Z',
+      footer_tagline: 'شركتنا رائـــــدة فـي مجـــــــال النشــــر التعليمي', footer_tagline_align: 'start',
+    }]);
+  });
+  await page.goto('/settings');
+  await page.getByRole('button', { name: 'إعدادات المتجر', exact: true }).click();
+  const group = page.getByTestId('footer-align');
+  await expect(group).toBeVisible({ timeout: 15_000 });
+
+  const preview = page.getByTestId('footer-preview-text');
+  const textAlign = () => preview.evaluate((p) => getComputedStyle(p).textAlign);
+  await expect(page.getByTestId('footer-align-start')).toHaveAttribute('aria-checked', 'true');
+  expect(await textAlign()).toMatch(/^(start|right)$/);
+
+  await page.getByTestId('footer-align-justify').click();
+  await expect(page.getByTestId('footer-align-justify')).toHaveAttribute('aria-checked', 'true');
+  expect(await textAlign()).toBe('justify');
+  await page.getByTestId('footer-align-center').click();
+  expect(await textAlign()).toBe('center');
+  await page.getByTestId('footer-align-justify').click();
+
+  // The hand-typed stretching is flagged, and one click takes it out of the field and the preview.
+  await expect(page.getByTestId('footer-tatweel-note')).toBeVisible();
+  await page.getByTestId('footer-tatweel-remove').click();
+  await expect(page.getByTestId('footer-tatweel-note')).toHaveCount(0);
+  await expect(page.getByLabel('نص الفوتر')).toHaveValue('شركتنا رائدة في مجال النشر التعليمي');
+  await expect(preview).toHaveText('شركتنا رائدة في مجال النشر التعليمي');
+
+  // Saved with the choice (the write is answered here, not sent).
+  await page.getByRole('button', { name: 'حفظ إعدادات المتجر' }).click();
+  await expect.poll(() => writes.filter((w) => w.url.includes('store_settings')).length).toBe(1);
+  const saved = writes.find((w) => w.url.includes('store_settings'))!.body as Record<string, unknown>;
+  expect(saved.footer_tagline_align).toBe('justify');
+  expect(saved.footer_tagline).toBe('شركتنا رائدة في مجال النشر التعليمي');
+});

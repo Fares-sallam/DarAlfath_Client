@@ -120,3 +120,112 @@ html.dark .brand-lockup__img--night,
 @media (max-width: 760px) {
   .site-footer::before { height: 22px; background-size: auto 66px; }
 }
+
+
+/* ── The cover of a book with no picture ───────────────────────────────────
+   White, whatever the theme (it stands in for a printed cover): the lockup in
+   the middle and a band of the day-coloured pattern at the top and at the
+   bottom. A band is one row of the tile (three rows tall), hence the 300%. */
+
+.book-cover__blank {
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+}
+
+.book-cover__band {
+  position: absolute;
+  inset-inline: 0;
+  height: 17%;
+  background-image: url('/patterns/brand-pattern.svg');
+  background-repeat: repeat-x;
+  background-size: auto 300%;
+  background-position: center top;
+  pointer-events: none;
+}
+.book-cover__band--top { top: 0; }
+.book-cover__band--bottom { bottom: 0; transform: scaleY(-1); }
+
+.book-cover__logo {
+  position: relative;
+  width: 68%;
+  max-height: 46%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.book-cover__blank--thumb .book-cover__band { display: none; }
+.book-cover__blank--thumb .book-cover__logo { width: 64%; max-height: 64%; }
+
+/* ── Top nav row: centred, a fading rule between the items ──────────────────
+   The row used to start at the right edge and leave a wide empty stretch on
+   the left. Now it sits in the middle and grows outward on both sides as
+   items are added. Between two neighbours stands a thin vertical rule whose
+   ends fade out, the same way the horizontal rules beside the pattern do. */
+
+.site-header__nav {
+  justify-content: center;
+  gap: 10px;
+}
+
+.site-header__nav > * + * { position: relative; }
+.site-header__nav > * + *::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: -6px;
+  top: 50%;
+  width: 1px;
+  height: 22px;
+  transform: translateY(-50%);
+  background: linear-gradient(180deg, transparent, var(--home-frame-strong, rgba(42, 163, 171, 0.65)) 50%, transparent);
+  pointer-events: none;
+}
+
+/* ── The pattern divider: three units, tight to the sections around it ────── */
+
+.ornament-divider { gap: 16px; }
+.ornament-divider__mark { width: 78px; height: 28px; }
+
+.page-sections > .ornament-divider { margin-block: -8px; }
+.page-sections--home { --home-gap: clamp(28px, 5vw, 56px); gap: var(--home-gap); }
+.page-sections--home > .ornament-divider { margin-block: calc(var(--home-gap) * -0.45); }
+
+/* ── Footer lockup, a size that reads at the foot of the page ────────────── */
+
+.site-footer .brand-lockup--small .brand-lockup__img { height: 68px; }
+@media (max-width: 760px) {
+  .site-footer .brand-lockup--small .brand-lockup__img { height: 54px; }
+}
+
+/* ── Home wall in the dark theme ────────────────────────────────────────────
+   The page's own dark fill sat in front of the pattern, so only slivers of it
+   ever showed. With the fill left to the body behind it, the wall is seen the
+   way it is on the light theme: right across the gaps and margins. */
+
+html.dark .page-sections--home { background: transparent; }
+html.dark { --home-page-wall-opacity: 0.3; }
+
+/* ── Top nav row: larger type so it reads at a glance ───────────────────── */
+
+.site-header__nav > a,
+.site-header__nav > .nav-dropdown > .nav-dropdown__trigger {
+  font-size: 15.2px;
+  padding: 7px 12px;
+}
+.site-header__nav > .nav-dropdown > .nav-dropdown__trigger svg { width: 16px; height: 16px; }
+
+/* ── The footer paragraph's alignment, as chosen in the dashboard ────────────
+   start: as before. center: logo, text and icons on the column's middle.
+   justify: every line begins and ends at the same two points (the last line
+   of a paragraph still starts at the right, as printed text does). */
+
+.site-footer__brand--center { text-align: center; }
+.site-footer__brand--center .brand-lockup { justify-content: center; }
+.site-footer__brand--center .site-footer__socials { justify-content: center; }
+.site-footer__brand--center p { text-align-last: center; }
+
+.site-footer__brand--justify p {
+  text-align: justify;
+  text-justify: inter-word;
+  text-align-last: start;
+}

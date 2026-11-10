@@ -118,10 +118,15 @@ test('شريط التصنيفات: الترتيب والإخفاء من لوحة
   });
   await page.goto('/');
   const pills = page.locator('nav.category-bar .category-bar__pill');
+  // "كل التصنيفات" is always in the strip (right after "كل الكتب" when that is shown); the dashboard
+  // controls the categories and "كل الكتب", so the lists below leave it out.
+  const ALL_CATEGORIES = 'كل التصنيفات';
+  const names = async () => (await pills.allTextContents()).map((t) => t.trim()).filter((t) => t !== ALL_CATEGORIES);
   await expect.poll(() => pills.count(), { timeout: 20_000 }).toBeGreaterThan(2);
-  const before = (await pills.allTextContents()).map((t) => t.trim());
+  const before = await names();
   expect(before).not.toContain('كل الكتب');
   expect(before.length).toBeGreaterThan(2);
+  expect((await pills.first().textContent())?.trim()).toBe(ALL_CATEGORIES);
 
   // Now with a place given: the last one first, the first one off.
   const first = before[before.length - 1];
@@ -138,12 +143,14 @@ test('شريط التصنيفات: الترتيب والإخفاء من لوحة
     },
   });
   await page.reload();
-  await expect.poll(async () => (await pills.allTextContents()).map((t) => t.trim())[1], { timeout: 20_000 }).toBe(first);
-  const after = (await pills.allTextContents()).map((t) => t.trim());
+  await expect.poll(async () => (await names())[1], { timeout: 20_000 }).toBe(first);
+  const after = await names();
   expect(after[0]).toBe('كل الكتب');
   expect(after[1]).toBe(first);
   expect(after).not.toContain(hidden);
   expect(after.length).toBe(before.length + 1 - 1); // "كل الكتب" back, one hidden
+  // …and "كل التصنيفات" sits right after "كل الكتب".
+  expect((await pills.allTextContents()).map((t) => t.trim()).slice(0, 2)).toEqual(['كل الكتب', ALL_CATEGORIES]);
 });
 
 test('«الأكثر مبيعًا» مكان «من رفوف الدار»: الكتب المختارة بترتيبها، ومن غير اختيار الصف مش ظاهر', async ({ page }) => {

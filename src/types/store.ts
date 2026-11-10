@@ -24,6 +24,8 @@ export interface StoreSettings {
   website_url?: string | null;
   /** The footer's line under the logo (الإعدادات → إعدادات المتجر); empty means the store's own line. */
   footer_tagline?: string | null;
+  /** How the footer paragraph sits (set in the dashboard): start, center or justify. */
+  footer_tagline_align?: 'start' | 'center' | 'justify' | null;
 }
 
 export interface CountryItem {
