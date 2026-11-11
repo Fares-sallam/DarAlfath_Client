@@ -63,11 +63,14 @@ Deno.serve(async (req) => {
   const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (rateLimited(ip)) return json({ error: 'محاولات كثيرة جدًا. حاول لاحقًا.' }, 429);
 
-  let email = '', password = '';
+  let email = '', password = '', captchaToken = '';
   try {
     const body = await req.json();
     email = String(body?.email ?? '').trim();
     password = String(body?.password ?? '');
+    // Turnstile token from the browser, handed on to Supabase Auth (checked there when CAPTCHA
+    // protection is on; ignored while it is off). A token works once, so it is not checked here.
+    captchaToken = typeof body?.captchaToken === 'string' ? body.captchaToken.slice(0, 4096) : '';
   } catch {
     return json({ error: 'طلب غير صالح.' }, 400);
   }
@@ -96,7 +99,17 @@ Deno.serve(async (req) => {
 
   // ② جرّب الدخول على عميل anon منفصل (server-side، بلا حفظ جلسة).
   const anon = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
-  const { data: signIn, error: signErr } = await anon.auth.signInWithPassword({ email, password });
+  const { data: signIn, error: signErr } = await anon.auth.signInWithPassword({
+    email,
+    password,
+    options: captchaToken ? { captchaToken } : undefined,
+  });
+
+  // A missing or failed security check says nothing about the password: it must not count toward
+  // the lock (or a bot could lock anyone out without ever trying a password).
+  if (signErr && /captcha/i.test(signErr.message ?? '')) {
+    return json({ error: 'تعذّر التحقق الأمني (أنا لست روبوت). حدّث الصفحة وحاول مرة أخرى.', captcha: true }, 400);
+  }
 
   if (signErr || !signIn?.session) {
     // ③ فشل → سجّل المحاولة (تقفل عند الخامسة).

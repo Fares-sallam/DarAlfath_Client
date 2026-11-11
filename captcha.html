@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>تحقق أمني — دار الفتح</title>
+  <!--
+    The mobile app's security check. The app opens this page in a small web view before a sign-in,
+    a sign-up or a code by email, and gets back a Cloudflare Turnstile token for Supabase Auth.
+    Messages to the app (window.ReactNativeWebView.postMessage, JSON):
+      { type: 'token', token }  a fresh token (works once)
+      { type: 'nokey' }         the site has no Turnstile key: go on without one
+      { type: 'interactive' }   Cloudflare wants a click: the app should show this page
+      { type: 'error' }         the check failed or timed out
+  -->
+  <style>
+    html, body { margin: 0; height: 100%; background: transparent; font-family: system-ui, -apple-system, sans-serif; }
+    body { display: flex; align-items: center; justify-content: center; }
+    p { color: #054180; font-weight: 700; font-size: 15px; margin: 0 0 10px; text-align: center; }
+  </style>
+</head>
+<body>
+  <main>
+    <p>تحقق سريع إنك مش روبوت</p>
+    <div id="box"></div>
+  </main>
+  <script>
+    (function () {
+      var KEY = '%VITE_TURNSTILE_SITE_KEY%';
+      function send(msg) {
+        var text = JSON.stringify(msg);
+        if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(text);
+        else if (window.parent !== window) window.parent.postMessage(text, '*');
+      }
+      if (!KEY || KEY.charAt(0) === '%') { send({ type: 'nokey' }); return; }
+      window.onTurnstileLoad = function () {
+        try {
+          window.turnstile.render('#box', {
+            sitekey: KEY,
+            language: 'ar',
+            theme: 'light',
+            callback: function (token) { send({ type: 'token', token: token }); },
+            'error-callback': function () { send({ type: 'error' }); },
+            'expired-callback': function () { send({ type: 'error' }); },
+            'timeout-callback': function () { send({ type: 'error' }); },
+            'before-interactive-callback': function () { send({ type: 'interactive' }); }
+          });
+        } catch (e) { send({ type: 'error' }); }
+      };
+      var s = document.createElement('script');
+      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad';
+      s.async = true;
+      s.onerror = function () { send({ type: 'error' }); };
+      document.head.appendChild(s);
+    })();
+  </script>
+</body>
+</html>
