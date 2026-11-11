@@ -90,7 +90,35 @@ export const STATIC_SEO: Record<string, { title: string; description: string; pa
     description: 'سياسات متجر دار الفتح: الشحن والتوصيل، الاسترجاع والاستبدال، الخصوصية وشروط الاستخدام.',
     path: '/policies',
   },
+  links: {
+    title: titleFor('روابط دار الفتح'),
+    description: 'كل روابط دار الفتح للنشر والتوزيع في مكان واحد: المتجر، التطبيق، حساباتنا على وسائل التواصل الاجتماعي وأحدث العروض.',
+    path: '/links',
+  },
 };
+
+/** What the company links page (/links) says about itself; the dashboard can override each part (إدارة الصفحة والروابط → إعدادات الصفحة). */
+export interface LinksPageSeoSource {
+  is_enabled?: boolean | null;
+  seo_title?: string | null;
+  seo_description?: string | null;
+  share_image_url?: string | null;
+}
+
+export function linksPageSeo(source: LinksPageSeoSource, origin: string): Seo {
+  const page = STATIC_SEO.links;
+  const title = source.seo_title?.trim();
+  const description = source.seo_description?.trim();
+  return {
+    title: title || page.title,
+    description: description ? shorten(description, 200) : page.description,
+    path: page.path,
+    image: previewImage(source.share_image_url?.trim() || null, origin),
+    type: 'website',
+    // A page switched off in the dashboard keeps out of search results.
+    noindex: source.is_enabled === false || undefined,
+  };
+}
 
 export function staticSeo(key: keyof typeof STATIC_SEO, origin: string): Seo {
   const page = STATIC_SEO[key];

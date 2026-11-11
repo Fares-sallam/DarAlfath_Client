@@ -49,7 +49,7 @@ test('القايمة الجانبية: «إدارة الإعلانات والأ�
   const ads = links.findIndex((t) => t.includes('إدارة الإعلانات والأشرطة'));
   const settings = links.findIndex((t) => t.includes('الإعدادات'));
   expect(ads).toBe(videos + 1);
-  expect(settings).toBe(ads + 1);
+  expect(settings).toBeGreaterThan(ads); // «إدارة الصفحة والروابط» sits right after the ads page, then the settings
   await expect(page.getByRole('heading', { name: 'إدارة الإعلانات والأشرطة' }).first()).toBeVisible();
   for (const name of ['شريط العروض والإعلانات', 'شريط التصنيفات', 'مربعات أعلى الفوتر', 'الأكثر مبيعًا']) {
     await expect(tab(page, name)).toBeVisible();

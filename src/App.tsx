@@ -15,6 +15,7 @@ import PoliciesPage from '@/pages/PoliciesPage';
 import ContactPage from '@/pages/ContactPage';
 import NotFoundPage from '@/pages/NotFoundPage';
 import PaymentResultPage from '@/pages/PaymentResultPage';
+import LinksPage from '@/pages/LinksPage';
 
 export default function App() {
   return (
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="policies" element={<PoliciesPage />} />
         <Route path="contact" element={<ContactPage />} />
       </Route>
+      <Route path="links" element={<LinksPage />} />
       <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </>

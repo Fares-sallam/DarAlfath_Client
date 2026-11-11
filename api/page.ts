@@ -6,7 +6,7 @@
  *
  * Anything that goes wrong falls back to the plain app HTML, so a page never breaks because of this.
  */
-import { booksListSeo, bookSeo, injectSeo, staticSeo, titleFor, type Seo, type SeoBook } from '../src/lib/seo';
+import { booksListSeo, bookSeo, injectSeo, linksPageSeo, staticSeo, titleFor, type LinksPageSeoSource, type Seo, type SeoBook } from '../src/lib/seo';
 import { UUID, rest, safeFilterValue, siteOrigin } from './_shared';
 
 export const config = { runtime: 'edge' };
@@ -82,6 +82,12 @@ async function seoFor(kind: string, params: URLSearchParams, origin: string): Pr
     if (category) categoryName = (await rest<{ name: string }>(`categories?select=name&slug=eq.${encodeURIComponent(category)}&limit=1`))?.[0]?.name ?? null;
     else if (series) seriesName = (await rest<{ name: string }>(`book_series?select=name&id=eq.${encodeURIComponent(series)}&limit=1`))?.[0]?.name ?? null;
     return { seo: booksListSeo(origin, { categorySlug: category, categoryName, seriesName, seriesId: series, searched }), status: 200 };
+  }
+
+  if (kind === 'links') {
+    // What the dashboard set for the company links page; if the database does not answer, the page's own defaults.
+    const rows = await rest<LinksPageSeoSource>('links_page_settings?select=is_enabled,seo_title,seo_description,share_image_url&id=eq.1&limit=1');
+    return { seo: linksPageSeo(rows?.[0] ?? {}, origin), status: 200 };
   }
 
   if (kind === 'categories' || kind === 'contact' || kind === 'policies' || kind === 'home') {

@@ -210,6 +210,67 @@ test('الصفحات الأساسية: لكل صفحة عنوان ووصف ور�
   }
 });
 
+test('صفحة الروابط (/links): عنوانها ووصفها وصورتها من لوحة التحكم، وبدون إعدادات الافتراضي، ومقفولة = noindex', async () => {
+  // as set in the dashboard
+  let world = mockWorld({
+    links_page_settings: [{ is_enabled: true, seo_title: 'روابط دار الفتح الرسمية', seo_description: 'كل حساباتنا ومتجرنا وتطبيقنا في مكان واحد', share_image_url: `${SUPABASE}/storage/v1/object/public/site-assets/links-page/share.webp` }],
+  });
+  try {
+    const response = await pageHandler(request('/api/page?kind=links'));
+    const html = await response.text();
+    expect(response.status).toBe(200);
+    expect(html).toContain('<title>روابط دار الفتح الرسمية</title>');
+    expect(meta(html, 'name', 'description')).toBe('كل حساباتنا ومتجرنا وتطبيقنا في مكان واحد');
+    expect(meta(html, 'property', 'og:url')).toBe('https://dar-alfath-client.vercel.app/links');
+    expect(html).toContain('<link data-seo="1" rel="canonical" href="https://dar-alfath-client.vercel.app/links" />');
+    // the share picture is asked of storage at a small size, like a cover
+    expect(meta(html, 'property', 'og:image')).toContain('/storage/v1/render/image/public/site-assets/links-page/share.webp');
+    expect(meta(html, 'name', 'robots')).toContain('index');
+    expect(response.headers.get('x-robots-tag')).toBeNull();
+    expect(world.queries.join(' ')).toContain('links_page_settings');
+  } finally {
+    world.restore();
+  }
+
+  // nothing set, or the database does not answer: the page's own words and the house logo
+  for (const rows of [
+    { links_page_settings: [{ is_enabled: true, seo_title: '', seo_description: '  ', share_image_url: null }] },
+    { links_page_settings: 'fail' as const },
+    {},
+  ]) {
+    world = mockWorld(rows);
+    try {
+      const html = await (await pageHandler(request('/api/page?kind=links'))).text();
+      expect(html).toContain('<title>روابط دار الفتح — دار الفتح للنشر والتوزيع</title>');
+      expect(meta(html, 'name', 'description')).toContain('كل روابط دار الفتح');
+      expect(meta(html, 'property', 'og:image')).toContain('/branding/dar-alfath-logo-2026.jpg');
+      expect(meta(html, 'name', 'robots')).toContain('index');
+    } finally {
+      world.restore();
+    }
+  }
+
+  // switched off in the dashboard: kept out of search results
+  world = mockWorld({ links_page_settings: [{ is_enabled: false }] });
+  try {
+    const response = await pageHandler(request('/api/page?kind=links'));
+    expect(meta(await response.text(), 'name', 'robots')).toContain('noindex');
+    expect(response.headers.get('x-robots-tag')).toBe('noindex');
+  } finally {
+    world.restore();
+  }
+
+  // a title with markup in it cannot get out of the head
+  world = mockWorld({ links_page_settings: [{ is_enabled: true, seo_title: 'x"><script>alert(1)</script>', seo_description: '</title><img src=x onerror=alert(2)>' }] });
+  try {
+    const html = await (await pageHandler(request('/api/page?kind=links'))).text();
+    expect(html).not.toContain('<script>alert(1)</script>');
+    expect(html).not.toContain('<img src=x onerror');
+  } finally {
+    world.restore();
+  }
+});
+
 test('الدومين: الرابط الأساسي هو دومين الإنتاج حتى لو الطلب جه على vercel.app، وبيتغير بإعداد واحد', async () => {
   let world = mockWorld({ products_public_catalog: [BOOK], product_variants_public: [] }, { VERCEL_PROJECT_PRODUCTION_URL: 'darolfath.com' });
   try {
@@ -244,6 +305,7 @@ test('sitemap.xml: الصفحات الأساسية والتصنيفات وكل �
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
     expect(locs).toContain('https://darolfath.com/');
     expect(locs).toContain('https://darolfath.com/books');
+    expect(locs).toContain('https://darolfath.com/links');
     expect(locs).toContain(`https://darolfath.com/books?category=${encodeURIComponent('كتب-المعلم')}`);
     expect(locs.filter((l) => l.endsWith(`/book/${ID}`))).toHaveLength(1);
     expect(locs).toContain(`https://darolfath.com/book/${OTHER_ID}`);

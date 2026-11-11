@@ -73,6 +73,10 @@
       "destination": "/api/page?kind=policies"
     },
     {
+      "source": "/links",
+      "destination": "/api/page?kind=links"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

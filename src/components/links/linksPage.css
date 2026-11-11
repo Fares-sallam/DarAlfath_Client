@@ -1,0 +1,486 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   THE COMPANY LINKS PAGE — الصفحة والروابط
+   Drawn by components/links/LinksPageView, in the store (/links) and in the
+   dashboard's preview. Self-contained: it carries the house palette and
+   reads the fonts and pattern files by their usual addresses, so both draw it
+   the same. Every class starts with lp-. Kept identical in both repos.
+
+   Palette (the same swatches as the store): navy #054180, teal #2aa3ab,
+   sea green #067e70, mint #dae8e6. Primary colours lead by day, the secondary
+   ones by night; the pattern is a faint wash behind the header and a single
+   row of crescents at the foot.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+.lp-root {
+  --lp-navy: #054180;
+  --lp-navy-deep: #003166;
+  --lp-teal: #2aa3ab;
+  --lp-green: #067e70;
+  --lp-mint: #dae8e6;
+  --lp-font-display: 'DIN Next LT Arabic', 'Bahij TheSansArabic', Tahoma, sans-serif;
+  --lp-font-text: 'Bahij TheSansArabic', 'DIN Next LT Arabic', Tahoma, sans-serif;
+  --lp-radius: 16px;
+  --lp-card-radius: 22px;
+  --lp-icon-radius: 16px;
+
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--lp-bg);
+  color: var(--lp-text);
+  font-family: var(--lp-font-text);
+  font-size: 16px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.lp-root *,
+.lp-root *::before,
+.lp-root *::after { box-sizing: border-box; }
+
+.lp-root--preview { min-height: 100%; }
+
+/* ── Themes ───────────────────────────────────────────────────────────────── */
+
+.lp-root[data-lp-theme='light'] {
+  --lp-bg: #f7fbfa;
+  --lp-surface: #ffffff;
+  --lp-surface-2: #eaf2f1;
+  --lp-line: #d8e5e3;
+  --lp-text: #0e2542;
+  --lp-muted: #566a80;
+  --lp-heading: #054180;
+  --lp-rule: rgba(5, 65, 128, 0.32);
+  --lp-ornament: #054180;
+  --lp-ornament-accent: #2aa3ab;
+  --lp-shadow: 0 8px 24px rgba(14, 37, 66, 0.08);
+  --lp-shadow-hover: 0 14px 32px rgba(14, 37, 66, 0.15);
+  --lp-pattern: url('/patterns/brand-pattern.svg');
+  --lp-wash-opacity: 0.08;
+}
+
+.lp-root[data-lp-theme='dark'] {
+  --lp-bg: #00102a;
+  --lp-surface: #001d41;
+  --lp-surface-2: #00254f;
+  --lp-line: #0a4a8a;
+  --lp-text: #e6f3f1;
+  --lp-muted: #8fa8c8;
+  --lp-heading: #dae8e6;
+  --lp-rule: rgba(218, 232, 230, 0.3);
+  --lp-ornament: #dae8e6;
+  --lp-ornament-accent: #2aa3ab;
+  --lp-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --lp-shadow-hover: 0 14px 32px rgba(0, 0, 0, 0.5);
+  --lp-pattern: url('/patterns/brand-pattern-night.svg');
+  --lp-wash-opacity: 0.14;
+}
+
+/* ── Button shapes ────────────────────────────────────────────────────────── */
+
+.lp-shape-rounded { --lp-radius: 16px; --lp-card-radius: 22px; --lp-icon-radius: 16px; }
+.lp-shape-pill    { --lp-radius: 999px; --lp-card-radius: 26px; --lp-icon-radius: 50%; }
+.lp-shape-square  { --lp-radius: 6px; --lp-card-radius: 8px; --lp-icon-radius: 8px; }
+
+/* ── Colours: a button face, and the solid accent drawn from it ──────────────
+   --c-bg / --c-fg: the face of a button. --c-solid / --c-solid-fg: a badge or
+   a chip of the same colour. */
+
+.lp-c-primary { --c-bg: #054180; --c-fg: #ffffff; --c-hover: #06519e; --c-chip: rgba(255, 255, 255, 0.16); --c-border: transparent; --c-solid: #054180; --c-solid-fg: #ffffff; }
+[data-lp-theme='dark'] .lp-c-primary { --c-bg: #067e70; --c-fg: #ffffff; --c-hover: #08917f; --c-solid: #067e70; --c-solid-fg: #ffffff; }
+
+.lp-c-navy { --c-bg: #054180; --c-fg: #ffffff; --c-hover: #06519e; --c-chip: rgba(255, 255, 255, 0.16); --c-border: transparent; --c-solid: #054180; --c-solid-fg: #ffffff; }
+[data-lp-theme='dark'] .lp-c-navy { --c-border: rgba(218, 232, 230, 0.22); }
+
+.lp-c-teal { --c-bg: #2aa3ab; --c-fg: #00254f; --c-hover: #36b3bb; --c-chip: rgba(0, 37, 79, 0.14); --c-border: transparent; --c-solid: #2aa3ab; --c-solid-fg: #00254f; }
+
+.lp-c-green { --c-bg: #067e70; --c-fg: #ffffff; --c-hover: #08917f; --c-chip: rgba(255, 255, 255, 0.16); --c-border: transparent; --c-solid: #067e70; --c-solid-fg: #ffffff; }
+
+.lp-c-mint { --c-bg: #dae8e6; --c-fg: #054180; --c-hover: #cbdedb; --c-chip: rgba(5, 65, 128, 0.1); --c-border: transparent; --c-solid: #dae8e6; --c-solid-fg: #054180; }
+
+.lp-c-outline { --c-bg: transparent; --c-fg: var(--lp-heading); --c-hover: rgba(42, 163, 171, 0.12); --c-chip: rgba(42, 163, 171, 0.16); --c-border: var(--lp-heading); --c-solid: var(--lp-heading); --c-solid-fg: var(--lp-bg); }
+
+/* ── Page structure ───────────────────────────────────────────────────────── */
+
+.lp-wash {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 400px;
+  z-index: -1;
+  background-image: var(--lp-pattern);
+  background-size: 228px auto;
+  opacity: var(--lp-wash-opacity);
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
+  pointer-events: none;
+}
+.lp-root:not(.lp-bg-pattern) .lp-wash { display: none; }
+
+.lp-col {
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
+  padding: 30px 18px 36px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.lp-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 18px;
+  text-align: center;
+}
+
+.lp-logo { display: flex; justify-content: center; }
+.lp-logo__img { display: block; height: clamp(54px, 15vw, 80px); width: auto; max-width: 100%; }
+.lp-logo__img--night { display: none; }
+.lp-root[data-lp-theme='dark'] .lp-logo__img--day { display: none; }
+.lp-root[data-lp-theme='dark'] .lp-logo__img--night { display: block; }
+
+.lp-title {
+  margin: 6px 0 0;
+  font: 800 clamp(22px, 6vw, 27px) / 1.45 var(--lp-font-display);
+  color: var(--lp-heading);
+}
+
+.lp-tagline {
+  margin: 0;
+  max-width: 36ch;
+  color: var(--lp-muted);
+  font-size: 15.5px;
+  line-height: 1.95;
+}
+
+.lp-list { display: flex; flex-direction: column; gap: 14px; }
+.lp-empty { margin: 0; text-align: center; color: var(--lp-muted); font-size: 14px; }
+
+/* ── Button ───────────────────────────────────────────────────────────────── */
+
+/* :where() keeps this reset at zero weight, so a button's own colour (a single class) always wins over it */
+:where(.lp-root) a { color: inherit; text-decoration: none; }
+
+.lp-btn {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px 14px;
+  border-radius: var(--lp-radius);
+  background: var(--c-bg);
+  color: var(--c-fg);
+  border: 1.5px solid var(--c-border, transparent);
+  box-shadow: var(--lp-shadow);
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out, background-color 0.18s ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+.lp-c-outline.lp-btn { box-shadow: none; }
+
+.lp-btn:active { transform: translateY(0) scale(0.99); box-shadow: var(--lp-shadow); }
+.lp-btn:focus-visible,
+.lp-iconbtn:focus-visible,
+.lp-theme:focus-visible,
+.lp-coupon__btn:focus-visible,
+.lp-image__link:focus-visible { outline: 3px solid var(--lp-teal); outline-offset: 3px; }
+
+.lp-btn__icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--c-chip);
+}
+
+.lp-btn__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; text-align: start; }
+.lp-btn__title { font: 700 16.5px / 1.45 var(--lp-font-display); overflow-wrap: anywhere; }
+.lp-btn__sub { font-size: 13px; line-height: 1.55; opacity: 0.86; overflow-wrap: anywhere; }
+
+.lp-btn__arrow { flex: none; opacity: 0.7; transition: transform 0.18s ease-out; }
+
+.lp-btn--plain { justify-content: center; }
+.lp-btn--plain .lp-btn__text { flex: 0 1 auto; align-items: center; text-align: center; }
+
+.lp-badge {
+  flex: none;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font: 700 12px / 1.4 var(--lp-font-display);
+  background: var(--c-chip, rgba(42, 163, 171, 0.18));
+  color: inherit;
+}
+.lp-badge--solid { background: var(--c-solid, var(--lp-teal)); color: var(--c-solid-fg, #00254f); }
+.lp-c-outline .lp-badge--solid { border: 1.5px solid var(--lp-heading); background: transparent; color: var(--lp-heading); }
+
+/* ── Icon row (links shown as icons only) ─────────────────────────────────── */
+
+.lp-icons { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+
+.lp-iconbtn {
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: var(--lp-icon-radius);
+  background: var(--c-bg);
+  color: var(--c-fg);
+  border: 1.5px solid var(--c-border, transparent);
+  box-shadow: var(--lp-shadow);
+  transition: transform 0.18s ease-out, box-shadow 0.18s ease-out, background-color 0.18s ease-out;
+  -webkit-tap-highlight-color: transparent;
+}
+.lp-c-outline.lp-iconbtn { box-shadow: none; }
+.lp-iconbtn:active { transform: translateY(0) scale(0.96); }
+
+/* ── Offer ────────────────────────────────────────────────────────────────── */
+
+.lp-offer {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--lp-card-radius);
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-line);
+  box-shadow: var(--lp-shadow);
+}
+
+/* a corner of the pattern, faint, so the card belongs to the house (under the text, never over the picture) */
+.lp-offer__body::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  width: 170px;
+  height: 120px;
+  z-index: -1;
+  background-image: var(--lp-pattern);
+  background-size: 170px auto;
+  opacity: 0.1;
+  -webkit-mask-image: linear-gradient(225deg, #000, transparent 72%);
+  mask-image: linear-gradient(225deg, #000, transparent 72%);
+  pointer-events: none;
+}
+
+.lp-offer__img { display: block; width: 100%; aspect-ratio: 2 / 1; object-fit: cover; background: var(--lp-surface-2); }
+
+.lp-offer__body { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 18px 18px 20px; text-align: start; }
+.lp-offer__top { display: flex; align-items: center; gap: 10px; }
+.lp-offer__icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--c-solid, var(--lp-teal)); color: var(--c-solid-fg, #00254f); }
+.lp-c-outline .lp-offer__icon { background: transparent; border: 1.5px solid var(--lp-heading); color: var(--lp-heading); }
+
+.lp-offer__title { margin: 0; font: 800 21px / 1.5 var(--lp-font-display); color: var(--lp-heading); overflow-wrap: anywhere; }
+.lp-offer__text { margin: 0; color: var(--lp-muted); font-size: 15px; line-height: 1.95; white-space: pre-line; overflow-wrap: anywhere; }
+.lp-offer__ends { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--lp-muted); font-size: 13.5px; }
+
+.lp-btn--cta { margin-top: 4px; }
+
+.lp-coupon {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 100%;
+  padding: 8px 8px 8px 12px;
+  border: 1.5px dashed var(--lp-teal);
+  border-radius: 14px;
+  background: rgba(42, 163, 171, 0.1);
+}
+.lp-coupon__label { font-size: 13px; color: var(--lp-muted); }
+.lp-coupon__code {
+  direction: ltr;
+  font: 700 17px / 1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.08em;
+  color: var(--lp-heading);
+  overflow-wrap: anywhere;
+}
+.lp-coupon__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--lp-teal);
+  color: #00254f;
+  font: 700 13px / 1 var(--lp-font-display);
+  cursor: pointer;
+  transition: transform 0.15s ease-out, background-color 0.15s ease-out;
+}
+.lp-coupon__btn:active { transform: scale(0.96); }
+
+/* ── Image ────────────────────────────────────────────────────────────────── */
+
+.lp-image { margin: 0; }
+.lp-image__link { display: block; border-radius: var(--lp-card-radius); transition: transform 0.18s ease-out, box-shadow 0.18s ease-out; }
+.lp-image__img { display: block; width: 100%; height: auto; border-radius: var(--lp-card-radius); box-shadow: var(--lp-shadow); background: var(--lp-surface-2); }
+.lp-image figcaption { margin-top: 8px; text-align: center; color: var(--lp-muted); font-size: 13.5px; }
+
+/* ── Heading and text ─────────────────────────────────────────────────────── */
+
+.lp-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  font: 800 20px / 1.5 var(--lp-font-display);
+  color: var(--lp-heading);
+}
+.lp-heading.lp-size-sm { font-size: 16.5px; }
+.lp-heading.lp-size-lg { font-size: 26px; }
+
+/* centred headings are framed by two rules that fade out, as beside the pattern divider */
+.lp-heading.lp-align-center::before,
+.lp-heading.lp-align-center::after { content: ''; flex: 1; height: 1px; }
+.lp-heading.lp-align-center::before { background: linear-gradient(270deg, var(--lp-rule), transparent); }
+.lp-heading.lp-align-center::after { background: linear-gradient(90deg, var(--lp-rule), transparent); }
+.lp-heading.lp-align-start { justify-content: flex-start; }
+.lp-heading.lp-align-end { justify-content: flex-end; }
+
+.lp-text { margin: 0; color: var(--lp-text); font-size: 15.5px; line-height: 2; white-space: pre-line; overflow-wrap: anywhere; }
+.lp-text.lp-size-sm { font-size: 14px; color: var(--lp-muted); }
+.lp-text.lp-size-lg { font-size: 18px; }
+.lp-text.lp-align-start { text-align: start; }
+.lp-text.lp-align-center { text-align: center; }
+.lp-text.lp-align-end { text-align: end; }
+.lp-text.lp-align-justify { text-align: justify; text-justify: inter-word; }
+
+/* ── Dividers ─────────────────────────────────────────────────────────────── */
+
+.lp-divider { display: flex; align-items: center; justify-content: center; gap: 12px; margin-inline: auto; color: var(--lp-ornament); }
+.lp-len-short { width: 32%; }
+.lp-len-medium { width: 62%; }
+.lp-len-long { width: 100%; }
+
+.lp-divider--line { height: 1px; background: linear-gradient(90deg, transparent, var(--lp-rule) 22%, var(--lp-rule) 78%, transparent); }
+.lp-divider--dashed { height: 0; border-top: 1.5px dashed var(--lp-rule); }
+.lp-divider--dotted { height: 0; border-top: 2.5px dotted var(--lp-rule); }
+.lp-divider--double { height: 0; border-top: 4px double var(--lp-rule); }
+
+.lp-mark { flex: none; height: 28px; width: auto; color: var(--lp-ornament); }
+.lp-mark__accent { fill: var(--lp-ornament-accent); }
+.lp-divider__rule { flex: 1; height: 1px; background: linear-gradient(270deg, var(--lp-rule), transparent); }
+.lp-divider__rule--end { background: linear-gradient(90deg, var(--lp-rule), transparent); }
+
+.lp-divider--band {
+  height: 26px;
+  background-image: var(--lp-pattern);
+  background-repeat: repeat-x;
+  background-size: auto 78px; /* the tile is three rows tall: one row is the band */
+  background-position: center top;
+}
+
+.lp-divider--space { width: 100%; }
+.lp-divider--space.lp-len-short { height: 4px; }
+.lp-divider--space.lp-len-medium { height: 22px; }
+.lp-divider--space.lp-len-long { height: 48px; }
+
+/* ── Foot ─────────────────────────────────────────────────────────────────── */
+
+.lp-footer { margin-top: 10px; display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center; }
+.lp-footer p { margin: 0; max-width: 40ch; color: var(--lp-muted); font-size: 13.5px; line-height: 1.9; }
+.lp-frieze {
+  width: 100%;
+  height: 26px;
+  background-image: var(--lp-pattern);
+  background-repeat: repeat-x;
+  background-size: auto 78px;
+  background-position: center top;
+}
+
+/* ── Day / night switch ───────────────────────────────────────────────────── */
+
+.lp-theme {
+  position: absolute;
+  top: 14px;
+  inset-inline-end: 14px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--lp-line);
+  background: var(--lp-surface);
+  color: var(--lp-heading);
+  box-shadow: var(--lp-shadow);
+  cursor: pointer;
+  transition: transform 0.18s ease-out, background-color 0.18s ease-out;
+}
+
+/* ── Loading ──────────────────────────────────────────────────────────────── */
+
+.lp-skel {
+  height: 62px;
+  border-radius: var(--lp-radius);
+  background: linear-gradient(90deg, var(--lp-surface-2) 25%, var(--lp-surface) 50%, var(--lp-surface-2) 75%);
+  background-size: 300% 100%;
+  animation: lp-shimmer 1.5s linear infinite;
+}
+
+/* ── Screen readers ───────────────────────────────────────────────────────── */
+
+.lp-sr {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Hover: only where a pointer can hover (on a phone a tap would leave the button raised) ───────── */
+
+@media (hover: hover) {
+  .lp-btn:hover { transform: translateY(-2px); box-shadow: var(--lp-shadow-hover); background: var(--c-hover, var(--c-bg)); }
+  .lp-c-outline.lp-btn:hover { box-shadow: var(--lp-shadow); }
+  .lp-btn:hover .lp-btn__arrow { transform: translateX(-3px); }
+  .lp-iconbtn:hover { transform: translateY(-3px); box-shadow: var(--lp-shadow-hover); background: var(--c-hover, var(--c-bg)); }
+  .lp-image__link:hover { transform: translateY(-2px); }
+  .lp-coupon__btn:hover { background: #36b3bb; }
+  .lp-theme:hover { transform: rotate(14deg) scale(1.06); }
+}
+
+/* ── Motion ───────────────────────────────────────────────────────────────── */
+
+@keyframes lp-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes lp-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes lp-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+.lp-header { animation: lp-fade 0.6s ease-out both; }
+.lp-item { animation: lp-rise 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; animation-delay: calc(var(--i, 0) * 60ms + 90ms); }
+.lp-footer { animation: lp-fade 0.8s ease-out 0.5s both; }
+
+.lp-root--preview .lp-header,
+.lp-root--preview .lp-item,
+.lp-root--preview .lp-footer { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-header, .lp-item, .lp-footer, .lp-skel { animation: none; }
+  .lp-btn, .lp-iconbtn, .lp-theme, .lp-image__link, .lp-btn__arrow, .lp-coupon__btn { transition: none; }
+  .lp-btn:hover, .lp-iconbtn:hover, .lp-theme:hover, .lp-image__link:hover { transform: none; }
+}
+
+@media (max-width: 380px) {
+  .lp-col { padding-inline: 14px; }
+  .lp-btn { gap: 12px; padding-inline: 12px; }
+  .lp-btn__title { font-size: 15.5px; }
+}
