@@ -124,6 +124,36 @@ function jsonOk(data: unknown) {
   });
 }
 
+// ── Durable rate limit (shared by every instance, survives restarts) ──────────
+// The in-memory limit above only sees one instance at a time, so a flood spread over a few
+// instances walks past it. This one counts in the database (rate_limit_hits, migration
+// 20261110_security_hardening) and fails OPEN: if that call breaks, the request goes on
+// rather than the shop going down with it. Each check is [bucket, max hits, window seconds].
+// deno-lint-ignore no-explicit-any
+async function durableLimitExceeded(admin: any, checks: Array<[string, number, number]>): Promise<boolean> {
+  if (checks.length === 0) return false;
+  try {
+    const { data, error } = await admin.rpc('rate_limit_hits', {
+      p_checks: checks.map(([bucket, max, windowSeconds]) => ({ bucket, max, window: windowSeconds })),
+    });
+    if (error) {
+      console.warn('[rate-limit] rpc failed:', error.message);
+      return false;
+    }
+    return typeof data === 'string' && data.length > 0;
+  } catch (err) {
+    console.warn('[rate-limit] check failed:', err);
+    return false;
+  }
+}
+
+/** Our own RAISE EXCEPTION texts (stock, validation) are Arabic and written for customers; anything else stays in the log. */
+function friendlyRpcError(err: { code?: string; message?: string } | null | undefined, fallback: string): string {
+  const msg = err?.message ?? '';
+  if (err?.code === 'P0001' && /[\u0600-\u06FF]/.test(msg)) return msg;
+  return fallback;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -142,6 +172,15 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    // Durable per-address limits, before any other work (CGNAT: many customers share an address).
+    const limitIp = getClientIp(req);
+    if (limitIp !== 'unknown' && await durableLimitExceeded(supabase, [
+      [`order:ip:${limitIp}:10m`, 20, 600],
+      [`order:ip:${limitIp}:1d`, 100, 86400],
+    ])) {
+      return jsonError('تم إرسال طلبات كثيرة خلال وقت قصير. حاول مرة أخرى بعد دقائق.', 429);
+    }
 
     const body = await req.json();
     const { customer, paymentMethod, paymentMethodId: clientPaymentMethodId, country, shipping, items, paymentType, couponCode, turnstileToken } = body;
@@ -182,6 +221,12 @@ Deno.serve(async (req) => {
       const token = authHeader.replace('Bearer ', '');
       const { data: userData } = await supabase.auth.getUser(token);
       userId = userData?.user?.id ?? null;
+    }
+    if (userId && await durableLimitExceeded(supabase, [
+      [`order:user:${userId}:10m`, 6, 600],
+      [`order:user:${userId}:1d`, 20, 86400],
+    ])) {
+      return jsonError('تم إرسال طلبات كثيرة خلال وقت قصير. حاول مرة أخرى بعد دقائق.', 429);
     }
     // The app sells to signed-in accounts only, with an email (the user's decision, 2026-10-15): only
     // the website takes guests. The app is told apart by its x-app-key.
@@ -436,8 +481,10 @@ Deno.serve(async (req) => {
     const { data: rpcData, error: rpcError } = await supabase.rpc(rpcName, rpcParams);
 
     if (rpcError) {
-      // Surface user-friendly Arabic messages from RAISE EXCEPTION in the RPC
-      return jsonError(rpcError.message || 'تعذر إنشاء الطلب في قاعدة البيانات.');
+      // Surface user-friendly Arabic messages from RAISE EXCEPTION in the RPC (stock etc.);
+      // database details stay in the log.
+      console.error('[create-order] rpc failed:', rpcError.code, rpcError.message);
+      return jsonError(friendlyRpcError(rpcError, 'تعذر إنشاء الطلب. حاول مرة أخرى بعد قليل.'));
     }
 
     if (!rpcData?.id) {

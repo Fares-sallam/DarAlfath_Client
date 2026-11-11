@@ -13,6 +13,9 @@
 //
 //    • Otherwise → return `pending` so the client keeps polling.
 //
+//  A row that was already closed (a declined first card, 30 minutes passed) is asked about
+//  again for a day: if Paymob says it was paid after all, the order is created.
+//
 //  Source of truth = Paymob server. We never trust client-supplied params.
 // ════════════════════════════════════════════════════════════════════════
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -27,6 +30,12 @@ const PAYMOB_SECRET_KEY = Deno.env.get('PAYMOB_SECRET_KEY') ?? '';
 const PAYMOB_PUBLIC_KEY = Deno.env.get('PAYMOB_PUBLIC_KEY') ?? '';
 const PAYMOB_BASE_URL = 'https://accept.paymob.com';
 const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
+
+// How long after the payment started a closed row is still checked against Paymob.
+const LATE_SUCCESS_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const PAID_UNFULFILLED_MESSAGE =
+  'تم خصم المبلغ لكن تعذّر إتمام الطلب تلقائيًا (غالبًا لنفاد الكمية). لا تدفع مرة أخرى: فريق الدار هيتواصل معاك لاسترداد المبلغ أو إتمام الطلب.';
 
 // ── In-memory rate limit (per IP per isolate) ──
 const RL_WINDOW_MS = 5 * 60 * 1000;
@@ -137,11 +146,17 @@ Deno.serve(async (req) => {
     }
 
     // ── Idempotency: if already completed, just return order id ────────
-    const { data: existing } = await supabase
+    const { data: existing, error: lookupError } = await supabase
       .from('pending_payments')
-      .select('status, resulting_order_id, paymob_order_id, failure_reason, coupon_code, client_secret_hash, paymob_client_secret')
+      .select('status, resulting_order_id, paymob_order_id, failure_reason, coupon_code, client_secret_hash, paymob_client_secret, paid_at, created_at')
       .eq('merchant_order_id', merchantOrderId)
       .maybeSingle();
+
+    if (lookupError) {
+      // A database hiccup is not "no such order": keep the client polling.
+      console.error('[check-paymob] pending_payments lookup failed:', lookupError.message);
+      return jsonOk({ status: 'pending' });
+    }
 
     if (!existing) {
       return jsonOk({ status: 'not_found', error: 'لم نجد طلباً معلقاً بهذا الرقم' });
@@ -159,17 +174,41 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (existing.status === 'failed' || existing.status === 'cancelled' || existing.status === 'expired') {
-      return jsonOk({
-        status: 'failed',
-        error:  existing.failure_reason ?? 'الدفع فشل',
-      });
+    const paidUnfulfilledReply = () => jsonOk({
+      status: 'failed',
+      paidUnfulfilled: true,
+      error: PAID_UNFULFILLED_MESSAGE,
+    });
+
+    // Money was taken earlier and the order could not be made: nothing more to ask Paymob.
+    if (existing.status === 'failed' && existing.paid_at) {
+      return paidUnfulfilledReply();
+    }
+
+    const isClosed = existing.status === 'failed' || existing.status === 'cancelled' || existing.status === 'expired';
+    const closedReply = () => jsonOk({
+      status: 'failed',
+      error:  existing.failure_reason ?? 'الدفع فشل',
+    });
+
+    // A closed row can still turn out to have been paid (the buyer's first card was declined
+    // and the second went through, or they paid after the 30 minutes). For a day we ask Paymob
+    // again, and never close such a row a second time.
+    const ageMs = Date.now() - new Date(existing.created_at as string).getTime();
+    const lateWindowOpen = isClosed
+      && !cancel
+      && !!existing.paymob_client_secret
+      && Number.isFinite(ageMs)
+      && ageMs < LATE_SUCCESS_WINDOW_MS;
+
+    if (isClosed && !lateWindowOpen) {
+      return closedReply();
     }
 
     // ── Ownership: الطلب ما زال pending — نطلب الـ clientSecret الصادر عند initiate
     //    قبل الاستعلام من Paymob أو الإلغاء. merchant_order_id وحده لا يكفي للتصرّف
     //    في دفعة حيّة.
-    if (existing.client_secret_hash) {
+    if (!isClosed && existing.client_secret_hash) {
       const provided = (clientSecret ?? '').trim();
       if (!provided || (await sha256Hex(provided)) !== existing.client_secret_hash) {
         return jsonError('غير مصرح بالوصول لهذا الطلب.', 403);
@@ -206,8 +245,8 @@ Deno.serve(async (req) => {
     if (!inquiryRes.ok) {
       const t = await inquiryRes.text();
       console.warn('[check-paymob] intention lookup failed:', inquiryRes.status, t.substring(0, 200));
-      // Don't treat as failure yet — let client keep polling
-      return jsonOk({ status: 'pending' });
+      // A closed row stays closed when Paymob can't be reached; a live one keeps polling.
+      return isClosed ? closedReply() : jsonOk({ status: 'pending' });
     }
 
     const intention = await inquiryRes.json() as {
@@ -237,18 +276,39 @@ Deno.serve(async (req) => {
       pending:         txn?.pending,
       error_occured:   txn?.error_occured,
       id:              txn?.id,
+      closedRow:       isClosed,
     }));
 
     // Helper: release coupon if it was claimed with this pending payment
+    const couponCode: string | null = existing.coupon_code ?? null;
     async function releaseCouponIfNeeded() {
-      if (existing.coupon_code) {
+      if (couponCode) {
         try {
-          await supabase.rpc('release_coupon', { p_coupon_code: existing.coupon_code });
-          console.log(`[check-paymob] Coupon ${existing.coupon_code} released`);
+          await supabase.rpc('release_coupon', { p_coupon_code: couponCode });
+          console.log(`[check-paymob] Coupon ${couponCode} released`);
         } catch (e) {
           console.warn('[check-paymob] release_coupon failed:', e);
         }
       }
+    }
+
+    // A refunded or voided transaction is not a payment to fulfil.
+    if (txn.is_refunded === true || txn.is_voided === true) {
+      console.warn(`[check-paymob] ${merchantOrderId}: transaction was refunded/voided — not completing`);
+      if (isClosed) return closedReply();
+      const { data: cancelRes } = await supabase.rpc('cancel_pending_payment', {
+        p_merchant_order_id: merchantOrderId,
+        p_reason:            'تم استرداد المبلغ أو إلغاء العملية',
+      });
+      if (cancelRes?.success && !cancelRes?.already) await releaseCouponIfNeeded();
+      return jsonOk({ status: 'failed', error: 'تم استرداد المبلغ أو إلغاء العملية.' });
+    }
+
+    // A row that was already closed is only ever reopened by a confirmed payment: it is never
+    // cancelled, released or closed again here.
+    if (isClosed) {
+      const paidAfterClose = paidByIntention && txn.id != null;
+      if (!paidAfterClose) return closedReply();
     }
 
     // No transaction yet → customer hasn't completed payment. (Guarded by
@@ -292,30 +352,44 @@ Deno.serve(async (req) => {
       );
 
       if (completeErr) {
-        console.error('[check-paymob] complete error:', completeErr);
-        return jsonOk({ status: 'pending', error: completeErr.message });
+        // Passing trouble (a lock, a deadlock): the next poll tries again.
+        console.error('[check-paymob] complete error:', completeErr.message);
+        return jsonOk({ status: 'pending' });
+      }
+
+      if (result?.paid_unfulfilled) {
+        console.error('[check-paymob] PAID WITHOUT ORDER:', merchantOrderId, result.error);
+        return paidUnfulfilledReply();
       }
 
       if (!result?.success) {
-        return jsonOk({ status: 'pending', error: result?.error ?? 'تعذر إتمام الطلب' });
+        console.error('[check-paymob] complete refused:', merchantOrderId, result?.error);
+        return jsonOk({
+          status: 'error',
+          error:  'تعذّر تأكيد الدفع تلقائيًا. لو تم خصم المبلغ تواصل معنا وأخبرنا برقم العملية.',
+        });
       }
 
-      // Fire-and-forget email notification (non-blocking; failures are logged)
-      try {
-        await supabase.functions.invoke('send-order-email', {
-          body: { orderId: result.order_id },
-          headers: INTERNAL_FUNCTION_SECRET
-            ? { 'x-internal-function-secret': INTERNAL_FUNCTION_SECRET }
-            : undefined,
-        });
-      } catch (e) {
-        console.warn('[check-paymob] email dispatch failed:', e);
+      // Only the call that created the order sends the confirmation email (a repeat poll, or
+      // the webhook getting there first, would otherwise send it again).
+      if (!result.already) {
+        try {
+          await supabase.functions.invoke('send-order-email', {
+            body: { orderId: result.order_id },
+            headers: INTERNAL_FUNCTION_SECRET
+              ? { 'x-internal-function-secret': INTERNAL_FUNCTION_SECRET }
+              : undefined,
+          });
+        } catch (e) {
+          console.warn('[check-paymob] email dispatch failed:', e);
+        }
       }
 
       return jsonOk({
         status:  'success',
         orderId: result.order_id,
         total:   result.total,
+        ...(result.already ? { already: true } : {}),
       });
     }
 
@@ -362,10 +436,8 @@ Deno.serve(async (req) => {
     }
     return jsonOk({ status: 'pending' });
   } catch (err) {
+    // The details stay in the log; the client just keeps polling.
     console.error('[check-paymob] Unexpected:', err);
-    return jsonOk({
-      status: 'pending',
-      error:  err instanceof Error ? err.message : 'خطأ غير متوقع',
-    });
+    return jsonOk({ status: 'pending' });
   }
 });

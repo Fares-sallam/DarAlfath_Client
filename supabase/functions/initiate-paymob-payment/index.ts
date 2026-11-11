@@ -192,6 +192,36 @@ function generateMerchantOrderId(): string {
   return `ORD-${ymd}-${rand}`;
 }
 
+// ── Durable rate limit (shared by every instance, survives restarts) ──────────
+// The in-memory limit above only sees one instance at a time, so a flood spread over a few
+// instances walks past it. This one counts in the database (rate_limit_hits, migration
+// 20261110_security_hardening) and fails OPEN: if that call breaks, the request goes on
+// rather than the shop going down with it. Each check is [bucket, max hits, window seconds].
+// deno-lint-ignore no-explicit-any
+async function durableLimitExceeded(admin: any, checks: Array<[string, number, number]>): Promise<boolean> {
+  if (checks.length === 0) return false;
+  try {
+    const { data, error } = await admin.rpc('rate_limit_hits', {
+      p_checks: checks.map(([bucket, max, windowSeconds]) => ({ bucket, max, window: windowSeconds })),
+    });
+    if (error) {
+      console.warn('[rate-limit] rpc failed:', error.message);
+      return false;
+    }
+    return typeof data === 'string' && data.length > 0;
+  } catch (err) {
+    console.warn('[rate-limit] check failed:', err);
+    return false;
+  }
+}
+
+/** Our own RAISE EXCEPTION texts (stock, validation) are Arabic and written for customers; anything else stays in the log. */
+function friendlyRpcError(err: { code?: string; message?: string } | null | undefined, fallback: string): string {
+  const msg = err?.message ?? '';
+  if (err?.code === 'P0001' && /[\u0600-\u06FF]/.test(msg)) return msg;
+  return fallback;
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -212,6 +242,15 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    // Durable per-address limits, before any other work (CGNAT: many customers share an address).
+    const limitIp = getClientIp(req);
+    if (limitIp !== 'unknown' && await durableLimitExceeded(supabase, [
+      [`pay:ip:${limitIp}:10m`, 30, 600],
+      [`pay:ip:${limitIp}:1d`, 150, 86400],
+    ])) {
+      return jsonError('تم إرسال طلبات دفع كثيرة خلال وقت قصير. حاول مرة أخرى بعد دقائق.', 429);
+    }
 
     const body = await req.json();
     const {
@@ -316,6 +355,12 @@ Deno.serve(async (req) => {
       const { data: userData } = await supabase.auth.getUser(token);
       userId = userData?.user?.id ?? null;
     }
+    if (userId && await durableLimitExceeded(supabase, [
+      [`pay:user:${userId}:10m`, 8, 600],
+      [`pay:user:${userId}:1d`, 30, 86400],
+    ])) {
+      return jsonError('تم إرسال طلبات دفع كثيرة خلال وقت قصير. حاول مرة أخرى بعد دقائق.', 429);
+    }
     // The app sells to signed-in accounts only, with an email (the user's decision, 2026-10-15): only
     // the website takes guests. The app is told apart by its x-app-key.
     if (isTrustedApp && !userId) {
@@ -372,7 +417,7 @@ Deno.serve(async (req) => {
 
     if (vErr) {
       console.error('[paymob] variant fetch error:', vErr);
-      return jsonError(`فشل التحقق من المنتجات: ${vErr.message}`);
+      return jsonError('تعذر التحقق من المنتجات. حاول مرة أخرى بعد قليل.');
     }
     if (!variantRows || variantRows.length === 0) {
       return jsonError('لم نجد أي منتجات بهذه المعرّفات');
@@ -598,7 +643,7 @@ Deno.serve(async (req) => {
     if (rpcError) {
       console.error('[paymob] create_pending_payment error:', rpcError);
       await releaseCouponIfNeeded();
-      return jsonError(rpcError.message || 'تعذر حجز المنتجات');
+      return jsonError(friendlyRpcError(rpcError, 'تعذر حجز المنتجات. حاول مرة أخرى بعد قليل.'));
     }
 
     // Store the client-secret hash on the freshly-created pending payment.
@@ -659,7 +704,7 @@ Deno.serve(async (req) => {
       console.error('[paymob] intention failed:', intentionRes.status, t.substring(0, 400));
       return await failAndCleanup(
         'Paymob intention failed',
-        `تعذر بدء عملية الدفع: ${t.substring(0, 200)}`,
+        'تعذر بدء عملية الدفع. حاول مرة أخرى بعد قليل.',
       );
     }
 
@@ -712,6 +757,6 @@ Deno.serve(async (req) => {
         console.warn('[paymob] release_coupon in catch failed:', e);
       }
     }
-    return jsonError(err instanceof Error ? err.message : 'حدث خطأ غير متوقع', 500);
+    return jsonError('حدث خطأ غير متوقع. حاول مرة أخرى بعد قليل.', 500);
   }
 });

@@ -969,6 +969,24 @@ export function useSiteContent() {
   });
 }
 
+/** The saved order/visibility of the top menu bar (see lib/headerNav). null = the default bar.
+ *  Read on its own so a problem here never touches the rest of the content settings. */
+export function useHeaderNav() {
+  return useQuery({
+    queryKey: ['site-header-nav'],
+    queryFn: async (): Promise<unknown> => {
+      if (!isSupabaseConfigured) return null;
+      const { data, error } = await supabase
+        .from('site_content_settings')
+        .select('header_nav')
+        .maybeSingle();
+      if (error || !data) return null;
+      return (data as { header_nav: unknown }).header_nav ?? null;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 export interface AnnouncementItem {
   id: string;
   message: string;

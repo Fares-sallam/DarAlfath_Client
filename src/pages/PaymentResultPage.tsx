@@ -29,7 +29,9 @@ export default function PaymentResultPage() {
   // go through. `unconfirmed` means we simply could not get an answer in time —
   // the money may well have been taken. Conflating the two told paying customers
   // "الطلب لم يتم" and invited them to pay a second time.
-  const [state, setState] = useState<'loading' | 'success' | 'failed' | 'unconfirmed' | 'pending'>('loading');
+  // `paid_unfulfilled`: the money was taken but the order could not be made (the last copy sold
+  // meanwhile). Not a failure to retry: paying again would charge twice.
+  const [state, setState] = useState<'loading' | 'success' | 'failed' | 'unconfirmed' | 'pending' | 'paid_unfulfilled'>('loading');
   const [errorMessage, setErrorMessage] = useState('');
   const [orderId, setOrderId] = useState<string | null>(null);
   const [reference, setReference] = useState<string | null>(null);
@@ -94,7 +96,7 @@ export default function PaymentResultPage() {
         }
 
         if (data?.status === 'failed') {
-          setState('failed');
+          setState(data.paidUnfulfilled ? 'paid_unfulfilled' : 'failed');
           setErrorMessage(data.error || 'فشلت عملية الدفع.');
           clearPendingPaymob();
           return;
@@ -126,7 +128,7 @@ export default function PaymentResultPage() {
             void queryClient.invalidateQueries({ queryKey: ['products-public-catalog'] });
           } else if (poll?.status === 'failed') {
             clearInterval(interval);
-            setState('failed');
+            setState(poll.paidUnfulfilled ? 'paid_unfulfilled' : 'failed');
             setErrorMessage(poll.error || 'فشلت عملية الدفع.');
             clearPendingPaymob();
           }
@@ -185,6 +187,36 @@ export default function PaymentResultPage() {
               )}
               <Link to="/contact" className="ghost-button">
                 تواصل معنا
+              </Link>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  if (state === 'paid_unfulfilled') {
+    return (
+      <div className="page-sections">
+        <section className="page-card">
+          <div className="empty-state">
+            <Clock size={48} color="var(--gold, #62bcc3)" />
+            <h3>استلمنا دفعتك وطلبك محتاج مراجعة</h3>
+            <p>{errorMessage}</p>
+            <p style={{ fontWeight: 700 }}>
+              من فضلك لا تدفع مرة أخرى حتى لا يُخصم المبلغ مرتين.
+            </p>
+            {reference && (
+              <p style={{ fontSize: '0.85rem', opacity: 0.6 }}>
+                رقم العملية: {reference}
+              </p>
+            )}
+            <div className="empty-state__actions">
+              <Link to="/contact" className="primary-button">
+                تواصل معنا
+              </Link>
+              <Link to="/" className="ghost-button">
+                العودة للرئيسية
               </Link>
             </div>
           </div>

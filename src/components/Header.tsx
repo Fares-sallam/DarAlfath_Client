@@ -9,7 +9,8 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { useAllCategoryNames, useProductExtraCategorySlugs, useProducts, useSeries } from '@/hooks/useStorefront';
+import { useAllCategoryNames, useHeaderNav, useProductExtraCategorySlugs, useProducts, useSeries } from '@/hooks/useStorefront';
+import { HEADER_NAV_FIXED, resolveHeaderNav, seriesIdOf } from '@/lib/headerNav';
 import type { StoreSettings } from '@/types/store';
 
 const navItems = [
@@ -30,6 +31,7 @@ export default function Header({ settings }: { settings: StoreSettings }) {
   const { data: extraCategorySlugs } = useProductExtraCategorySlugs();
   const { data: allSeries = [] } = useSeries();
   const { data: allCategoryNames } = useAllCategoryNames();
+  const { data: savedHeaderNav } = useHeaderNav();
   const [query, setQuery] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -98,6 +100,29 @@ export default function Header({ settings }: { settings: StoreSettings }) {
       .filter((series) => series.categories.length > 0);
   }, [allSeries, products, extraCategorySlugs, allCategoryNames]);
 
+  // The bar's order and which items show come from the dashboard (إدارة الإعلانات والأشرطة →
+  // شريط القائمة). A series still needs books with categories to appear (see above).
+  type SeriesMenuItem = (typeof seriesMenu)[number];
+  type BarItem =
+    | { kind: 'link'; key: string; label: string; to: string }
+    | { kind: 'series'; key: string; series: SeriesMenuItem };
+  const barItems = useMemo((): BarItem[] => {
+    const byId = new Map(seriesMenu.map((s) => [s.id, s]));
+    const items: BarItem[] = [];
+    for (const entry of resolveHeaderNav(savedHeaderNav, allSeries.map((s) => s.id))) {
+      if (!entry.visible) continue;
+      const sid = seriesIdOf(entry.key);
+      if (sid) {
+        const series = byId.get(sid);
+        if (series) items.push({ kind: 'series', key: entry.key, series });
+        continue;
+      }
+      const fixed = HEADER_NAV_FIXED[entry.key as keyof typeof HEADER_NAV_FIXED];
+      if (fixed) items.push({ kind: 'link', key: entry.key, ...fixed });
+    }
+    return items;
+  }, [savedHeaderNav, allSeries, seriesMenu]);
+
   // A category's book list opens beside its menu, to the left of it. For the
   // last series in the row there isn't room (the list ends up past the edge
   // of the screen, even while hidden, and the page scrolls sideways), so
@@ -120,7 +145,7 @@ export default function Header({ settings }: { settings: StoreSettings }) {
     // Web fonts change the row's widths once they arrive.
     void document.fonts?.ready.then(measure);
     return () => window.removeEventListener('resize', measure);
-  }, [seriesMenu]);
+  }, [barItems]);
 
   return (
     <header className="site-header">
@@ -179,9 +204,12 @@ export default function Header({ settings }: { settings: StoreSettings }) {
           row, flex-wrap on .site-header__nav is the safety net if it ever
           doesn't fit on one line (see that rule's own comment). */}
       <div className="container site-header__nav" ref={navRef}>
-        {navItems.slice(0, 2).map((item) => <NavLink key={item.label} to={item.to}>{item.label}</NavLink>)}
-
-        {seriesMenu.map((series) => (
+        {barItems.map((item) => {
+          if (item.kind === 'link') {
+            return <NavLink key={item.key} to={item.to} end={item.to === '/'}>{item.label}</NavLink>;
+          }
+          const { series } = item;
+          return (
           <div
             className={`nav-dropdown${flipped.has(series.id) ? ' nav-dropdown--flip' : ''}`}
             key={series.id}
@@ -228,9 +256,8 @@ export default function Header({ settings }: { settings: StoreSettings }) {
               ))}
             </div>
           </div>
-        ))}
-
-        <NavLink to="/contact">تواصل معنا</NavLink>
+          );
+        })}
       </div>
 
       {/* ── Mobile drawer overlay ──

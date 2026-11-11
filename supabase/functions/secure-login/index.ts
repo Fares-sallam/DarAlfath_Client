@@ -33,6 +33,29 @@ function json(b: unknown, status = 200) {
   return new Response(JSON.stringify(b), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 }
 
+// ── Durable rate limit (shared by every instance, survives restarts) ──────────
+// The in-memory limit above only sees one instance at a time, so a flood spread over a few
+// instances walks past it. This one counts in the database (rate_limit_hits, migration
+// 20261110_security_hardening) and fails OPEN: if that call breaks, the request goes on
+// rather than the shop going down with it. Each check is [bucket, max hits, window seconds].
+// deno-lint-ignore no-explicit-any
+async function durableLimitExceeded(admin: any, checks: Array<[string, number, number]>): Promise<boolean> {
+  if (checks.length === 0) return false;
+  try {
+    const { data, error } = await admin.rpc('rate_limit_hits', {
+      p_checks: checks.map(([bucket, max, windowSeconds]) => ({ bucket, max, window: windowSeconds })),
+    });
+    if (error) {
+      console.warn('[rate-limit] rpc failed:', error.message);
+      return false;
+    }
+    return typeof data === 'string' && data.length > 0;
+  } catch (err) {
+    console.warn('[rate-limit] check failed:', err);
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
@@ -51,6 +74,11 @@ Deno.serve(async (req) => {
   if (!email || !password) return json({ error: 'أدخل البريد الإلكتروني وكلمة المرور.' }, 400);
 
   const admin = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
+
+  // حد دائم لكل IP مشترك بين كل النسخ (الأرقام سخية لأن شبكات الموبايل تشارك عنوانًا واحدًا).
+  if (ip !== 'unknown' && await durableLimitExceeded(admin, [[`login:ip:${ip}:5m`, 60, 300]])) {
+    return json({ error: 'محاولات كثيرة جدًا. حاول لاحقًا.' }, 429);
+  }
 
   // نحدّد user_id لربط القفل بحساب حقيقي (الإيميل غير الموجود لا يُقفل لكنه يفشل دائمًا).
   const { data: userId } = await admin.rpc('get_user_id_by_email', { p_email: email });

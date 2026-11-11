@@ -68,6 +68,29 @@ const clean = (value: unknown, keepLines = false) =>
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// ── Durable rate limit (shared by every instance, survives restarts) ──────────
+// The in-memory limit above only sees one instance at a time, so a flood spread over a few
+// instances walks past it. This one counts in the database (rate_limit_hits, migration
+// 20261110_security_hardening) and fails OPEN: if that call breaks, the request goes on
+// rather than the shop going down with it. Each check is [bucket, max hits, window seconds].
+// deno-lint-ignore no-explicit-any
+async function durableLimitExceeded(admin: any, checks: Array<[string, number, number]>): Promise<boolean> {
+  if (checks.length === 0) return false;
+  try {
+    const { data, error } = await admin.rpc('rate_limit_hits', {
+      p_checks: checks.map(([bucket, max, windowSeconds]) => ({ bucket, max, window: windowSeconds })),
+    });
+    if (error) {
+      console.warn('[rate-limit] rpc failed:', error.message);
+      return false;
+    }
+    return typeof data === 'string' && data.length > 0;
+  } catch (err) {
+    console.warn('[rate-limit] check failed:', err);
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return fail('Method not allowed', 405);
@@ -100,11 +123,21 @@ Deno.serve(async (req) => {
   try {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
+    if (ip !== 'unknown' && await durableLimitExceeded(supabase, [
+      [`review:ip:${ip}:10m`, 8, 600],
+      [`review:ip:${ip}:1d`, 40, 86400],
+    ])) {
+      return fail('أرسلت تعليقات كثيرة في وقت قصير. حاول مرة أخرى بعد قليل.', 429);
+    }
+
     let userId: string | null = null;
     const auth = req.headers.get('Authorization');
     if (auth?.startsWith('Bearer ')) {
       const { data } = await supabase.auth.getUser(auth.slice(7));
       userId = data?.user?.id ?? null;
+    }
+    if (userId && await durableLimitExceeded(supabase, [[`review:user:${userId}:1d`, 20, 86400]])) {
+      return fail('أرسلت تعليقات كثيرة اليوم. حاول مرة أخرى غدًا.', 429);
     }
 
     const { data: product } = await supabase.from('products').select('id').eq('id', productId).eq('is_active', true).maybeSingle();

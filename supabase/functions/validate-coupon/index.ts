@@ -54,6 +54,29 @@ type CouponRow = {
 
 type ItemInput = { product_id: string; variant_id?: string; quantity: number; price?: number };
 
+// ── Durable rate limit (shared by every instance, survives restarts) ──────────
+// The in-memory limit above only sees one instance at a time, so a flood spread over a few
+// instances walks past it. This one counts in the database (rate_limit_hits, migration
+// 20261110_security_hardening) and fails OPEN: if that call breaks, the request goes on
+// rather than the shop going down with it. Each check is [bucket, max hits, window seconds].
+// deno-lint-ignore no-explicit-any
+async function durableLimitExceeded(admin: any, checks: Array<[string, number, number]>): Promise<boolean> {
+  if (checks.length === 0) return false;
+  try {
+    const { data, error } = await admin.rpc('rate_limit_hits', {
+      p_checks: checks.map(([bucket, max, windowSeconds]) => ({ bucket, max, window: windowSeconds })),
+    });
+    if (error) {
+      console.warn('[rate-limit] rpc failed:', error.message);
+      return false;
+    }
+    return typeof data === 'string' && data.length > 0;
+  } catch (err) {
+    console.warn('[rate-limit] check failed:', err);
+    return false;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -70,6 +93,12 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
+
+    // Durable per-address limit (CGNAT: generous).
+    const limitIp = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    if (limitIp !== 'unknown' && await durableLimitExceeded(supabase, [[`coupon:ip:${limitIp}:5m`, 60, 300]])) {
+      return jsonOk({ valid: false, error: 'محاولات كثيرة. حاول بعد قليل.' });
+    }
 
     // Resolve authenticated user (optional)
     let userId: string | null = null;
