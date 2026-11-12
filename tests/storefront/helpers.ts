@@ -6,13 +6,15 @@ const PASSWORD = process.env.E2E_ADMIN_PASSWORD;
 /** Buying needs an account, so checkout tests sign in with the E2E test account (from .env.e2e). */
 export async function signIn(page: Page) {
   test.skip(!EMAIL || !PASSWORD, 'حساب الاختبار غير مضبوط في .env.e2e');
+  // The live site's real Turnstile key asks an automated browser for a click and sign-in would wait for it (60 s).
+  // Blocking Cloudflare's script makes the page go on without a token, as it does for a person whose
+  // extension blocks it (Supabase's captcha protection is not on yet).
+  await page.route('**://challenges.cloudflare.com/**', (route) => route.abort());
   await page.goto('/account');
   await page.getByPlaceholder('name@example.com').fill(EMAIL!);
   await page.getByPlaceholder('••••••••').fill(PASSWORD!);
   await page.locator('form.auth-card button[type="submit"]').click();
-  // On the live site the real Turnstile key does not pass an automated browser, so sign-in first waits out the
-  // captcha's 10 s of silence (src/lib/authCaptcha.ts) and then goes on without a token: allow for that.
-  await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible({ timeout: 40_000 });
+  await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible({ timeout: 20_000 });
 }
 
 /**
