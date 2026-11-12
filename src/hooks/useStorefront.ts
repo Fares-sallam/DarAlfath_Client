@@ -1023,6 +1023,20 @@ export interface AnnouncementItem {
   link_url: string | null;
 }
 
+export function useProductMetadata(productId?: string) {
+  return useQuery({
+    queryKey: ['product-metadata', productId],
+    enabled: isSupabaseConfigured && Boolean(productId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from('product_metadata_public')
+        .select('publisher, page_count, publication_year').eq('product_id', productId!).maybeSingle();
+      if (error) return null;
+      return data as { publisher: string | null; page_count: number | null; publication_year: number | null } | null;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
 /** The messages in the strip under the header: only live ones reach here (on, and inside their dates). */
 export function useAnnouncements() {
   return useQuery({
@@ -1032,6 +1046,7 @@ export function useAnnouncements() {
       const { data, error } = await supabase
         .from('site_announcements')
         .select('id, message, link_url')
+        .in('audience', ['all', 'web'])
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true });
       if (error || !data) return [];
