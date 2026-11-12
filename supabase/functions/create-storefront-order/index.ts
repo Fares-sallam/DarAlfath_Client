@@ -173,6 +173,18 @@ async function freeShippingThreshold(admin: any, channel: 'web' | 'app', legacyT
   }
 }
 
+// ── The price this channel charges for an edition (product_variants.sale_channel, migration
+// 20261112_sale_channel) ── A discount can be for the website, the app or both; on a channel it is
+// not for, the edition sells at its price before the discount (or the selling price if higher).
+// No sale_channel (before the migration) = the discount applies everywhere, as before.
+function channelPrice(v: Record<string, unknown>, channel: 'web' | 'app'): number {
+  const sale = Number(v.sale_price ?? v.price);
+  const base = v.base_price != null ? Number(v.base_price) : null;
+  const ch = v.sale_channel;
+  const applies = !ch || ch === 'all' || ch === channel;
+  return applies || base == null || !Number.isFinite(base) ? sale : Math.max(base, sale);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -360,7 +372,7 @@ Deno.serve(async (req) => {
 
     const { data: variantRows, error: vErr } = await supabase
       .from('product_variants')
-      .select('id, product_id, price, sale_price, variant_type, weight_kg')
+      .select('*')
       .in('id', variantIds);
 
     if (vErr || !variantRows || variantRows.length === 0) {
@@ -383,7 +395,7 @@ Deno.serve(async (req) => {
 
     for (const item of items as Record<string, unknown>[]) {
       const v = variantMap.get(item.variant_id as string) as Record<string, unknown>;
-      const realPrice = Number(v.sale_price ?? v.price);
+      const realPrice = channelPrice(v, isTrustedApp ? 'app' : 'web');
       if (!Number.isFinite(realPrice) || realPrice <= 0) {
         return jsonError('سعر منتج غير صالح');
       }
