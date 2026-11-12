@@ -40,11 +40,12 @@ Deno.serve(async (req) => {
   const ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (rateLimited(ip)) return json({ error: 'محاولات كثيرة جدًا. حاول لاحقًا.' }, 429);
 
-  let email = '', password = '';
+  let email = '', password = '', captchaToken = '';
   try {
     const body = await req.json();
     email = String(body?.email ?? '').trim();
     password = String(body?.password ?? '');
+    captchaToken = typeof body?.captchaToken === 'string' ? body.captchaToken : '';
   } catch {
     return json({ error: 'طلب غير صالح.' }, 400);
   }
@@ -68,7 +69,14 @@ Deno.serve(async (req) => {
 
   // ② جرّب الدخول على عميل anon منفصل (server-side، بلا حفظ جلسة).
   const anon = createClient(SUPABASE_URL, ANON_KEY, { auth: { persistSession: false } });
-  const { data: signIn, error: signErr } = await anon.auth.signInWithPassword({ email, password });
+  const { data: signIn, error: signErr } = await anon.auth.signInWithPassword({
+    email, password, options: { captchaToken },
+  });
+
+  // CAPTCHA failures are not wrong passwords and must not lock a valid account.
+  if (signErr && (/captcha/i.test(signErr.message) || signErr.code === 'captcha_failed')) {
+    return json({ error: 'تعذّر التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.' }, 403);
+  }
 
   if (signErr || !signIn?.session) {
     // ③ فشل → سجّل المحاولة (تقفل عند الخامسة).

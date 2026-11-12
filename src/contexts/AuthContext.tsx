@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { getAuthCaptchaToken } from '@/lib/authCaptcha';
 
 type AuthResult = {
   error: string | null;
@@ -42,6 +43,10 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 function getArabicAuthError(message?: string, code?: string) {
   const value = String(message || '').toLowerCase();
+
+  if (value.includes('captcha') || value.includes('التحقق الأمني')) {
+    return 'تعذّر التحقق الأمني. حدّث الصفحة وحاول مرة أخرى.';
+  }
 
   if (value.includes('invalid login credentials')) {
     return 'بيانات الدخول غير صحيحة. تأكد من البريد وكلمة المرور.';
@@ -144,8 +149,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
       // بوابة الدخول الآمنة: قفل البريد دقيقتين بعد 5 محاولات فاشلة (ضد التخمين).
+      const captchaToken = await getAuthCaptchaToken();
       const { data, error: fnError } = await supabase.functions.invoke('secure-login', {
-        body: { email: email.trim(), password },
+        body: { email: email.trim(), password, captchaToken },
       });
 
       if (fnError) {
@@ -171,10 +177,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp: async ({ email, password, fullName }) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
+      const captchaToken = await getAuthCaptchaToken();
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
+          captchaToken,
           emailRedirectTo: getRedirectUrl('/account?verified=1'),
           data: {
             full_name: fullName.trim(),
@@ -224,9 +232,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     resendConfirmation: async (email) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
+      const captchaToken = await getAuthCaptchaToken();
       const { error } = await supabase.auth.signInWithOtp({
         email: email.trim(),
         options: {
+          captchaToken,
           // false prevents ghost account creation via resend spam
           shouldCreateUser: false,
           emailRedirectTo: getRedirectUrl('/account?verified=1'),
@@ -237,7 +247,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const msg = error.message.toLowerCase();
 
         // Rate limit — tell the user clearly
-        if (msg.includes('rate') || msg.includes('limit')) {
+        if (msg.includes('rate') || msg.includes('limit') || msg.includes('captcha')) {
           return { error: getArabicAuthError(error.message) };
         }
 
@@ -257,7 +267,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     sendResetOtp: async (email) => {
       if (!isSupabaseConfigured) return { error: missingSupabaseMessage };
 
+      const captchaToken = await getAuthCaptchaToken();
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        captchaToken,
         redirectTo: getRedirectUrl('/account?mode=reset'),
       });
 
