@@ -15,7 +15,11 @@ type TurnstileApi = {
 
 const SITE_KEY = ((import.meta.env.VITE_TURNSTILE_SITE_KEY as string | undefined) ?? '').trim();
 const SCRIPT_SRC = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
-const TIMEOUT_MS = 60_000;
+// Cloudflare usually answers in a second or two. If it says nothing for this long (blocked by an
+// extension, a bad connection) the request goes on without a token rather than keeping the person
+// waiting; once it asks for a click the person gets the longer time below.
+const QUIET_TIMEOUT_MS = 10_000;
+const INTERACTIVE_TIMEOUT_MS = 60_000;
 
 export const authCaptchaEnabled = () => SITE_KEY.length > 0;
 
@@ -86,7 +90,7 @@ export async function getAuthCaptchaToken(): Promise<string | undefined> {
       card.remove();
       resolve(token || undefined);
     };
-    const timer = window.setTimeout(() => finish(undefined), TIMEOUT_MS);
+    let timer = window.setTimeout(() => finish(undefined), QUIET_TIMEOUT_MS);
 
     try {
       id = api.render(box, {
@@ -98,7 +102,11 @@ export async function getAuthCaptchaToken(): Promise<string | undefined> {
         'error-callback': () => finish(undefined),
         'expired-callback': () => finish(undefined),
         'timeout-callback': () => finish(undefined),
-        'before-interactive-callback': () => { card.style.display = 'block'; },
+        'before-interactive-callback': () => {
+          card.style.display = 'block';
+          window.clearTimeout(timer);
+          timer = window.setTimeout(() => finish(undefined), INTERACTIVE_TIMEOUT_MS);
+        },
         'after-interactive-callback': () => { card.style.display = 'none'; },
       });
     } catch {
