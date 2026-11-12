@@ -575,9 +575,9 @@ export default function BookDetailsPage() {
           {activeTab === 'specs' && (
             <dl className="bk3-specs">
               <div className="bk3-specs__r"><dt>المؤلف</dt><dd>{product.author}</dd></div>
-              {metadata?.publisher && <div className="bk3-specs__r"><dt>الناشر</dt><dd>{metadata.publisher}</dd></div>}
-              {metadata?.page_count && <div className="bk3-specs__r"><dt>عدد الصفحات</dt><dd>{metadata.page_count}</dd></div>}
-              {metadata?.publication_year && <div className="bk3-specs__r"><dt>سنة النشر</dt><dd>{metadata.publication_year}</dd></div>}
+              <div className="bk3-specs__r"><dt>الناشر</dt><dd>{metadata?.publisher?.trim() || '—'}</dd></div>
+              <div className="bk3-specs__r"><dt>عدد الصفحات</dt><dd>{metadata?.page_count != null ? `${metadata.page_count} صفحة` : '—'}</dd></div>
+              <div className="bk3-specs__r"><dt>سنة النشر</dt><dd>{metadata?.publication_year ?? '—'}</dd></div>
               <div className="bk3-specs__r">
                 <dt>{categories.length > 1 ? 'التصنيفات' : 'التصنيف'}</dt>
                 <dd>{categories.length > 0 ? categories.map((c) => c.name).join('، ') : categoryLabel}</dd>
