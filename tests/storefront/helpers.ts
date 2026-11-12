@@ -10,7 +10,9 @@ export async function signIn(page: Page) {
   await page.getByPlaceholder('name@example.com').fill(EMAIL!);
   await page.getByPlaceholder('••••••••').fill(PASSWORD!);
   await page.locator('form.auth-card button[type="submit"]').click();
-  await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible({ timeout: 15_000 });
+  // On the live site the real Turnstile key does not pass an automated browser, so sign-in first waits out the
+  // captcha's 10 s of silence (src/lib/authCaptcha.ts) and then goes on without a token: allow for that.
+  await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible({ timeout: 40_000 });
 }
 
 /**
