@@ -5,6 +5,7 @@ import { useCart } from '@/contexts/CartContext';
 import { formatMoney } from '@/hooks/useStorefront';
 import { usePrivateSeo } from '@/hooks/useSeo';
 import { OrnamentDivider } from '@/components/Ornament';
+import FreeShippingBar from '@/components/FreeShippingBar';
 
 export default function CartPage() {
   usePrivateSeo('سلة المشتريات', '/cart');
@@ -48,6 +49,7 @@ export default function CartPage() {
       ) : null}
 
       {items.length ? (
+        <>
         <div className="cart-layout-v2">
           <div className="cart-rows">
             {items.map((item, i) => (
@@ -135,6 +137,8 @@ export default function CartPage() {
             </Link>
           </aside>
         </div>
+        <FreeShippingBar />
+        </>
       ) : (
         <div className="cart-empty">
           <div className="cart-empty__icon">

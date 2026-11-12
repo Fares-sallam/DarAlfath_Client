@@ -154,6 +154,25 @@ function friendlyRpcError(err: { code?: string; message?: string } | null | unde
   return fallback;
 }
 
+// ── Free-shipping offer for this channel (shipping_offers, migration 20261112) ──
+// The live offer with the lowest minimum for 'web' or 'app'; 0 when none is live. Until the
+// migration is applied (no such function yet) the old store-wide threshold still applies.
+// deno-lint-ignore no-explicit-any
+async function freeShippingThreshold(admin: any, channel: 'web' | 'app', legacyThreshold: number): Promise<number> {
+  try {
+    const { data, error } = await admin.rpc('current_free_shipping', { p_channel: channel });
+    if (error) {
+      console.warn('[free-shipping] offer lookup failed, using the old threshold:', error.message);
+      return legacyThreshold;
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    return Number(row?.min_subtotal) || 0;
+  } catch (err) {
+    console.warn('[free-shipping] offer lookup failed, using the old threshold:', err);
+    return legacyThreshold;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -408,7 +427,11 @@ Deno.serve(async (req) => {
         .maybeSingle();
 
       const flatRate = Number(settings?.default_shipping_cost) || 45;
-      const freeThreshold = Number(settings?.free_shipping_threshold) || 0;
+      const freeThreshold = await freeShippingThreshold(
+        supabase,
+        isTrustedApp ? 'app' : 'web',
+        Number(settings?.free_shipping_threshold) || 0,
+      );
       const defaultCompanyId = settings?.default_shipping_company_id as string | null | undefined;
 
       // ── Weight + governorate rate lookup ──────────────────────────────

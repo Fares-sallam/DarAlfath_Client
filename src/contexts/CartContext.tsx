@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProductItem, ProductVariantItem } from '@/types/store';
 import { useCountry } from '@/contexts/CountryContext';
-import { useStoreSettings } from '@/hooks/useStorefront';
+import { useFreeShippingOffer, useStoreSettings, type FreeShippingOffer } from '@/hooks/useStorefront';
 import { supabase } from '@/lib/supabase';
 
 export interface CartItem {
@@ -33,6 +33,10 @@ interface CartContextValue {
   currencySymbol: string;
   freeShippingThreshold: number;
   remainingForFreeShipping: number;
+  /** The live free-shipping offer for the website (title, end date), for the cart's progress bar. */
+  freeShippingOffer: FreeShippingOffer;
+  /** True when the cart holds at least one paper book (only those are shipped). */
+  hasPhysicalItems: boolean;
   /** Total physical weight of the cart in kg (digital items excluded,
    *  0.3kg default per item with no recorded weight) — feeds the real
    *  governorate+weight shipping quote (useShippingRate) on checkout. */
@@ -52,7 +56,6 @@ const CartContext = createContext<CartContextValue | undefined>(undefined);
 
 const STORAGE_KEY = 'daralfath_client_cart';
 const DEFAULT_SHIPPING_FLAT_RATE = 45;
-const DEFAULT_FREE_SHIPPING_THRESHOLD = 499;
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0;
@@ -118,7 +121,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const { data: storeSettings } = useStoreSettings();
 
   const shippingFlatRate = Number(storeSettings?.default_shipping_cost) || DEFAULT_SHIPPING_FLAT_RATE;
-  const freeShippingThresholdValue = Number(storeSettings?.free_shipping_threshold) || DEFAULT_FREE_SHIPPING_THRESHOLD;
+  // The website's live offer (shipping_offers); 0 = no free shipping now. The server applies the same one.
+  const freeShippingOffer = useFreeShippingOffer();
+  const freeShippingThresholdValue = freeShippingOffer.threshold;
 
   // Lazy initializer: reads localStorage synchronously on first render
   // so cart is populated before any effect can overwrite it with []
@@ -275,6 +280,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       currencySymbol,
       freeShippingThreshold,
       remainingForFreeShipping,
+      freeShippingOffer,
+      hasPhysicalItems,
       cartWeightKg,
       addToCart,
       itemForVariant,
@@ -284,7 +291,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       unavailableRemoved,
       dismissUnavailableNotice,
     };
-  }, [items, selectedCountry, shippingFlatRate, freeShippingThresholdValue, unavailableRemoved]);
+  }, [items, selectedCountry, shippingFlatRate, freeShippingThresholdValue, freeShippingOffer, unavailableRemoved]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

@@ -969,6 +969,36 @@ export function useSiteContent() {
   });
 }
 
+export interface FreeShippingOffer {
+  /** Minimum order for free shipping on the website; 0 = no offer now. */
+  threshold: number;
+  title: string;
+  /** When the offer stops, if it has an end date. */
+  endsAt: string | null;
+}
+
+/** The website's free-shipping offer right now (shipping_offers via current_free_shipping('web')).
+ *  Falls back to the old store-wide threshold while that function does not exist yet, so the cart
+ *  keeps agreeing with what the server charges in either state. */
+export function useFreeShippingOffer(): FreeShippingOffer {
+  const { data: settings } = useStoreSettings();
+  const legacy = Number(settings?.free_shipping_threshold) || 0;
+  const { data } = useQuery({
+    queryKey: ['free-shipping-offer', 'web'],
+    queryFn: async (): Promise<FreeShippingOffer | null> => {
+      if (!isSupabaseConfigured) return null;
+      const { data: rows, error } = await supabase.rpc('current_free_shipping', { p_channel: 'web' });
+      if (error) return null;
+      const row = (Array.isArray(rows) ? rows[0] : rows) as { title?: string; min_subtotal?: number; ends_at?: string | null } | undefined;
+      return row
+        ? { threshold: Number(row.min_subtotal) || 0, title: row.title || 'شحن مجاني', endsAt: row.ends_at ?? null }
+        : { threshold: 0, title: 'شحن مجاني', endsAt: null };
+    },
+    staleTime: 60_000,
+  });
+  return data ?? { threshold: legacy, title: 'شحن مجاني', endsAt: null };
+}
+
 /** The saved order/visibility of the top menu bar (see lib/headerNav). null = the default bar.
  *  Read on its own so a problem here never touches the rest of the content settings. */
 export function useHeaderNav() {
