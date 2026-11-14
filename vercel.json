@@ -35,6 +35,14 @@
           }
         }
       ],
+      "missing": [
+        {
+          "type": "host",
+          "value": {
+            "eq": "dar-alfath-client.vercel.app"
+          }
+        }
+      ],
       "headers": [
         {
           "key": "X-Robots-Tag",

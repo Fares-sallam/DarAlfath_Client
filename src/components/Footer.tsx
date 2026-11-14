@@ -44,7 +44,8 @@ export default function Footer({ settings }: { settings: StoreSettings }) {
           <div className="site-footer__links">
             <Link to="/">الرئيسية</Link>
             <Link to="/books">الكتب</Link>
-            <Link to="/policies">سياستنا</Link>
+            <Link to="/policies#privacy">سياسة الخصوصية</Link>
+            <Link to="/policies#terms">الشروط والأحكام</Link>
             <Link to="/contact">تواصل معنا</Link>
           </div>
         </div>

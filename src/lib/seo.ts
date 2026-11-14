@@ -12,6 +12,7 @@
  */
 
 export const SITE_NAME = 'دار الفتح للنشر والتوزيع';
+export const TEMPORARY_PUBLIC_HOST = 'dar-alfath-client.vercel.app';
 export const DEFAULT_DESCRIPTION =
   'المتجر الرسمي لدار الفتح للنشر والتوزيع: كتب تعليمية وإسلامية للأطفال والمعلمين، نسخ ورقية ورقمية، وشحن لجميع المحافظات.';
 export const LOGO_PATH = '/branding/dar-alfath-logo-2026.jpg';
@@ -328,8 +329,8 @@ export function sitemapXml(origin: string, entries: SitemapEntry[]): string {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
 }
 
-/** The temporary *.vercel.app addresses are kept out of search; a real domain is open. */
+/** Only the public OAuth hostname is crawlable before the custom domain is ready. */
 export function robotsTxt(origin: string, host: string): string {
-  if (host.endsWith('.vercel.app')) return 'User-agent: *\nDisallow: /\n';
+  if (host.endsWith('.vercel.app') && host !== TEMPORARY_PUBLIC_HOST) return 'User-agent: *\nDisallow: /\n';
   return `User-agent: *\nAllow: /\n\nSitemap: ${absoluteUrl(origin, '/sitemap.xml')}\n`;
 }

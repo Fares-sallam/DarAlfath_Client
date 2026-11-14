@@ -1,3 +1,5 @@
+import { TEMPORARY_PUBLIC_HOST } from '../src/lib/seo';
+
 /**
  * Shared by the edge functions in this folder (a leading underscore keeps it from being a route).
  */
@@ -10,11 +12,13 @@ declare const process: { env: Record<string, string | undefined> };
  * came to. Moving to a new domain therefore needs no code change.
  */
 export function siteOrigin(request: Request): string {
+  const requested = new URL(request.url);
+  if (requested.hostname === TEMPORARY_PUBLIC_HOST) return requested.origin;
   const pinned = process.env.VITE_SITE_URL?.trim();
   if (pinned) return pinned.replace(/\/$/, '');
   const production = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
   if (production) return `https://${production.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
-  return new URL(request.url).origin;
+  return requested.origin;
 }
 
 /**

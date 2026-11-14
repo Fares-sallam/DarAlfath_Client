@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
-import { DEFAULT_DESCRIPTION, headTags, staticSeo, titleFor, type Seo } from '@/lib/seo';
+import { DEFAULT_DESCRIPTION, TEMPORARY_PUBLIC_HOST, headTags, staticSeo, titleFor, type Seo } from '@/lib/seo';
 
 
 /** The address the site is known by: pinned at build time, otherwise the one the page was opened on. */
-export const siteOrigin = (): string => (typeof __SITE_URL__ === 'string' && __SITE_URL__) || window.location.origin;
+export const siteOrigin = (): string =>
+  window.location.hostname === TEMPORARY_PUBLIC_HOST
+    ? window.location.origin
+    : (typeof __SITE_URL__ === 'string' && __SITE_URL__) || window.location.origin;
 
 const GENERIC =
   'meta[name="description"], meta[name="robots"], link[rel="canonical"], meta[property^="og:"], meta[name^="twitter:"], script[type="application/ld+json"][data-seo]';

@@ -1,4 +1,4 @@
-/** /robots.txt — closed on the temporary *.vercel.app addresses, open (with the sitemap) on a real domain. */
+/** /robots.txt — public for the OAuth hostname and real domain, closed on preview hosts. */
 import { robotsTxt } from '../src/lib/seo';
 import { siteOrigin } from './_shared';
 

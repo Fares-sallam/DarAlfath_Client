@@ -271,18 +271,18 @@ test('صفحة الروابط (/links): عنوانها ووصفها وصورته
   }
 });
 
-test('الدومين: الرابط الأساسي هو دومين الإنتاج حتى لو الطلب جه على vercel.app، وبيتغير بإعداد واحد', async () => {
+test('الدومين: عنوان Vercel العام له رابط أساسي صحيح، والدومين الرسمي يحتفظ بإعداده', async () => {
   let world = mockWorld({ products_public_catalog: [BOOK], product_variants_public: [] }, { VERCEL_PROJECT_PRODUCTION_URL: 'darolfath.com' });
   try {
     const html = await (await pageHandler(request(`/api/page?kind=book&id=${ID}`))).text();
-    expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/book/${ID}`);
-    expect(html).toContain(`href="https://darolfath.com/book/${ID}"`);
+    expect(meta(html, 'property', 'og:url')).toBe(`https://dar-alfath-client.vercel.app/book/${ID}`);
+    expect(html).toContain(`href="https://dar-alfath-client.vercel.app/book/${ID}"`);
   } finally {
     world.restore();
   }
   world = mockWorld({ products_public_catalog: [BOOK], product_variants_public: [] }, { VERCEL_PROJECT_PRODUCTION_URL: 'darolfath.com', VITE_SITE_URL: 'https://www.darolfath.com/' });
   try {
-    const html = await (await pageHandler(request(`/api/page?kind=book&id=${ID}`))).text();
+    const html = await (await pageHandler(request(`/api/page?kind=book&id=${ID}`, 'www.darolfath.com'))).text();
     expect(meta(html, 'property', 'og:url')).toBe(`https://www.darolfath.com/book/${ID}`);
   } finally {
     world.restore();
@@ -317,10 +317,13 @@ test('sitemap.xml: الصفحات الأساسية والتصنيفات وكل �
   }
 });
 
-test('robots.txt: مقفول على vercel.app ومفتوح (مع الـ sitemap) على دومين حقيقي', async () => {
+test('robots.txt: عنوان OAuth العام مفتوح، المعاينات مقفولة، والدومين الرسمي مفتوح', async () => {
   const world = mockWorld({}, { VERCEL_PROJECT_PRODUCTION_URL: 'darolfath.com' });
   try {
-    expect(await robotsHandler(request('/robots.txt', 'dar-alfath-client.vercel.app')).text()).toBe('User-agent: *\nDisallow: /\n');
+    const temporary = await robotsHandler(request('/robots.txt', 'dar-alfath-client.vercel.app')).text();
+    expect(temporary).toContain('Allow: /');
+    expect(temporary).toContain('Sitemap: https://dar-alfath-client.vercel.app/sitemap.xml');
+    expect(await robotsHandler(request('/robots.txt', 'preview-123.vercel.app')).text()).toBe('User-agent: *\nDisallow: /\n');
     const open = await robotsHandler(request('/robots.txt', 'darolfath.com')).text();
     expect(open).toContain('Allow: /');
     expect(open).toContain('Sitemap: https://darolfath.com/sitemap.xml');
