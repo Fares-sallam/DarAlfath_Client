@@ -44,19 +44,19 @@
     }
   ],
   "redirects": [
-    { "source": "/links", "destination": "/", "permanent": true, "preserveQueryParams": true },
-    { "source": "/book/:id", "destination": "/store/book/:id", "permanent": true, "preserveQueryParams": true },
-    { "source": "/books", "destination": "/store/books", "permanent": true, "preserveQueryParams": true },
-    { "source": "/categories", "destination": "/store/categories", "permanent": true, "preserveQueryParams": true },
-    { "source": "/wishlist", "destination": "/store/wishlist", "permanent": true, "preserveQueryParams": true },
-    { "source": "/cart", "destination": "/store/cart", "permanent": true, "preserveQueryParams": true },
-    { "source": "/checkout", "destination": "/store/checkout", "permanent": true, "preserveQueryParams": true },
-    { "source": "/payment/result", "destination": "/store/payment/result", "permanent": true, "preserveQueryParams": true },
-    { "source": "/account", "destination": "/store/account", "permanent": true, "preserveQueryParams": true },
-    { "source": "/account/orders", "destination": "/store/account/orders", "permanent": true, "preserveQueryParams": true },
-    { "source": "/account/downloads", "destination": "/store/account/downloads", "permanent": true, "preserveQueryParams": true },
-    { "source": "/policies", "destination": "/store/policies", "permanent": true, "preserveQueryParams": true },
-    { "source": "/contact", "destination": "/store/contact", "permanent": true, "preserveQueryParams": true }
+    { "source": "/links", "destination": "/", "permanent": true },
+    { "source": "/book/:id", "destination": "/store/book/:id", "permanent": true },
+    { "source": "/books", "destination": "/store/books", "permanent": true },
+    { "source": "/categories", "destination": "/store/categories", "permanent": true },
+    { "source": "/wishlist", "destination": "/store/wishlist", "permanent": true },
+    { "source": "/cart", "destination": "/store/cart", "permanent": true },
+    { "source": "/checkout", "destination": "/store/checkout", "permanent": true },
+    { "source": "/payment/result", "destination": "/store/payment/result", "permanent": true },
+    { "source": "/account", "destination": "/store/account", "permanent": true },
+    { "source": "/account/orders", "destination": "/store/account/orders", "permanent": true },
+    { "source": "/account/downloads", "destination": "/store/account/downloads", "permanent": true },
+    { "source": "/policies", "destination": "/store/policies", "permanent": true },
+    { "source": "/contact", "destination": "/store/contact", "permanent": true }
   ],
   "rewrites": [
     {
