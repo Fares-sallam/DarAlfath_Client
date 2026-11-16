@@ -111,7 +111,7 @@ export default function BookDetailsPage() {
         )
       : isLoading
         ? null
-        : { title: titleFor('الكتاب غير موجود'), description: DEFAULT_DESCRIPTION, path: '/books', noindex: true },
+        : { title: titleFor('الكتاب غير موجود'), description: DEFAULT_DESCRIPTION, path: '/store/books', noindex: true },
   );
   const { data: galleryRows = [] } = useProductImageGallery(
     product?.product_id ?? productId

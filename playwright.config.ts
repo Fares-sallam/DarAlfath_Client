@@ -62,7 +62,7 @@ export default defineConfig({
   /* يشغّل سيرفري الـdev تلقائيًا قبل الاختبارات (كل تطبيق من مجلده). */
   webServer: [
     {
-      command: 'npm run dev -- --host 127.0.0.1 --port 5173 --strictPort',
+      command: 'VITE_LEGACY_TEST_ROUTES=true npm run dev -- --host 127.0.0.1 --port 5173 --strictPort',
       url: STOREFRONT_URL,
       reuseExistingServer: !process.env.CI,
       timeout: 60_000,

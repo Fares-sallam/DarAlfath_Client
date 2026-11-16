@@ -21,7 +21,8 @@ const corsHeaders = {
 const GMAIL_USER         = Deno.env.get('GMAIL_USER')         ?? '';
 const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD') ?? '';
 const ADMIN_EMAIL        = Deno.env.get('ADMIN_EMAIL')        ?? 'store@darolfath.com';
-const SITE_URL           = Deno.env.get('SITE_URL')           ?? 'https://dar-alfath-client.vercel.app';
+const SITE_URL           = (Deno.env.get('SITE_URL') ?? 'https://darolfath.com').replace(/\/$/, '');
+const DASHBOARD_URL      = (Deno.env.get('DASHBOARD_URL') ?? 'https://dar-alfath-dashboard.vercel.app').replace(/\/$/, '');
 const INTERNAL_FUNCTION_SECRET = Deno.env.get('INTERNAL_FUNCTION_SECRET') ?? '';
 
 function jsonOk(data: unknown) {
@@ -179,12 +180,12 @@ function buildEmailHtml(order: OrderData, audience: 'customer' | 'admin'): strin
     <!-- CTA -->
     ${audience === 'customer' ? `
     <div style="text-align:center;margin-top:24px">
-      <a href="${SITE_URL}/account/orders" style="display:inline-block;background:#1e40af;color:white;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600">
+      <a href="${SITE_URL}/store/account/orders" style="display:inline-block;background:#1e40af;color:white;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600">
         عرض طلباتي
       </a>
     </div>` : `
     <div style="text-align:center;margin-top:24px">
-      <a href="${SITE_URL.replace('client','dashboard')}/orders" style="display:inline-block;background:#1e40af;color:white;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600">
+      <a href="${DASHBOARD_URL}/orders" style="display:inline-block;background:#1e40af;color:white;padding:12px 28px;border-radius:12px;text-decoration:none;font-weight:600">
         فتح الطلب في لوحة التحكم
       </a>
     </div>`}

@@ -37,10 +37,10 @@ test('الرئيسية: عنوان ووصف وبيانات الدار وصندو
   expect(h.title).toContain('دار الفتح للنشر والتوزيع');
   expect(h.description!.length).toBeGreaterThan(40);
   expect(h.robots).toContain('index');
-  expect(h.canonical).toBe(`${new URL(page.url()).origin}/`);
+  expect(h.canonical).toBe(`${new URL(page.url()).origin}/store`);
   const types = h.ld.map((d) => d['@type']);
   expect(types).toEqual(['Organization', 'WebSite']);
-  expect((h.ld[1] as any).potentialAction.target.urlTemplate).toBe(`${new URL(page.url()).origin}/books?q={search_term_string}`);
+  expect((h.ld[1] as any).potentialAction.target.urlTemplate).toBe(`${new URL(page.url()).origin}/store/books?q={search_term_string}`);
 });
 
 test('صفحة الكتاب: كل بياناتها بتظهر، وتتغير لما تروح لصفحة تانية', async ({ page }) => {
@@ -51,7 +51,7 @@ test('صفحة الكتاب: كل بياناتها بتظهر، وتتغير ل�
   const h = await head(page);
   expect(h.title).toBe(`${book.title} — دار الفتح للنشر والتوزيع`);
   expect(h.description!.length).toBeGreaterThan(30);
-  expect(h.canonical).toBe(`${new URL(page.url()).origin}/book/${book.id}`);
+  expect(h.canonical).toBe(`${new URL(page.url()).origin}/store/book/${book.id}`);
   expect(h.ogTitle).toBe(h.title);
   expect(h.ogImage).toMatch(/width=600/);                     // a small version of the cover for previews
   expect(h.robots).toContain('index');
@@ -75,7 +75,7 @@ test('صفحة تصنيف: عنوان التصنيف، والبحث والترت
   await page.goto(`/books?category=${encodeURIComponent(book.categorySlug!)}`);
   await expect.poll(async () => (await head(page)).title, { timeout: 20_000 }).toContain(book.categoryName!);
   let h = await head(page);
-  expect(h.canonical).toContain(`/books?category=${encodeURIComponent(book.categorySlug!)}`);
+  expect(h.canonical).toContain(`/store/books?category=${encodeURIComponent(book.categorySlug!)}`);
   expect(h.robots).toContain('index');
 
   await page.goto('/books?q=%D9%83%D8%AA%D8%A7%D8%A8');
@@ -96,7 +96,7 @@ test('الصفحات الثابتة: لكل واحدة عنوان ووصف خا�
     await page.goto(path);
     await expect.poll(async () => (await head(page)).title, { message: path }).toContain(word);
     const h = await head(page);
-    expect(h.canonical, path).toBe(`${new URL(page.url()).origin}${path}`);
+    expect(h.canonical, path).toBe(`${new URL(page.url()).origin}/store${path}`);
     expect(h.robots, path).toContain('index');
   }
 });

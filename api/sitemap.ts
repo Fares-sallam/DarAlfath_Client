@@ -15,13 +15,13 @@ export default async function handler(request: Request): Promise<Response> {
   const seen = new Set<string>();
   const entries: SitemapEntry[] = [
     { path: '/', priority: 1.0 },
-    ...(['books', 'categories', 'contact', 'policies', 'links'] as const).map((key) => ({ path: STATIC_SEO[key].path, priority: key === 'books' ? 0.9 : 0.5 })),
+    ...(['home', 'books', 'categories', 'contact', 'policies'] as const).map((key) => ({ path: STATIC_SEO[key].path, priority: key === 'home' ? 0.9 : key === 'books' ? 0.8 : 0.5 })),
     ...(categories ?? [])
       .filter((c): c is { slug: string } => !!c.slug)
-      .map((c) => ({ path: `/books?category=${encodeURIComponent(c.slug)}`, priority: 0.7 })),
+      .map((c) => ({ path: `/store/books?category=${encodeURIComponent(c.slug)}`, priority: 0.7 })),
     ...(books ?? [])
       .filter((b) => (seen.has(b.product_id) ? false : (seen.add(b.product_id), true)))
-      .map((b) => ({ path: `/book/${b.product_id}`, lastmod: b.created_at, priority: 0.8 })),
+      .map((b) => ({ path: `/store/book/${b.product_id}`, lastmod: b.created_at, priority: 0.8 })),
   ];
 
   return new Response(sitemapXml(origin, entries), {

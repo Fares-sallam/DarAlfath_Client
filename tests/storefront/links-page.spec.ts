@@ -87,7 +87,7 @@ test('الروابط: الخارجي بيفتح في تبويب جديد بأم�
   await expect(external).toContainText('جديد');
   const internal = page.getByRole('link', { name: /تسوّق من المتجر/ });
   await expect(internal).not.toHaveAttribute('target', /.+/);
-  await expect(internal).toHaveAttribute('href', '/');
+  await expect(internal).toHaveAttribute('href', '/store');
 });
 
 test('رابط داخلي: بينقل لصفحة المتجر من غير تحميل جديد', async ({ page }) => {
@@ -96,7 +96,7 @@ test('رابط داخلي: بينقل لصفحة المتجر من غير تحم
   await page.evaluate(() => { (window as unknown as { __stayed: number }).__stayed = 1; });
 
   await page.getByRole('link', { name: /تواصل معنا/ }).click();
-  await expect(page).toHaveURL(/\/contact$/);
+  await expect(page).toHaveURL(/\/store\/contact$/);
   // the same page of the app: nothing was reloaded
   expect(await page.evaluate(() => (window as unknown as { __stayed?: number }).__stayed)).toBe(1);
 });
@@ -110,7 +110,7 @@ test('العرض: الكود بيتنسخ بضغطة، وتاريخ الانته
   await expect(offer.locator('.lp-offer__title')).toHaveText('عرض الدورة الصيفية');
   await expect(offer.locator('.lp-badge--solid')).toHaveText('خصم 20%');
   await expect(offer.locator('.lp-offer__ends')).toContainText('ينتهي يوم');
-  await expect(offer.getByRole('link', { name: /اطلب الآن/ })).toHaveAttribute('href', '/books?sale=1');
+  await expect(offer.getByRole('link', { name: /اطلب الآن/ })).toHaveAttribute('href', '/store/books?sale=1');
 
   await expect(offer.locator('.lp-coupon__code')).toHaveText('DARALFATH20');
   await offer.getByRole('button', { name: 'نسخ' }).click();
@@ -223,7 +223,7 @@ test('عنوان الصفحة ووصفها: من الإعدادات، أو ال�
   await page.goto('/links');
   await expect(page).toHaveTitle('روابط دار الفتح الرسمية');
   await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', 'كل حساباتنا في مكان واحد');
-  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/links$/);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', /\/$/);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', /^index/);
 
   const other = await page.context().newPage();

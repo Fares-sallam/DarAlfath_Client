@@ -1,12 +1,13 @@
 import { useEffect } from 'react';
-import { DEFAULT_DESCRIPTION, TEMPORARY_PUBLIC_HOST, headTags, staticSeo, titleFor, type Seo } from '@/lib/seo';
+import { DEFAULT_DESCRIPTION, PRIMARY_SITE_ORIGIN, headTags, staticSeo, titleFor, type Seo } from '@/lib/seo';
+import { withStoreBase } from '@/lib/storePaths';
 
 
 /** The address the site is known by: pinned at build time, otherwise the one the page was opened on. */
 export const siteOrigin = (): string =>
-  window.location.hostname === TEMPORARY_PUBLIC_HOST
+  window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
     ? window.location.origin
-    : (typeof __SITE_URL__ === 'string' && __SITE_URL__) || window.location.origin;
+    : (typeof __SITE_URL__ === 'string' && __SITE_URL__) || PRIMARY_SITE_ORIGIN;
 
 const GENERIC =
   'meta[name="description"], meta[name="robots"], link[rel="canonical"], meta[property^="og:"], meta[name^="twitter:"], script[type="application/ld+json"][data-seo]';
@@ -40,5 +41,5 @@ export function useSeo(seo: Seo | null | undefined): void {
 
 /** A page that belongs to the visitor (cart, account, orders…): titled, and kept out of search results. */
 export function usePrivateSeo(title: string, path: string): void {
-  useSeo({ title: titleFor(title), description: DEFAULT_DESCRIPTION, path, noindex: true });
+  useSeo({ title: titleFor(title), description: DEFAULT_DESCRIPTION, path: withStoreBase(path), noindex: true });
 }

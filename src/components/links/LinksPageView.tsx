@@ -21,6 +21,14 @@ interface Ctx {
   preview: boolean;
   /** Moves inside the store without a page load. Absent: an ordinary link. */
   onNavigate?: (to: string) => void;
+  /** Root prepended to legacy internal links saved before the store moved below /store. */
+  internalBasePath?: string;
+}
+
+function internalHref(href: string, base = ''): string {
+  const cleanBase = base.replace(/\/$/, '');
+  if (!cleanBase || href === cleanBase || href.startsWith(`${cleanBase}/`)) return href;
+  return href === '/' ? cleanBase : `${cleanBase}${href}`;
 }
 
 /** The attributes of an <a> for a saved address, or null when it is not one the page will draw. */
@@ -29,7 +37,8 @@ function linkProps(url: string | null, newTab: boolean | null, ctx: Ctx): Anchor
   if (!target) return null;
   const openable = target.kind === 'external' || target.kind === 'internal';
   const openNew = openable && (newTab ?? target.kind === 'external');
-  const props: AnchorHTMLAttributes<HTMLAnchorElement> = { href: target.href };
+  const href = target.kind === 'internal' ? internalHref(target.href, ctx.internalBasePath) : target.href;
+  const props: AnchorHTMLAttributes<HTMLAnchorElement> = { href };
   if (openNew) {
     props.target = '_blank';
     props.rel = 'noopener noreferrer';
@@ -42,7 +51,7 @@ function linkProps(url: string | null, newTab: boolean | null, ctx: Ctx): Anchor
     const plain = event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey;
     if (target.kind === 'internal' && !openNew && ctx.onNavigate && plain) {
       event.preventDefault();
-      ctx.onNavigate(target.href);
+      ctx.onNavigate(href);
     }
   };
   return props;
@@ -214,6 +223,7 @@ interface Props {
   onToggleTheme?: () => void;
   preview?: boolean;
   onNavigate?: (to: string) => void;
+  internalBasePath?: string;
   now?: Date;
 }
 
@@ -226,8 +236,8 @@ function rootClass(settings: LinksPageSettings, preview: boolean) {
   ].filter(Boolean).join(' ');
 }
 
-export default function LinksPageView({ settings, blocks, theme, onToggleTheme, preview = false, onNavigate, now }: Props) {
-  const ctx: Ctx = { preview, onNavigate };
+export default function LinksPageView({ settings, blocks, theme, onToggleTheme, preview = false, onNavigate, internalBasePath, now }: Props) {
+  const ctx: Ctx = { preview, onNavigate, internalBasePath };
   const items = groupBlocks(sortBlocks(blocks).filter((b) => isLive(b, now ?? new Date())));
   const hasTitle = settings.title.trim() !== '';
 
@@ -309,11 +319,11 @@ export function LinksPageClosed({ theme, onNavigate }: { theme: LinksTheme; onNa
         <div className="lp-list">
           <a
             className="lp-btn lp-btn--plain lp-c-primary"
-            href="/"
+            href="/store"
             onClick={(e) => {
               if (onNavigate && e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
                 e.preventDefault();
-                onNavigate('/');
+                onNavigate('/store');
               }
             }}
           >

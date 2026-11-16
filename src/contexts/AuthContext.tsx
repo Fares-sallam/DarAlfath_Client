@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { AUTH_CAPTCHA_ERROR, getAuthCaptchaToken, isCaptchaError } from '@/lib/authCaptcha';
+import { withStoreBase } from '@/lib/storePaths';
 
 type AuthResult = {
   error: string | null;
@@ -86,9 +87,11 @@ function getArabicAuthError(message?: string) {
 
 function getRedirectUrl(path: string) {
   const configuredOrigin = import.meta.env.VITE_AUTH_REDIRECT_ORIGIN as string | undefined;
-  const fallbackOrigin = typeof window === 'undefined' ? undefined : window.location.origin;
-  const origin = (configuredOrigin || fallbackOrigin || '').replace(/\/$/, '');
-  return origin ? `${origin}${path}` : undefined;
+  // The browser's current origin is authoritative after a domain move. The
+  // configured value remains only for non-browser rendering and local tools.
+  const browserOrigin = typeof window === 'undefined' ? undefined : window.location.origin;
+  const origin = (browserOrigin || configuredOrigin || '').replace(/\/$/, '');
+  return origin ? `${origin}${withStoreBase(path)}` : undefined;
 }
 
 const missingSupabaseMessage =

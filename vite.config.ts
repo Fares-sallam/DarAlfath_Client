@@ -4,11 +4,11 @@ import path from 'node:path';
 import { injectSeo, staticSeo } from './src/lib/seo';
 
 /**
- * The address the site is known by: VITE_SITE_URL if set, otherwise the production domain Vercel
- * reports (a custom domain once one is the primary one). Empty when building locally.
+ * The address the site is known by: VITE_SITE_URL if set, otherwise the custom
+ * production domain on Vercel. Empty when building locally.
  */
 const siteUrl = (process.env.VITE_SITE_URL?.trim().replace(/\/$/, '') ||
-  (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : ''));
+  (process.env.VERCEL ? 'https://darolfath.com' : ''));
 
 export default defineConfig({
   plugins: [

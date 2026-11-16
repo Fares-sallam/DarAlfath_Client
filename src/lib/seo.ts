@@ -7,12 +7,12 @@
  * already in the <head>, and the app keeps them up to date as the visitor moves around. Both
  * sides build the tags from the helpers here, so they always agree.
  *
- * Nothing here knows the site's address: it is passed in (the production domain, or the one
- * the request came to), so moving to a new domain needs no change in this file.
+ * Most helpers receive the origin so local tools still work; production pins
+ * it to PRIMARY_SITE_ORIGIN to prevent duplicate canonical pages.
  */
 
 export const SITE_NAME = 'دار الفتح للنشر والتوزيع';
-export const TEMPORARY_PUBLIC_HOST = 'dar-alfath-client.vercel.app';
+export const PRIMARY_SITE_ORIGIN = 'https://darolfath.com';
 export const DEFAULT_DESCRIPTION =
   'المتجر الرسمي لدار الفتح للنشر والتوزيع: كتب تعليمية وإسلامية للأطفال والمعلمين، نسخ ورقية ورقمية، وشحن لجميع المحافظات.';
 export const LOGO_PATH = '/branding/dar-alfath-logo-2026.jpg';
@@ -70,31 +70,31 @@ export const jsonLdText = (data: object) =>
 /* ── The pages that are the same for everyone ──────────────────────── */
 
 export const STATIC_SEO: Record<string, { title: string; description: string; path: string }> = {
-  home: { title: titleFor(), description: DEFAULT_DESCRIPTION, path: '/' },
+  home: { title: titleFor(), description: DEFAULT_DESCRIPTION, path: '/store' },
   books: {
     title: titleFor('كل الكتب'),
     description: 'تصفّح كتالوج دار الفتح كاملًا: كتب التجويد والنحو والإملاء والقراءة والمناهج، بنسخ ورقية ورقمية وأسعار واضحة.',
-    path: '/books',
+    path: '/store/books',
   },
   categories: {
     title: titleFor('التصنيفات'),
     description: 'تصنيفات كتب دار الفتح: منهج الدورة الصيفية، كتب المعلم، كتب القراءة، سلسلة النحو بين يديك وغيرها.',
-    path: '/categories',
+    path: '/store/categories',
   },
   contact: {
     title: titleFor('تواصل معنا'),
     description: 'تواصل مع فريق دار الفتح للنشر والتوزيع للاستفسار عن الكتب والطلبات والشحن.',
-    path: '/contact',
+    path: '/store/contact',
   },
   policies: {
     title: titleFor('سياسة المتجر'),
     description: 'سياسات متجر دار الفتح: الشحن والتوصيل، الاسترجاع والاستبدال، الخصوصية وشروط الاستخدام.',
-    path: '/policies',
+    path: '/store/policies',
   },
   links: {
     title: titleFor('روابط دار الفتح'),
     description: 'كل روابط دار الفتح للنشر والتوزيع في مكان واحد: المتجر، التطبيق، حساباتنا على وسائل التواصل الاجتماعي وأحدث العروض.',
-    path: '/links',
+    path: '/',
   },
 };
 
@@ -116,6 +116,7 @@ export function linksPageSeo(source: LinksPageSeoSource, origin: string): Seo {
     path: page.path,
     image: previewImage(source.share_image_url?.trim() || null, origin),
     type: 'website',
+    jsonLd: [organizationLd(origin)],
     // A page switched off in the dashboard keeps out of search results.
     noindex: source.is_enabled === false || undefined,
   };
@@ -147,11 +148,11 @@ export function websiteLd(origin: string) {
     '@context': 'https://schema.org',
     '@type': 'WebSite',
     name: SITE_NAME,
-    url: absoluteUrl(origin, '/'),
+    url: absoluteUrl(origin, '/store'),
     inLanguage: 'ar',
     potentialAction: {
       '@type': 'SearchAction',
-      target: { '@type': 'EntryPoint', urlTemplate: absoluteUrl(origin, '/books?q={search_term_string}') },
+      target: { '@type': 'EntryPoint', urlTemplate: absoluteUrl(origin, '/store/books?q={search_term_string}') },
       'query-input': 'required name=search_term_string',
     },
   };
@@ -167,8 +168,8 @@ export function booksListSeo(
   const name = opts.categoryName || opts.seriesName;
   if (!name) return { ...base, noindex: opts.searched || undefined };
   const path = opts.categorySlug
-    ? `/books?category=${encodeURIComponent(opts.categorySlug)}`
-    : `/books?series=${encodeURIComponent(opts.seriesId ?? '')}`;
+    ? `/store/books?category=${encodeURIComponent(opts.categorySlug)}`
+    : `/store/books?series=${encodeURIComponent(opts.seriesId ?? '')}`;
   return {
     ...base,
     title: titleFor(name.trim()),
@@ -201,7 +202,7 @@ export function bookSeo(book: SeoBook, origin: string): Seo {
   // One space between words, whatever the database has (a stray double space is common in titles).
   const title = book.title.replace(/\s+/g, ' ').trim();
   const author = book.author?.replace(/\s+/g, ' ').trim();
-  const url = absoluteUrl(origin, `/book/${book.id}`);
+  const url = absoluteUrl(origin, `/store/book/${book.id}`);
   const image = previewImage(book.coverUrl, origin);
   const price = book.minPrice && book.minPrice > 0 ? book.minPrice : null;
 
@@ -240,9 +241,10 @@ export function bookSeo(book: SeoBook, origin: string): Seo {
 
   const crumbs = [
     { name: 'الرئيسية', url: absoluteUrl(origin, '/') },
-    { name: 'الكتب', url: absoluteUrl(origin, '/books') },
+    { name: 'المتجر', url: absoluteUrl(origin, '/store') },
+    { name: 'الكتب', url: absoluteUrl(origin, '/store/books') },
     ...(book.categorySlug && book.categoryName
-      ? [{ name: book.categoryName.trim(), url: absoluteUrl(origin, `/books?category=${encodeURIComponent(book.categorySlug)}`) }]
+      ? [{ name: book.categoryName.trim(), url: absoluteUrl(origin, `/store/books?category=${encodeURIComponent(book.categorySlug)}`) }]
       : []),
     { name: title, url },
   ];
@@ -255,7 +257,7 @@ export function bookSeo(book: SeoBook, origin: string): Seo {
   return {
     title: titleFor(title),
     description,
-    path: `/book/${book.id}`,
+    path: `/store/book/${book.id}`,
     image,
     type: 'book',
     jsonLd: [product, breadcrumbs],
@@ -331,6 +333,6 @@ export function sitemapXml(origin: string, entries: SitemapEntry[]): string {
 
 /** Only the public OAuth hostname is crawlable before the custom domain is ready. */
 export function robotsTxt(origin: string, host: string): string {
-  if (host.endsWith('.vercel.app') && host !== TEMPORARY_PUBLIC_HOST) return 'User-agent: *\nDisallow: /\n';
+  if (host.endsWith('.vercel.app')) return 'User-agent: *\nDisallow: /\n';
   return `User-agent: *\nAllow: /\n\nSitemap: ${absoluteUrl(origin, '/sitemap.xml')}\n`;
 }

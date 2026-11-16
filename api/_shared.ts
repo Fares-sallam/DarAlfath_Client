@@ -1,4 +1,4 @@
-import { TEMPORARY_PUBLIC_HOST } from '../src/lib/seo';
+import { PRIMARY_SITE_ORIGIN } from '../src/lib/seo';
 
 /**
  * Shared by the edge functions in this folder (a leading underscore keeps it from being a route).
@@ -7,18 +7,15 @@ import { TEMPORARY_PUBLIC_HOST } from '../src/lib/seo';
 declare const process: { env: Record<string, string | undefined> };
 
 /**
- * The address the site is known by: set VITE_SITE_URL to pin it, otherwise the production domain
- * Vercel reports (a custom domain once one is the primary one), otherwise the one the request
- * came to. Moving to a new domain therefore needs no code change.
+ * The public address is pinned to the custom domain so Vercel previews and the
+ * old vercel.app hostname cannot create duplicate canonical pages.
  */
 export function siteOrigin(request: Request): string {
   const requested = new URL(request.url);
-  if (requested.hostname === TEMPORARY_PUBLIC_HOST) return requested.origin;
+  if (requested.hostname === 'localhost' || requested.hostname === '127.0.0.1') return requested.origin;
   const pinned = process.env.VITE_SITE_URL?.trim();
   if (pinned) return pinned.replace(/\/$/, '');
-  const production = process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim();
-  if (production) return `https://${production.replace(/^https?:\/\//, '').replace(/\/$/, '')}`;
-  return requested.origin;
+  return PRIMARY_SITE_ORIGIN;
 }
 
 /**

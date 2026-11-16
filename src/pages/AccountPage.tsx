@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePrivateSeo } from '@/hooks/useSeo';
+import { withStoreBase } from '@/lib/storePaths';
 import { supabase } from '@/lib/supabase';
 import OtpInput from '@/components/OtpInput';
 
@@ -113,7 +114,7 @@ export default function AccountPage() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('verified') === '1') {
       setNotice('تم تأكيد البريد بنجاح. يمكنك تسجيل الدخول الآن.');
-      window.history.replaceState({}, '', '/account');
+      window.history.replaceState({}, '', withStoreBase('/account'));
     }
   }, []);
 

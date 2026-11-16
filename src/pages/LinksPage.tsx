@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import LinksPageView, { LinksPageClosed, LinksPageSkeleton } from '@/components/links/LinksPageView';
 import { useLinksPage } from '@/hooks/useLinksPage';
 import { useTheme } from '@/contexts/ThemeContext';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { linksPageSeo } from '@/lib/seo';
 import { DEFAULT_LINKS_SETTINGS, makeBlock, type LinksBlock } from '@/lib/linksPage';
+import { STORE_BASE_PATH } from '@/lib/storePaths';
 
 /** What the page draws when its content cannot be read, or has nothing on it yet: the two ways into the store. */
 const FALLBACK_BLOCKS: LinksBlock[] = [
-  makeBlock('link', { id: 'fallback-store', sort_order: 0, title: 'تسوّق من المتجر', body: 'كتب دار الفتح الورقية والرقمية', url: '/', icon: 'store', look: { style: 'primary', display: 'button' } }),
-  makeBlock('link', { id: 'fallback-contact', sort_order: 1, title: 'تواصل معنا', url: '/contact', icon: 'email', look: { style: 'mint', display: 'button' } }),
+  makeBlock('link', { id: 'fallback-store', sort_order: 0, title: 'تسوّق من المتجر', body: 'كتب دار الفتح الورقية والرقمية', url: STORE_BASE_PATH, icon: 'store', look: { style: 'primary', display: 'button' } }),
+  makeBlock('link', { id: 'fallback-contact', sort_order: 1, title: 'تواصل معنا', url: `${STORE_BASE_PATH}/contact`, icon: 'email', look: { style: 'mint', display: 'button' } }),
 ];
 
 /**
@@ -21,7 +21,6 @@ const FALLBACK_BLOCKS: LinksBlock[] = [
 export default function LinksPage() {
   const { data, isLoading } = useLinksPage();
   const { theme, toggleTheme } = useTheme();
-  const navigate = useNavigate();
 
   const settings = data?.settings ?? DEFAULT_LINKS_SETTINGS;
   useSeo(linksPageSeo(settings, siteOrigin()));
@@ -36,7 +35,7 @@ export default function LinksPage() {
   }, [theme]);
 
   if (isLoading) return <LinksPageSkeleton theme={theme} />;
-  if (!settings.is_enabled) return <LinksPageClosed theme={theme} onNavigate={navigate} />;
+  if (!settings.is_enabled) return <LinksPageClosed theme={theme} />;
 
   return (
     <LinksPageView
@@ -44,7 +43,7 @@ export default function LinksPage() {
       blocks={data && data.blocks.length > 0 ? data.blocks : FALLBACK_BLOCKS}
       theme={theme}
       onToggleTheme={toggleTheme}
-      onNavigate={navigate}
+      internalBasePath={STORE_BASE_PATH}
     />
   );
 }

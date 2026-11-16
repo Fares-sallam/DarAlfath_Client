@@ -35,14 +35,6 @@
           }
         }
       ],
-      "missing": [
-        {
-          "type": "host",
-          "value": {
-            "eq": "dar-alfath-client.vercel.app"
-          }
-        }
-      ],
       "headers": [
         {
           "key": "X-Robots-Tag",
@@ -50,6 +42,21 @@
         }
       ]
     }
+  ],
+  "redirects": [
+    { "source": "/links", "destination": "/", "permanent": true, "preserveQueryParams": true },
+    { "source": "/book/:id", "destination": "/store/book/:id", "permanent": true, "preserveQueryParams": true },
+    { "source": "/books", "destination": "/store/books", "permanent": true, "preserveQueryParams": true },
+    { "source": "/categories", "destination": "/store/categories", "permanent": true, "preserveQueryParams": true },
+    { "source": "/wishlist", "destination": "/store/wishlist", "permanent": true, "preserveQueryParams": true },
+    { "source": "/cart", "destination": "/store/cart", "permanent": true, "preserveQueryParams": true },
+    { "source": "/checkout", "destination": "/store/checkout", "permanent": true, "preserveQueryParams": true },
+    { "source": "/payment/result", "destination": "/store/payment/result", "permanent": true, "preserveQueryParams": true },
+    { "source": "/account", "destination": "/store/account", "permanent": true, "preserveQueryParams": true },
+    { "source": "/account/orders", "destination": "/store/account/orders", "permanent": true, "preserveQueryParams": true },
+    { "source": "/account/downloads", "destination": "/store/account/downloads", "permanent": true, "preserveQueryParams": true },
+    { "source": "/policies", "destination": "/store/policies", "permanent": true, "preserveQueryParams": true },
+    { "source": "/contact", "destination": "/store/contact", "permanent": true, "preserveQueryParams": true }
   ],
   "rewrites": [
     {
@@ -61,27 +68,31 @@
       "destination": "/api/robots"
     },
     {
-      "source": "/book/:id",
+      "source": "/store/book/:id",
       "destination": "/api/page?kind=book&id=:id"
     },
     {
-      "source": "/books",
+      "source": "/store/books",
       "destination": "/api/page?kind=books"
     },
     {
-      "source": "/categories",
+      "source": "/store/categories",
       "destination": "/api/page?kind=categories"
     },
     {
-      "source": "/contact",
+      "source": "/store/contact",
       "destination": "/api/page?kind=contact"
     },
     {
-      "source": "/policies",
+      "source": "/store/policies",
       "destination": "/api/page?kind=policies"
     },
     {
-      "source": "/links",
+      "source": "/store",
+      "destination": "/api/page?kind=home"
+    },
+    {
+      "source": "/",
       "destination": "/api/page?kind=links"
     },
     {

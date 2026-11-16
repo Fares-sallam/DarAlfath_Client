@@ -88,10 +88,10 @@ test('كتاب: عنوان ووصف وصورة مصغّرة ورابط أساس�
     expect(meta(html, 'name', 'description')!.length).toBeLessThanOrEqual(160);
     expect(meta(html, 'property', 'og:title')).toBe(`${BOOK.title} — دار الفتح للنشر والتوزيع`);
     expect(meta(html, 'property', 'og:type')).toBe('book');
-    expect(meta(html, 'property', 'og:url')).toBe(`https://dar-alfath-client.vercel.app/book/${ID}`);
+    expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/store/book/${ID}`);
     // A cover is a megabyte or more: the preview asks storage for a small one.
     expect(meta(html, 'property', 'og:image')).toBe(`${SUPABASE}/storage/v1/render/image/public/book-covers/abc.jpg?width=600&amp;height=600&amp;resize=contain&amp;quality=75`);
-    expect(html).toContain(`<link data-seo="1" rel="canonical" href="https://dar-alfath-client.vercel.app/book/${ID}" />`);
+    expect(html).toContain(`<link data-seo="1" rel="canonical" href="https://darolfath.com/store/book/${ID}" />`);
     expect(meta(html, 'name', 'robots')).toContain('index');
 
     const [product, crumbs] = jsonLd(html) as [Record<string, any>, Record<string, any>];
@@ -101,7 +101,7 @@ test('كتاب: عنوان ووصف وصورة مصغّرة ورابط أساس�
     expect(product.isbn).toBe(BOOK.isbn);
     // Prices differ by country: the home market's row is the one used.
     expect(product.offers).toMatchObject({ '@type': 'Offer', price: 35, priceCurrency: 'EGP', availability: 'https://schema.org/InStock' });
-    expect(crumbs.itemListElement.map((i: any) => i.name)).toEqual(['الرئيسية', 'الكتب', 'منهج الدورة الصيفية', BOOK.title]);
+    expect(crumbs.itemListElement.map((i: any) => i.name)).toEqual(['الرئيسية', 'المتجر', 'الكتب', 'منهج الدورة الصيفية', BOOK.title]);
   } finally {
     world.restore();
   }
@@ -173,7 +173,7 @@ test('تصنيف وسلسلة والبحث: عنوان التصنيف، وراب
     const slug = 'سلسلة-النحو-بين-يديك';
     let html = await (await pageHandler(request(`/api/page?kind=books&category=${encodeURIComponent(slug)}`))).text();
     expect(html).toContain('<title>سلسلة النحو بين يديك — دار الفتح للنشر والتوزيع</title>');
-    expect(meta(html, 'property', 'og:url')).toBe(`https://dar-alfath-client.vercel.app/books?category=${encodeURIComponent(slug)}`);
+    expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/store/books?category=${encodeURIComponent(slug)}`);
     expect(meta(html, 'name', 'robots')).toContain('index');
 
     html = await (await pageHandler(request(`/api/page?kind=books&category=${encodeURIComponent(slug)}&sort=price-asc`))).text();
@@ -199,10 +199,10 @@ test('تصنيف وسلسلة والبحث: عنوان التصنيف، وراب
 test('الصفحات الأساسية: لكل صفحة عنوان ووصف ورابط', async () => {
   const world = mockWorld({});
   try {
-    for (const [kind, title, canonicalPath] of [['contact', 'تواصل معنا', '/contact'], ['policies', 'سياسة المتجر', '/policies'], ['categories', 'التصنيفات', '/categories']] as const) {
+    for (const [kind, title, canonicalPath] of [['contact', 'تواصل معنا', '/store/contact'], ['policies', 'سياسة المتجر', '/store/policies'], ['categories', 'التصنيفات', '/store/categories']] as const) {
       const html = await (await pageHandler(request(`/api/page?kind=${kind}`))).text();
       expect(html, kind).toContain(`<title>${title} — دار الفتح للنشر والتوزيع</title>`);
-      expect(meta(html, 'property', 'og:url'), kind).toBe(`https://dar-alfath-client.vercel.app${canonicalPath}`);
+      expect(meta(html, 'property', 'og:url'), kind).toBe(`https://darolfath.com${canonicalPath}`);
       expect(meta(html, 'name', 'description')!.length, kind).toBeGreaterThan(40);
     }
   } finally {
@@ -210,7 +210,7 @@ test('الصفحات الأساسية: لكل صفحة عنوان ووصف ور�
   }
 });
 
-test('صفحة الروابط (/links): عنوانها ووصفها وصورتها من لوحة التحكم، وبدون إعدادات الافتراضي، ومقفولة = noindex', async () => {
+test('الصفحة المجمعة (/): عنوانها ووصفها وصورتها من لوحة التحكم، وبدون إعدادات الافتراضي، ومقفولة = noindex', async () => {
   // as set in the dashboard
   let world = mockWorld({
     links_page_settings: [{ is_enabled: true, seo_title: 'روابط دار الفتح الرسمية', seo_description: 'كل حساباتنا ومتجرنا وتطبيقنا في مكان واحد', share_image_url: `${SUPABASE}/storage/v1/object/public/site-assets/links-page/share.webp` }],
@@ -221,8 +221,8 @@ test('صفحة الروابط (/links): عنوانها ووصفها وصورته
     expect(response.status).toBe(200);
     expect(html).toContain('<title>روابط دار الفتح الرسمية</title>');
     expect(meta(html, 'name', 'description')).toBe('كل حساباتنا ومتجرنا وتطبيقنا في مكان واحد');
-    expect(meta(html, 'property', 'og:url')).toBe('https://dar-alfath-client.vercel.app/links');
-    expect(html).toContain('<link data-seo="1" rel="canonical" href="https://dar-alfath-client.vercel.app/links" />');
+    expect(meta(html, 'property', 'og:url')).toBe('https://darolfath.com/');
+    expect(html).toContain('<link data-seo="1" rel="canonical" href="https://darolfath.com/" />');
     // the share picture is asked of storage at a small size, like a cover
     expect(meta(html, 'property', 'og:image')).toContain('/storage/v1/render/image/public/site-assets/links-page/share.webp');
     expect(meta(html, 'name', 'robots')).toContain('index');
@@ -271,19 +271,19 @@ test('صفحة الروابط (/links): عنوانها ووصفها وصورته
   }
 });
 
-test('الدومين: عنوان Vercel العام له رابط أساسي صحيح، والدومين الرسمي يحتفظ بإعداده', async () => {
+test('الدومين: نسخة Vercel والدومين الرسمي يشيران إلى العنوان الأساسي', async () => {
   let world = mockWorld({ products_public_catalog: [BOOK], product_variants_public: [] }, { VERCEL_PROJECT_PRODUCTION_URL: 'darolfath.com' });
   try {
     const html = await (await pageHandler(request(`/api/page?kind=book&id=${ID}`))).text();
-    expect(meta(html, 'property', 'og:url')).toBe(`https://dar-alfath-client.vercel.app/book/${ID}`);
-    expect(html).toContain(`href="https://dar-alfath-client.vercel.app/book/${ID}"`);
+    expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/store/book/${ID}`);
+    expect(html).toContain(`href="https://darolfath.com/store/book/${ID}"`);
   } finally {
     world.restore();
   }
   world = mockWorld({ products_public_catalog: [BOOK], product_variants_public: [] }, { VERCEL_PROJECT_PRODUCTION_URL: 'darolfath.com', VITE_SITE_URL: 'https://www.darolfath.com/' });
   try {
     const html = await (await pageHandler(request(`/api/page?kind=book&id=${ID}`, 'www.darolfath.com'))).text();
-    expect(meta(html, 'property', 'og:url')).toBe(`https://www.darolfath.com/book/${ID}`);
+    expect(meta(html, 'property', 'og:url')).toBe(`https://www.darolfath.com/store/book/${ID}`);
   } finally {
     world.restore();
   }
@@ -304,11 +304,11 @@ test('sitemap.xml: الصفحات الأساسية والتصنيفات وكل �
     expect(response.headers.get('content-type')).toContain('xml');
     const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
     expect(locs).toContain('https://darolfath.com/');
-    expect(locs).toContain('https://darolfath.com/books');
-    expect(locs).toContain('https://darolfath.com/links');
-    expect(locs).toContain(`https://darolfath.com/books?category=${encodeURIComponent('كتب-المعلم')}`);
-    expect(locs.filter((l) => l.endsWith(`/book/${ID}`))).toHaveLength(1);
-    expect(locs).toContain(`https://darolfath.com/book/${OTHER_ID}`);
+    expect(locs).toContain('https://darolfath.com/store');
+    expect(locs).not.toContain('https://darolfath.com/links');
+    expect(locs).toContain(`https://darolfath.com/store/books?category=${encodeURIComponent('كتب-المعلم')}`);
+    expect(locs.filter((l) => l.endsWith(`/store/book/${ID}`))).toHaveLength(1);
+    expect(locs).toContain(`https://darolfath.com/store/book/${OTHER_ID}`);
     expect(xml).toContain('<lastmod>2026-10-03</lastmod>');
     expect(xml).not.toContain('/cart');
     expect(xml.startsWith('<?xml')).toBe(true);
@@ -317,12 +317,11 @@ test('sitemap.xml: الصفحات الأساسية والتصنيفات وكل �
   }
 });
 
-test('robots.txt: عنوان OAuth العام مفتوح، المعاينات مقفولة، والدومين الرسمي مفتوح', async () => {
+test('robots.txt: كل عناوين Vercel مقفولة لمنع التكرار، والدومين الرسمي مفتوح', async () => {
   const world = mockWorld({}, { VERCEL_PROJECT_PRODUCTION_URL: 'darolfath.com' });
   try {
     const temporary = await robotsHandler(request('/robots.txt', 'dar-alfath-client.vercel.app')).text();
-    expect(temporary).toContain('Allow: /');
-    expect(temporary).toContain('Sitemap: https://dar-alfath-client.vercel.app/sitemap.xml');
+    expect(temporary).toBe('User-agent: *\nDisallow: /\n');
     expect(await robotsHandler(request('/robots.txt', 'preview-123.vercel.app')).text()).toBe('User-agent: *\nDisallow: /\n');
     const open = await robotsHandler(request('/robots.txt', 'darolfath.com')).text();
     expect(open).toContain('Allow: /');
@@ -353,7 +352,7 @@ test('الصفحة المبنية فيها tags الرئيسية أصلًا: ا�
     expect(html.split(tag), tag).toHaveLength(2); // exactly one of each
   }
   expect(jsonLd(html).map((d) => (Array.isArray(d['@type']) ? 'Product' : d['@type']))).toEqual(['Product', 'BreadcrumbList']); // the home page's two are gone
-  expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/book/${ID}`);
+  expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/store/book/${ID}`);
 });
 
 test('لو اللي رجع مش صفحة الموقع (صفحة دخول قدام نسخة محمية): بيتبعت زي ما هو من غير ما نكتب فيه، والكوكيز بتتمرر', async () => {
