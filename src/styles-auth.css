@@ -60,12 +60,21 @@ html.dark .ax-stage.ax-stage { background: #00102a; min-height: 0; }
 
 /* The pattern behind the panel covers the whole stage evenly, edge to edge of the screen: no circle, no fade shapes, no bands.
    Its strength is the dashboard's (--store-pattern-k). */
+/* (the wash sits in a wrapper: a direct child of the page would be taken by the older "animate every child" rules, which hold
+   opacity at 1 and a transform, and so would undo the strength) */
+.ax-bg {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  bottom: calc(-1 * clamp(24px, 5vw, 64px)); /* down to the footer: the stage's own bottom padding is covered too */
+  z-index: -1;
+  pointer-events: none;
+}
 .ax-wash {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;
-  z-index: -1;
   width: 100vw;
   transform: translateX(-50%);
   background-image: var(--pattern);

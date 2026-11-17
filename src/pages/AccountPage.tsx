@@ -642,7 +642,9 @@ export default function AccountPage() {
 
   return (
     <div className="page-sections ax-stage" data-testid="auth-stage">
-      <div className="ax-wash" aria-hidden="true" />
+      <div className="ax-bg" aria-hidden="true">
+        <div className="ax-wash" />
+      </div>
       <section className="auth-layout">
         <div className="auth-copy">
           <div className="ax-copy__pattern" aria-hidden="true" />
