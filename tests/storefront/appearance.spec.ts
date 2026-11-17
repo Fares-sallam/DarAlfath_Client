@@ -327,7 +327,6 @@ test('زر رابط بأيقونة بألوان الشركة: الأيقونة �
 // ── The customer sign-in page (/account while signed out) ────────────────────────────────────────
 
 const washOpacity = (page: Page) => page.locator('.ax-wash').first().evaluate((el) => Number(getComputedStyle(el).opacity));
-const copyPatternOpacity = (page: Page) => page.locator('.ax-copy__pattern').evaluate((el) => Number(getComputedStyle(el).opacity));
 
 test('صفحة تسجيل العملاء: الباترن بالتصميم الأصلي، وفيها شاشة الدخول والتبويبين من غير ألوان مخصّصة', async ({ page }) => {
   await page.route('**/rest/v1/storefront_appearance*', (route) => route.fulfill({
@@ -340,7 +339,6 @@ test('صفحة تسجيل العملاء: الباترن بالتصميم الأ
   await expect(page.locator('form.auth-card')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-ab', '');
   expect(await washOpacity(page)).toBeCloseTo(0.1, 2);
-  expect(await copyPatternOpacity(page)).toBeCloseTo(0.4, 2);
   // the page's own colours: navy button by day
   await expect(page.locator('.auth-card button[type="submit"]')).toHaveCSS('background-color', 'rgb(5, 65, 128)');
   await expect(page.locator('.auth-tabs button.active')).toHaveCSS('background-color', 'rgb(5, 65, 128)');
@@ -351,8 +349,7 @@ test('صفحة تسجيل العملاء: الباترن بدرجته في ال�
   await page.goto(`/account?previewLook=${draft({ pattern_strength: 100 })}`);
   await expect(page.getByTestId('auth-stage')).toBeVisible();
   await expect(page.locator('html')).toHaveClass(/dark/);
-  await expect.poll(() => washOpacity(page)).toBeCloseTo(0.12, 2);
-  await expect.poll(() => copyPatternOpacity(page)).toBeCloseTo(0.4, 2);
+  await expect.poll(() => washOpacity(page)).toBeCloseTo(0.2, 2);
   const box = await page.locator('.ax-wash').evaluate((el) => { const r = el.getBoundingClientRect(); return { left: Math.round(r.left), width: Math.round(r.width), vw: window.innerWidth }; });
   expect(box).toEqual({ left: 0, width: box.vw, vw: box.vw }); // edge to edge, from the left edge of the screen
 });
@@ -362,12 +359,10 @@ test('صفحة تسجيل العملاء: درجة الباترن اللي من 
   await page.goto(`/account?previewLook=${draft({ pattern_strength: 200 })}`);
   await expect(page.getByTestId('auth-stage')).toBeVisible();
   expect(await washOpacity(page)).toBeCloseTo(0.2, 2); // 0.1 at twice the strength
-  expect(await copyPatternOpacity(page)).toBeCloseTo(0.8, 2); // 0.4 at twice the strength
 
   await page.goto(`/account?previewLook=${draft({ pattern_strength: 0 })}`);
   await expect(page.getByTestId('auth-stage')).toBeVisible();
   expect(await washOpacity(page)).toBe(0);
-  expect(await copyPatternOpacity(page)).toBe(0);
 });
 
 test('صفحة تسجيل العملاء: زر الدخول والتبويب بألوان من لوحة التحكم، لكل وضع (فاتح وليلي) لوحده', async ({ page }) => {

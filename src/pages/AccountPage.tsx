@@ -647,7 +647,6 @@ export default function AccountPage() {
       </div>
       <section className="auth-layout">
         <div className="auth-copy">
-          <div className="ax-copy__pattern" aria-hidden="true" />
           <span className="page-kicker">حساب العميل</span>
           <h1>
             {mode === 'forgot'

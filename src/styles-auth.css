@@ -24,7 +24,6 @@
   --ax-tab-text: #566a80;
   --ax-focus: rgba(42, 163, 171, 0.2);
   --ax-wash: 0.1;
-  --ax-copy-pattern: 0.4;
   --ax-shadow: 0 30px 60px -32px rgba(5, 65, 128, 0.35), 0 6px 18px rgba(14, 37, 66, 0.06);
   --ax-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -42,8 +41,7 @@ html.dark .ax-stage {
   --ax-tabs: #00254f;
   --ax-tab-text: #8fa8c8;
   --ax-focus: rgba(42, 163, 171, 0.28);
-  --ax-wash: 0.12;
-  --ax-copy-pattern: 0.4;
+  --ax-wash: 0.2;
   --ax-shadow: 0 30px 60px -30px rgba(0, 0, 0, 0.7);
 }
 
@@ -103,7 +101,7 @@ body:has(.ax-stage) .site-footer::before { display: none; }
   animation: ax-rise 0.6s var(--ax-ease) both;
 }
 
-/* the brand side: always deep navy, in both themes */
+/* the brand side: a solid block of the house navy, in both themes */
 .ax-stage.ax-stage .auth-copy {
   position: relative;
   isolation: isolate;
@@ -116,16 +114,7 @@ body:has(.ax-stage) .site-footer::before { display: none; }
   border-radius: 0;
   box-shadow: none;
   color: #ffffff;
-  background: radial-gradient(120% 90% at 85% 8%, #0a5199 0%, #003166 52%, #00102a 100%);
-}
-.ax-copy__pattern {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background-image: url('/patterns/brand-pattern-night.svg');
-  background-size: 260px auto;
-  opacity: calc(var(--ax-copy-pattern) * var(--store-pattern-k, 1));
-  pointer-events: none;
+  background: #003166; /* one solid navy: no gradient glow, no pattern inside, nothing see-through */
 }
 .ax-stage.ax-stage .auth-copy .page-kicker {
   align-self: flex-start;
@@ -163,9 +152,9 @@ body:has(.ax-stage) .site-footer::before { display: none; }
   gap: 12px;
   width: auto;
   padding: 10px 12px;
-  border: 1px solid #1a5a96;
+  border: 1px solid #1f68ad;
   border-radius: 16px;
-  background: #032a55; /* solid navy: the pattern behind the panel does not show through these boxes */
+  background: #0a4180;
   box-shadow: 0 8px 18px -12px rgba(0, 0, 0, 0.6);
   color: #e6f3f1;
   font-size: 14px;
@@ -176,8 +165,8 @@ body:has(.ax-stage) .site-footer::before { display: none; }
   flex: none;
   padding: 9px;
   border-radius: 12px;
-  background: #0a4a5c;
-  color: #4fd0d8;
+  background: #0b5a72;
+  color: #7fe0e6;
 }
 
 /* ── The form side ──────────────────────────────────────────────────────── */
