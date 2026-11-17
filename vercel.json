@@ -45,6 +45,7 @@
   ],
   "redirects": [
     { "source": "/links", "destination": "/", "permanent": true },
+    { "source": "/store/links", "destination": "/", "permanent": true },
     { "source": "/book/:id", "destination": "/store/book/:id", "permanent": true },
     { "source": "/books", "destination": "/store/books", "permanent": true },
     { "source": "/categories", "destination": "/store/categories", "permanent": true },
