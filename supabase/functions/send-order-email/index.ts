@@ -4,13 +4,13 @@
 //  Sends a confirmation email to the customer + a notification to the
 //  admin (store@darolfath.com) for any new order.
 //
-//  Uses Gmail SMTP — requires GMAIL_USER and GMAIL_APP_PASSWORD secrets.
+//  Sends through Resend (https://resend.com) — requires the RESEND_API_KEY secret;
+//  the sender is EMAIL_FROM (default: Dar Alfath <info@darolfath.com>).
 //
 //  Trigger: called from check-paymob-transaction (on payment success) and
 //  from create-storefront-order (for COD).
 // ════════════════════════════════════════════════════════════════════════
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { SMTPClient } from 'https://deno.land/x/denomailer@1.6.0/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin':  '*',
@@ -18,8 +18,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const GMAIL_USER         = Deno.env.get('GMAIL_USER')         ?? '';
-const GMAIL_APP_PASSWORD = Deno.env.get('GMAIL_APP_PASSWORD') ?? '';
+const RESEND_API_KEY     = Deno.env.get('RESEND_API_KEY')     ?? '';
+const EMAIL_FROM         = Deno.env.get('EMAIL_FROM')         ?? 'Dar Alfath <info@darolfath.com>';
 const ADMIN_EMAIL        = Deno.env.get('ADMIN_EMAIL')        ?? 'store@darolfath.com';
 const SITE_URL           = (Deno.env.get('SITE_URL') ?? 'https://darolfath.com').replace(/\/$/, '');
 const DASHBOARD_URL      = (Deno.env.get('DASHBOARD_URL') ?? 'https://dar-alfath-dashboard.vercel.app').replace(/\/$/, '');
@@ -201,32 +201,22 @@ function buildEmailHtml(order: OrderData, audience: 'customer' | 'admin'): strin
 </html>`;
 }
 
-// ── SMTP send ────────────────────────────────────────────────────────
-async function sendViaSmtp(to: string, subject: string, html: string) {
-  const client = new SMTPClient({
-    connection: {
-      hostname: 'smtp.gmail.com',
-      port:     465,
-      tls:      true,
-      auth: {
-        username: GMAIL_USER,
-        password: GMAIL_APP_PASSWORD,
-      },
+// ── Resend send ──────────────────────────────────────────────────────
+// Resend's HTTPS API (the darolfath.com domain is verified there). Throws on any
+// non-2xx answer so the callers' try/catch keeps reporting per-recipient errors.
+async function sendEmail(to: string, subject: string, html: string) {
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ from: EMAIL_FROM, to: [to], subject, html }),
   });
-
-  try {
-    await client.send({
-      // ASCII-only display name — see the subjectCustomer/subjectAdmin note
-      // above for why (denomailer mis-folds non-ASCII headers).
-      from:    `Dar Alfath <${GMAIL_USER}>`,
-      to,
-      subject,
-      content: 'text/html',
-      html,
-    });
-  } finally {
-    await client.close();
+  if (!res.ok) {
+    let detail = '';
+    try { detail = ((await res.json()) as { message?: string }).message ?? ''; } catch { /* not JSON */ }
+    throw new Error(`Resend ${res.status}${detail ? `: ${detail}` : ''}`);
   }
 }
 
@@ -252,9 +242,9 @@ Deno.serve(async (req) => {
       });
     }
 
-    if (!GMAIL_USER || !GMAIL_APP_PASSWORD) {
-      console.warn('[email] GMAIL_USER or GMAIL_APP_PASSWORD not set — skipping');
-      return jsonOk({ skipped: true, reason: 'gmail credentials missing' });
+    if (!RESEND_API_KEY) {
+      console.warn('[email] RESEND_API_KEY not set — skipping');
+      return jsonOk({ skipped: true, reason: 'resend api key missing' });
     }
 
     const supabase = createClient(
@@ -318,13 +308,8 @@ Deno.serve(async (req) => {
       is_paid:  orderRow.payment_status === 'مدفوع',
     };
 
-    // ASCII-only subjects — denomailer's header encoder mis-folds long
-    // non-ASCII Subject/From values (confirmed live: an Arabic subject
-    // arrived as raw undecoded quoted-printable, corrupting the whole
-    // message). The Arabic copy lives in the HTML body instead, which isn't
-    // subject to this header-folding bug. subjectAdmin in particular used to
-    // interpolate the customer's (Arabic) name directly into the subject,
-    // which made it especially likely to trip this.
+    // Subjects stay ASCII-only (they were kept that way for the old SMTP
+    // library); the Arabic copy lives in the HTML body.
     const subjectCustomer = orderData.is_paid
       ? `Dar Alfath - Order #${orderData.id} confirmed`
       : `Dar Alfath - Order #${orderData.id} received`;
@@ -335,7 +320,7 @@ Deno.serve(async (req) => {
     // Send to customer
     if (orderData.customer_email) {
       try {
-        await sendViaSmtp(
+        await sendEmail(
           orderData.customer_email,
           subjectCustomer,
           buildEmailHtml(orderData, 'customer'),
@@ -350,7 +335,7 @@ Deno.serve(async (req) => {
 
     // Send to admin
     try {
-      await sendViaSmtp(
+      await sendEmail(
         ADMIN_EMAIL,
         subjectAdmin,
         buildEmailHtml(orderData, 'admin'),
