@@ -30,7 +30,7 @@ test.describe('لوحة التحكم — تسجيل الدخول', () => {
     await expect(page.locator('.lg-brand')).toBeVisible();
     await expect(page.locator('.lg-brand__logo')).toBeVisible();
     // the logo and both patterns are real files (a missing one would be a blank panel)
-    expect(await page.locator('.lg-brand__logo').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
+    await expect.poll(() => page.locator('.lg-brand__logo').evaluate((img: HTMLImageElement) => img.complete && img.naturalWidth > 0)).toBe(true);
     for (const file of ['/patterns/brand-pattern-night.svg', '/patterns/brand-pattern.svg']) {
       expect((await page.request.get(file)).ok(), file).toBe(true);
     }
