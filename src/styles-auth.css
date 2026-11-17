@@ -130,10 +130,10 @@ body:has(.ax-stage) .site-footer::before { display: none; }
 .ax-stage.ax-stage .auth-copy .page-kicker {
   align-self: flex-start;
   padding: 6px 14px;
-  border: 1px solid rgba(42, 163, 171, 0.45);
+  border: 1px solid #1d7783;
   border-radius: 999px;
-  background: rgba(42, 163, 171, 0.14);
-  color: #93dbe0;
+  background: #0a4a5c; /* solid: nothing on this page is see-through */
+  color: #b4e8ec;
   font-size: 12.5px;
   font-weight: 700;
 }
@@ -163,10 +163,11 @@ body:has(.ax-stage) .site-footer::before { display: none; }
   gap: 12px;
   width: auto;
   padding: 10px 12px;
-  border: 1px solid rgba(218, 232, 230, 0.16);
+  border: 1px solid #1a5a96;
   border-radius: 16px;
-  background: rgba(0, 16, 42, 0.5);
-  color: rgba(230, 243, 241, 0.95);
+  background: #032a55; /* solid navy: the pattern behind the panel does not show through these boxes */
+  box-shadow: 0 8px 18px -12px rgba(0, 0, 0, 0.6);
+  color: #e6f3f1;
   font-size: 14px;
   font-weight: 500;
 }
@@ -175,8 +176,8 @@ body:has(.ax-stage) .site-footer::before { display: none; }
   flex: none;
   padding: 9px;
   border-radius: 12px;
-  background: rgba(42, 163, 171, 0.18);
-  color: #2aa3ab;
+  background: #0a4a5c;
+  color: #4fd0d8;
 }
 
 /* ── The form side ──────────────────────────────────────────────────────── */

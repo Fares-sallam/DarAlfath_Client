@@ -432,6 +432,22 @@ test('صفحة تسجيل العملاء: الباترن مغطّي الخلفي
   expect(await page.locator('.site-footer').evaluate((el) => getComputedStyle(el, '::before').display)).not.toBe('none');
 });
 
+test('صفحة تسجيل العملاء: مربعات المزايا والشارة صلبة (مفيش شفافية تبيّن الباترن من وراها)', async ({ page }) => {
+  for (const theme of ['light', 'dark']) {
+    await page.addInitScript((t) => localStorage.setItem('daralfath-theme', t), theme);
+    await page.goto('/account');
+    await expect(page.getByTestId('auth-stage')).toBeVisible();
+    const alphas = await page.locator('.auth-benefits div, .auth-copy .page-kicker, .auth-card, .auth-layout').evaluateAll((els) =>
+      els.map((el) => {
+        const m = /rgba?\(([^)]*)\)/.exec(getComputedStyle(el).backgroundColor);
+        const parts = m ? m[1].split(',').map((x) => Number(x.trim())) : [];
+        return parts.length === 4 ? parts[3] : 1; // no alpha channel: fully opaque
+      }));
+    expect(alphas.length).toBeGreaterThanOrEqual(6);
+    for (const alpha of alphas) expect(alpha, theme).toBe(1);
+  }
+});
+
 test('صفحة تسجيل العملاء: الأنماط الأخرى (إنشاء حساب، نسيت كلمة المرور) بنفس التصميم', async ({ page }) => {
   await page.goto('/account');
   await page.getByRole('button', { name: 'إنشاء حساب', exact: true }).first().click();
