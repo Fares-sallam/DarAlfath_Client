@@ -641,9 +641,11 @@ export default function AccountPage() {
   }
 
   return (
-    <div className="page-sections">
+    <div className="page-sections ax-stage" data-testid="auth-stage">
+      <div className="ax-wash" aria-hidden="true" />
       <section className="auth-layout">
         <div className="auth-copy">
+          <div className="ax-copy__pattern" aria-hidden="true" />
           <span className="page-kicker">حساب العميل</span>
           <h1>
             {mode === 'forgot'
@@ -690,6 +692,7 @@ export default function AccountPage() {
               <button
                 type="button"
                 className={mode === 'login' ? 'active' : ''}
+                data-ab-btn="auth_tabs"
                 onClick={() => switchMode('login')}
               >
                 تسجيل الدخول
@@ -697,6 +700,7 @@ export default function AccountPage() {
               <button
                 type="button"
                 className={mode === 'signup' ? 'active' : ''}
+                data-ab-btn="auth_tabs"
                 onClick={() => switchMode('signup')}
               >
                 إنشاء حساب
@@ -819,7 +823,7 @@ export default function AccountPage() {
           {error ? <div className="auth-alert auth-alert--error">{error}</div> : null}
           {notice ? <div className="auth-alert auth-alert--success">{notice}</div> : null}
 
-          <button type="submit" className="primary-button primary-button--full" disabled={submitting}>
+          <button type="submit" className="primary-button primary-button--full" data-ab-btn="auth_submit" disabled={submitting}>
             {submitting
               ? 'جاري التنفيذ...'
               : mode === 'login'

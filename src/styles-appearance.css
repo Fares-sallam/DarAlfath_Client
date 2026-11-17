@@ -51,6 +51,22 @@ html[data-ab~="quick_buy"] .book-card__quick[data-ab-btn="quick_buy"]:hover {
   color: var(--ab-quick-buy-hover-fg);
 }
 
+/* The customer sign-in page (styles-auth.css): its main button and the chosen tab. Written heavier than the page's own
+   rules so the colour chosen in the dashboard wins in both themes. */
+html[data-ab~="auth_submit"] .ax-stage.ax-stage .auth-card button[data-ab-btn="auth_submit"]:not(:disabled) {
+  background: var(--ab-auth-submit-bg);
+  background-image: none;
+  color: var(--ab-auth-submit-fg);
+}
+html[data-ab~="auth_submit"] .ax-stage.ax-stage .auth-card button[data-ab-btn="auth_submit"]:not(:disabled):hover {
+  background: var(--ab-auth-submit-hover);
+  color: var(--ab-auth-submit-hover-fg);
+}
+html[data-ab~="auth_tabs"] .ax-stage.ax-stage .auth-tabs button[data-ab-btn="auth_tabs"].active {
+  background: var(--ab-auth-tabs-bg);
+  color: var(--ab-auth-tabs-fg);
+}
+
 /* The strip shown while the dashboard previews a draft: never seen by customers. */
 .look-preview-bar {
   position: fixed;

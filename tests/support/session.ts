@@ -1,18 +1,25 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 /**
  * Signing in for the end-to-end tests, now that Supabase Auth asks for a Cloudflare Turnstile check (a robot cannot pass it).
  *
  * A person signs in once, by hand, with `npm run e2e:login`; that saves the test account's session in
- * playwright/.auth/session.json. Every run then renews the session with its refresh token (a refresh needs no captcha),
+ * ~/.daralfath-e2e/session.json (outside the project). Every run then renews the session with its refresh token (a refresh needs no captcha),
  * writes the renewed one back, and hands it to the tests: the dashboard as a storage state, the store as a script that
  * puts the session where the Supabase client looks for it. Nothing here sees or stores a password.
  */
 
+/** The renewed storage states the tests load (rebuilt every run, so they live with the project). */
 export const AUTH_DIR = path.resolve('playwright/.auth');
-export const SESSION_FILE = path.join(AUTH_DIR, 'session.json');
 export const ADMIN_STATE_FILE = path.join(AUTH_DIR, 'admin.json');
+/**
+ * The saved test-account session itself lives outside the project, in the home folder, so a fresh clone (or a deleted one)
+ * does not lose it and `npm run e2e:login` is needed once, not once per clone. E2E_SESSION_DIR picks another place.
+ */
+export const SESSION_DIR = process.env.E2E_SESSION_DIR || path.join(os.homedir(), '.daralfath-e2e');
+export const SESSION_FILE = path.join(SESSION_DIR, 'session.json');
 
 /** The key each app's Supabase client keeps its session under (the dashboard names it; the store uses the default). */
 export const DASHBOARD_STORAGE_KEY = 'darelfath-auth-token';
@@ -36,7 +43,7 @@ export function readSession(): StoredSession {
 }
 
 export function writeSession(session: StoredSession): void {
-  fs.mkdirSync(AUTH_DIR, { recursive: true });
+  fs.mkdirSync(SESSION_DIR, { recursive: true, mode: 0o700 });
   fs.writeFileSync(SESSION_FILE, JSON.stringify(session, null, 2), { mode: 0o600 });
 }
 

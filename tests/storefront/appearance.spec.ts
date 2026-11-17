@@ -13,6 +13,12 @@ const strips = (page: Page) =>
     els.map((svg) => Array.from(svg.querySelectorAll('path')).map((p) => (p.getAttribute('class') ?? '').replace('ornament-tone-', '')[0]).join('')));
 
 test('من غير مسودة: المتجر بتصميمه الأصلي، الأقسام بترتيبها القديم والشرائط متطابقة والأزرار زي ما صُمّمت', async ({ page }) => {
+  // What the dashboard has saved in the live database is its own business (it may be varied strips, other colours...): this checks
+  // the store as it draws itself when nothing was changed, so the saved row is answered as the untouched one.
+  await page.route('**/rest/v1/storefront_appearance*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ pattern_strength: 100, strip_arrangement: 'uniform', home_sections: [], button_styles: {} }),
+  }));
   await page.goto('/?previewLook=off');
   await expect(page.locator('.page-sections--home')).toBeVisible();
   await expect(page.locator('.shelf-section').first()).toBeVisible({ timeout: 15_000 });
@@ -22,9 +28,14 @@ test('من غير مسودة: المتجر بتصميمه الأصلي، الأ�
   expect(await root.evaluate((el) => getComputedStyle(el).getPropertyValue('--store-pattern-k').trim())).toBe('1');
   await expect(page.locator('.look-preview-bar')).toHaveCount(0);
 
-  // the series strip, then best sellers, then what is new: the order the home page always had
+  // the series strip, then best sellers, then the category rows (and videos last): the order the home page always had.
+  // (a section with nothing to show, like «وصل حديثًا» when no book is new, is not drawn, so only the ones present are compared)
   const headings = await homeHeadings(page);
-  expect(headings.indexOf('الأكثر مبيعًا')).toBeLessThan(headings.indexOf('وصل حديثًا'));
+  const at = (title: string) => headings.indexOf(title);
+  expect(at('أقسام المتجر')).toBeGreaterThanOrEqual(0);
+  expect(at('الأكثر مبيعًا')).toBeGreaterThan(at('أقسام المتجر'));
+  expect(at('إصدارات متنوعة')).toBeGreaterThan(at('الأكثر مبيعًا'));
+  expect(at('فيديوهات تعريفية')).toBeGreaterThan(at('إصدارات متنوعة'));
 
   const all = await strips(page);
   expect(all.length).toBeGreaterThan(0);
@@ -311,4 +322,112 @@ test('زر رابط بأيقونة بألوان الشركة: الأيقونة �
   // the text colour is chosen to read on the new face: light text on the dark face, dark text on the light one
   expect(dark.fg).toBe('rgb(255, 255, 255)');
   await page.locator('.lp-list').screenshot({ path: test.info().outputPath('buttons.png') });
+});
+
+// ── The customer sign-in page (/account while signed out) ────────────────────────────────────────
+
+const washOpacity = (page: Page) => page.locator('.ax-wash').first().evaluate((el) => Number(getComputedStyle(el).opacity));
+const copyPatternOpacity = (page: Page) => page.locator('.ax-copy__pattern').evaluate((el) => Number(getComputedStyle(el).opacity));
+
+test('صفحة تسجيل العملاء: الباترن بالتصميم الأصلي، وفيها شاشة الدخول والتبويبين من غير ألوان مخصّصة', async ({ page }) => {
+  await page.route('**/rest/v1/storefront_appearance*', (route) => route.fulfill({
+    status: 200, contentType: 'application/json',
+    body: JSON.stringify({ pattern_strength: 100, strip_arrangement: 'uniform', home_sections: [], button_styles: {} }),
+  }));
+  await page.addInitScript(() => localStorage.setItem('daralfath-theme', 'light'));
+  await page.goto('/account?previewLook=off');
+  await expect(page.getByTestId('auth-stage')).toBeVisible();
+  await expect(page.locator('form.auth-card')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-ab', '');
+  expect(await washOpacity(page)).toBeCloseTo(0.1, 2);
+  expect(await copyPatternOpacity(page)).toBeCloseTo(0.4, 2);
+  // the page's own colours: navy button by day
+  await expect(page.locator('.auth-card button[type="submit"]')).toHaveCSS('background-color', 'rgb(5, 65, 128)');
+  await expect(page.locator('.auth-tabs button.active')).toHaveCSS('background-color', 'rgb(5, 65, 128)');
+});
+
+test('صفحة تسجيل العملاء: درجة الباترن اللي من لوحة التحكم بتتطبق عليها (متجر كله)، ومن صفر يختفي', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('daralfath-theme', 'light'));
+  await page.goto(`/account?previewLook=${draft({ pattern_strength: 200 })}`);
+  await expect(page.getByTestId('auth-stage')).toBeVisible();
+  expect(await washOpacity(page)).toBeCloseTo(0.2, 2); // 0.1 at twice the strength
+  expect(await copyPatternOpacity(page)).toBeCloseTo(0.8, 2); // 0.4 at twice the strength
+
+  await page.goto(`/account?previewLook=${draft({ pattern_strength: 0 })}`);
+  await expect(page.getByTestId('auth-stage')).toBeVisible();
+  expect(await washOpacity(page)).toBe(0);
+  expect(await copyPatternOpacity(page)).toBe(0);
+});
+
+test('صفحة تسجيل العملاء: زر الدخول والتبويب بألوان من لوحة التحكم، لكل وضع (فاتح وليلي) لوحده', async ({ page }) => {
+  const look = draft({
+    button_styles: {
+      auth_submit: { color: 'teal', tone: 0, night: { color: 'mint', tone: 0 } },
+      auth_tabs: { color: 'green', tone: 0 },
+    },
+  });
+  await page.addInitScript(() => localStorage.setItem('daralfath-theme', 'light'));
+  await page.goto(`/account?previewLook=${look}`);
+  const submit = page.locator('.auth-card button[type="submit"]');
+  const tab = page.locator('.auth-tabs button.active');
+
+  await expect(page.locator('html')).toHaveAttribute('data-ab', 'auth_submit auth_tabs');
+  await expect(submit).toHaveCSS('background-color', 'rgb(42, 163, 171)');
+  await expect(tab).toHaveCSS('background-color', 'rgb(6, 126, 112)');
+  // the text colour is chosen to read on the colour
+  await expect(submit).toHaveCSS('color', 'rgb(5, 65, 128)');
+  await expect(tab).toHaveCSS('color', 'rgb(255, 255, 255)');
+
+  // switching to night: the submit follows its own night colour, the tab keeps its day one (no night colour was set)
+  await page.getByRole('button', { name: 'تفعيل الوضع الداكن' }).first().click();
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await expect(submit).toHaveCSS('background-color', 'rgb(218, 232, 230)');
+  await expect(tab).toHaveCSS('background-color', 'rgb(6, 126, 112)');
+
+  // the other tab becomes the chosen one: it takes the colour too
+  await page.getByRole('button', { name: 'إنشاء حساب', exact: true }).first().click();
+  await expect(page.locator('.auth-tabs button.active')).toHaveText('إنشاء حساب');
+  await expect(page.locator('.auth-tabs button.active')).toHaveCSS('background-color', 'rgb(6, 126, 112)');
+});
+
+test('صفحة تسجيل العملاء: بتشتغل في الوضعين ومن غير سكرول أفقي على الموبايل، والفورم كله ظاهر', async ({ page }) => {
+  for (const theme of ['light', 'dark']) {
+    await page.addInitScript((t) => localStorage.setItem('daralfath-theme', t), theme);
+    for (const size of [{ width: 1280, height: 800 }, { width: 390, height: 844 }]) {
+      await page.setViewportSize(size);
+      await page.goto('/account');
+      await expect(page.getByTestId('auth-stage')).toBeVisible();
+      for (const placeholder of ['name@example.com', '••••••••']) await expect(page.getByPlaceholder(placeholder)).toBeVisible();
+      await expect(page.locator('.auth-card button[type="submit"]')).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${theme} ${size.width}`).toBe(true);
+    }
+  }
+});
+
+test('صفحة تسجيل العملاء: الباترن مغطّي الخلفية كلها بدرجة واحدة، ومفيش شريط باترن صغير فوق الفوتر', async ({ page }) => {
+  await page.goto('/account');
+  await expect(page.getByTestId('auth-stage')).toBeVisible();
+  const wash = await page.locator('.ax-wash').evaluate((el) => {
+    const s = getComputedStyle(el);
+    const box = el.getBoundingClientRect();
+    return { mask: s.maskImage || s.webkitMaskImage || 'none', width: Math.round(box.width), viewport: window.innerWidth };
+  });
+  expect(wash.mask).toBe('none'); // no fade shape of any kind: the pattern is even
+  expect(wash.width).toBe(wash.viewport); // edge to edge of the screen
+  await expect(page.locator('.ax-wash')).toHaveCount(1);
+  // the footer's small pattern strip is not drawn on this page (it still is elsewhere in the store)
+  expect(await page.locator('.site-footer').evaluate((el) => getComputedStyle(el, '::before').display)).toBe('none');
+  await page.goto('/books');
+  expect(await page.locator('.site-footer').evaluate((el) => getComputedStyle(el, '::before').display)).not.toBe('none');
+});
+
+test('صفحة تسجيل العملاء: الأنماط الأخرى (إنشاء حساب، نسيت كلمة المرور) بنفس التصميم', async ({ page }) => {
+  await page.goto('/account');
+  await page.getByRole('button', { name: 'إنشاء حساب', exact: true }).first().click();
+  await expect(page.getByPlaceholder('مثال: أحمد محمد')).toBeVisible();
+  await expect(page.locator('.auth-card button[type="submit"]')).toContainText('إنشاء الحساب');
+  await page.getByRole('button', { name: 'تسجيل الدخول', exact: true }).first().click();
+  await page.getByRole('button', { name: 'نسيت كلمة المرور؟' }).click();
+  await expect(page.locator('.auth-mode-title')).toContainText('نسيت كلمة المرور');
+  await expect(page.getByTestId('auth-stage')).toBeVisible();
 });

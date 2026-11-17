@@ -12,7 +12,7 @@ const DASHBOARD_ORIGIN = process.env.E2E_DASHBOARD_URL || 'http://127.0.0.1:8080
 
 // Runs first for every project: it renews the test account's session once, so that no test refreshes it (a refresh
 // token is single-use) and every test starts signed in. The dashboard gets it as a storage state, the store reads
-// playwright/.auth/session.json (see storefront/helpers.ts).
+// ~/.daralfath-e2e/session.json (see storefront/helpers.ts).
 setup('جلسة حساب الاختبار (تجديد من الجلسة المحفوظة، أو دخول بالفورم لو الكابتشا مقفولة)', async ({ page }) => {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
 

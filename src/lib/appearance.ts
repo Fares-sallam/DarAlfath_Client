@@ -149,15 +149,17 @@ export function stripTones(arrangement: StripArrangement, units: number, seed = 
 
 // ── Buttons ──────────────────────────────────────────────────────────────────
 
-export type ButtonKey = 'view_all' | 'view_category' | 'add_to_cart' | 'quick_buy';
+export type ButtonKey = 'view_all' | 'view_category' | 'add_to_cart' | 'quick_buy' | 'auth_submit' | 'auth_tabs';
 
-export const BUTTON_KEYS: ButtonKey[] = ['view_all', 'view_category', 'add_to_cart', 'quick_buy'];
+export const BUTTON_KEYS: ButtonKey[] = ['view_all', 'view_category', 'add_to_cart', 'quick_buy', 'auth_submit', 'auth_tabs'];
 
 export const BUTTON_META: Record<ButtonKey, { label: string; hint: string; sample: string }> = {
   view_all: { label: 'عرض الكل', hint: 'الزر بجوار عنوان كل قائمة كتب (وصل حديثًا، عروض...)', sample: 'عرض الكل' },
   view_category: { label: 'عرض التصنيف', hint: 'الزر بجوار عنوان صفوف التصنيفات', sample: 'عرض التصنيف' },
   add_to_cart: { label: 'أضف للسلة', hint: 'الزر الرئيسي على بطاقة الكتاب وفي صفحته', sample: 'أضف للسلة' },
   quick_buy: { label: 'الشراء السريع', hint: 'الزر تحت «أضف للسلة»', sample: 'شراء سريع' },
+  auth_submit: { label: 'زر الدخول والتسجيل', hint: 'الزر الرئيسي في صفحة تسجيل العملاء (دخول، إنشاء حساب، كود التحقق)', sample: 'تسجيل الدخول' },
+  auth_tabs: { label: 'تبويب الدخول / إنشاء حساب', hint: 'التبويب المختار في صفحة تسجيل العملاء', sample: 'إنشاء حساب' },
 };
 
 /** The four house colours, and nothing else: a button can only be one of them (or stay as designed). */
@@ -202,6 +204,8 @@ export const DEFAULT_BUTTON_STYLES: ButtonStyles = {
   view_category: freshStyle(),
   add_to_cart: freshStyle(),
   quick_buy: freshStyle(),
+  auth_submit: freshStyle(),
+  auth_tabs: freshStyle(),
 };
 
 function pickColor(value: unknown): ButtonColor {

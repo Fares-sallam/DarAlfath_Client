@@ -1,6 +1,6 @@
 // One-time sign-in for the end-to-end tests (npm run e2e:login).
 // Supabase Auth asks for a Turnstile check, and Cloudflare refuses the browsers that automation tools open
-// ("Chrome for Testing"). So there are two ways in; both save the TEST account's session to playwright/.auth/session.json
+// ("Chrome for Testing"). So there are two ways in; both save the TEST account's session to ~/.daralfath-e2e/session.json
 // (never commit it), and after that every test run renews it by itself.
 //
 //   npm run e2e:login             opens your installed Google Chrome (not the testing build) in a fresh profile, without the
@@ -13,10 +13,12 @@
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 const KEY = 'darelfath-auth-token';
-const dir = path.resolve('playwright/.auth');
+// outside the project, so a new clone does not lose it (same place as tests/support/session.ts)
+const dir = process.env.E2E_SESSION_DIR || path.join(os.homedir(), '.daralfath-e2e');
 const args = process.argv.slice(2);
 const paste = args.includes('--paste');
 const url = args.find((a) => a.startsWith('http')) || 'https://dar-alfath-dashboard.vercel.app/login';
@@ -28,9 +30,9 @@ function save(raw) {
     console.error('اللي اتنسخ مش جلسة صالحة. لازم تنفّذ الأمر copy(...) بعد ما تسجّل دخول، من غير ما تنسخ حاجة تانية.');
     process.exit(1);
   }
-  fs.mkdirSync(dir, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   fs.writeFileSync(path.join(dir, 'session.json'), JSON.stringify(session, null, 2), { mode: 0o600 });
-  console.log('تم. الجلسة اتحفظت في playwright/.auth/session.json (الملف ده مش بيترفع على git).');
+  console.log(`تم. الجلسة اتحفظت في ${path.join(dir, 'session.json')} (برا المشروع، فمش بتترفع على git وبتفضل لو مسحت النسخة).`);
 }
 
 if (paste) {

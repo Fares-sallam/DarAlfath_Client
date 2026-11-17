@@ -49,7 +49,28 @@ const STUB = stubPicture();
  * depend on the actual pictures, so reads from the public image buckets are answered with a tiny
  * stand-in of the same shape. Writes are untouched (tests that upload fake them on their own).
  */
-export const test = base.extend<{ stubStorageImages: void }>({
+export const test = base.extend<{ stubStorageImages: void; untouchedLook: void }>({
+  /**
+   * How the store looks is decided in the dashboard («مظهر المتجر») and saved in the live database: sections can be hidden or
+   * reordered, strips varied, buttons recoloured. Tests about the store's own layout must not depend on what happens to be
+   * saved, so by default the saved row is answered as the untouched one. A test that is about a saved look answers it itself
+   * (a route set on the page wins over this one).
+   */
+  untouchedLook: [
+    async ({ context }, use) => {
+      await context.route('**/rest/v1/storefront_appearance*', (route) => {
+        if (route.request().method() !== 'GET' && route.request().method() !== 'HEAD') return route.fallback();
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          headers: { 'access-control-allow-origin': '*' },
+          body: JSON.stringify({ pattern_strength: 100, strip_arrangement: 'uniform', home_sections: [], button_styles: {} }),
+        });
+      });
+      await use();
+    },
+    { auto: true },
+  ],
   stubStorageImages: [
     async ({ context }, use) => {
       await context.route(/\/storage\/v1\/(object\/public|render\/image)\//, (route) => {

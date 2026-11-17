@@ -222,3 +222,34 @@ test('صفحة قديمة محفوظة من غير ألوان ليلية: بتف
   await expect(page.getByTestId('button-add_to_cart-same')).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('button-view_all-same')).toHaveAttribute('aria-checked', 'true');
 });
+
+test('زرّا صفحة تسجيل العملاء (الدخول والتبويب) في «ألوان الأزرار»: بنفس ألوان الهوية ولكل وضع، وبيتحفظوا مع الباقي', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await page.goto('/appearance');
+  const submit = page.getByTestId('button-auth_submit');
+  const tabs = page.getByTestId('button-auth_tabs');
+  await expect(submit).toContainText('زر الدخول والتسجيل');
+  await expect(tabs).toContainText('تبويب الدخول / إنشاء حساب');
+  await expect(page.getByTestId('appearance-pattern')).toContainText('صفحة تسجيل العملاء');
+
+  // day: the house colours only; the button's sample follows
+  await expect(submit.getByRole('radio')).toHaveCount(5);
+  await page.getByTestId('button-auth_submit-green').click();
+  await expect(page.getByTestId('button-auth_submit-sample')).toHaveCSS('background-color', 'rgb(6, 126, 112)');
+  // night: its own colour (and the original night look), without touching the day one
+  await page.getByTestId('button-theme-dark').click();
+  await page.getByTestId('button-auth_submit-mint').click();
+  await page.getByTestId('button-auth_tabs-teal').click();
+  await page.getByTestId('button-theme-light').click();
+  await expect(page.getByTestId('button-auth_submit-green')).toHaveAttribute('aria-checked', 'true');
+
+  await page.getByTestId('appearance-save').click();
+  await expect(page.getByTestId('appearance-save-bar')).toHaveCount(0);
+  const styles = writes[0].body.button_styles;
+  expect(styles.auth_submit).toEqual({ color: 'green', tone: 0, night: { color: 'mint', tone: 0 } });
+  expect(styles.auth_tabs).toEqual({ color: 'default', tone: 0, night: { color: 'teal', tone: 0 } });
+
+  // the store's preview link carries them
+  const draft = decode((await page.getByTestId('appearance-preview').getAttribute('href'))!);
+  expect(draft.button_styles.auth_submit.color).toBe('green');
+});

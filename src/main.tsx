@@ -16,6 +16,7 @@ import './styles-filters.css';      // ✦ Catalog filters — the books page's 
 import './styles-search.css';       // ✦ Live search — the results list under the header box
 import './styles-shop.css';         // ✦ Shop layer — card price/share, book page share, toast, video shelf
 import './styles-brand.css';        // ✦ Brand layer — house fonts, swatches, lockup, pattern
+import './styles-auth.css';         // ✦ Auth layer — the customer sign-in / sign-up page, drawn with the pattern
 import './styles-appearance.css';   // ✦ What the dashboard decides: pattern strength, button colours
 import { isStorePath, STORE_BASE_PATH } from '@/lib/storePaths';
 
