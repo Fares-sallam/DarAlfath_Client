@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 const opened = (page: Page) => page.evaluate(() => (window as unknown as { __opened: string[] }).__opened);
-const BOOK_URL = /^https:\/\/[^/]+\/book\/[0-9a-f-]{36}$/;
+const BOOK_URL = /^https:\/\/[^/]+\/store\/book\/[0-9a-f-]{36}$/;
 
 const activeRow = (page: Page) =>
   page.locator('tbody tr').filter({ has: page.locator('.status-badge', { hasText: 'نشط' }) }).first();
