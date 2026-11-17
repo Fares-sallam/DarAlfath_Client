@@ -60,9 +60,9 @@ test('شريط العروض: المعاينة بتعرض الرسالة الظا
   const now = Date.now();
   const writes = await setUp(page, {
     announcements: [
-      { id: 'a1', message: 'شحن مجاني فوق 500', link_url: null, is_active: true, sort_order: 0, starts_at: null, ends_at: null },
-      { id: 'a2', message: 'عرض انتهى', link_url: null, is_active: true, sort_order: 1, starts_at: null, ends_at: new Date(now - 864e5).toISOString() },
-      { id: 'a3', message: 'عرض جاي', link_url: null, is_active: true, sort_order: 2, starts_at: new Date(now + 864e5).toISOString(), ends_at: null },
+      { id: 'a1', message: 'شحن مجاني فوق 500', audience: 'all', link_url: null, is_active: true, sort_order: 0, starts_at: null, ends_at: null },
+      { id: 'a2', message: 'عرض انتهى', audience: 'all', link_url: null, is_active: true, sort_order: 1, starts_at: null, ends_at: new Date(now - 864e5).toISOString() },
+      { id: 'a3', message: 'عرض جاي', audience: 'all', link_url: null, is_active: true, sort_order: 2, starts_at: new Date(now + 864e5).toISOString(), ends_at: null },
     ],
   });
   await page.goto('/ads-strips?tab=offers');
@@ -84,13 +84,44 @@ test('شريط العروض: المعاينة بتعرض الرسالة الظا
   await add.click();
   await expect.poll(() => writes.filter((w) => w.method === 'POST' && w.url.includes('site_announcements')).length).toBe(1);
   const body = writes.find((w) => w.url.includes('site_announcements'))!.body as Record<string, unknown>;
-  expect(body).toMatchObject({ message: 'خصم 20٪ على سلسلة النحو', link_url: null, sort_order: 3 });
+  // a message is for the site and the app unless the platform is narrowed
+  expect(body).toMatchObject({ message: 'خصم 20٪ على سلسلة النحو', audience: 'all', link_url: null, sort_order: 3 });
   expect(new Date(String(body.ends_at)).getTime()).toBeGreaterThan(new Date(String(body.starts_at)).getTime());
 
   // Switching one off is one change.
   await rows.nth(0).getByRole('button', { name: 'إخفاء الرسالة' }).click();
   await expect.poll(() => writes.filter((w) => w.method === 'PATCH' && w.url.includes('id=eq.a1')).length).toBe(1);
   expect(writes.find((w) => w.method === 'PATCH')!.body).toEqual({ is_active: false });
+});
+
+test('شريط العروض: كل رسالة ليها منصة (الموقع / التطبيق / الاتنين)، والمعاينة بتتبدّل بينهم، والمنصة بتتحفظ', async ({ page }) => {
+  const writes = await setUp(page, {
+    announcements: [
+      { id: 'w1', message: 'عرض الموقع بس', audience: 'web', link_url: null, is_active: true, sort_order: 0, starts_at: null, ends_at: null },
+      { id: 'p1', message: 'عرض التطبيق بس', audience: 'app', link_url: null, is_active: true, sort_order: 1, starts_at: null, ends_at: null },
+      { id: 'b1', message: 'عرض للاتنين', audience: 'all', link_url: null, is_active: true, sort_order: 2, starts_at: null, ends_at: null },
+    ],
+  });
+  await page.goto('/ads-strips?tab=offers');
+
+  // the preview opens on the site: its own message first, then the shared one in the rotation
+  const preview = page.getByTestId('announcement-preview');
+  await expect(preview).toContainText('عرض الموقع بس');
+  await expect(preview).toContainText('و1 غيرها');
+  await page.getByRole('group', { name: 'معاينة حسب المنصة' }).getByRole('button', { name: 'التطبيق' }).click();
+  await expect(preview).toContainText('عرض التطبيق بس');
+  await expect(preview).not.toContainText('عرض الموقع بس');
+
+  // a platform with nothing live says so
+  await page.getByRole('group', { name: 'معاينة حسب المنصة' }).getByRole('button', { name: 'الموقع' }).click();
+  await expect(preview).toContainText('عرض الموقع بس');
+
+  // a new message for the app only is saved with that platform
+  await page.getByLabel('منصة الرسالة الجديدة').selectOption('app');
+  await page.getByLabel('نص الرسالة').first().fill('خصم للتطبيق');
+  await page.getByRole('button', { name: 'إضافة الرسالة' }).click();
+  await expect.poll(() => writes.filter((w) => w.method === 'POST' && w.url.includes('site_announcements')).length).toBe(1);
+  expect(writes.find((w) => w.url.includes('site_announcements'))!.body).toMatchObject({ message: 'خصم للتطبيق', audience: 'app' });
 });
 
 test('شريط التصنيفات: كل التصنيفات بعدد كتبها، والإخفاء والترتيب بيتحفظوا مع بعض، و«كل الكتب» لوحده', async ({ page }) => {

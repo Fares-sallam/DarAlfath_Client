@@ -281,6 +281,11 @@ test('حذف نسخة اتباعت منها جوه التطبيق: رسالة و
   const calls = await fakeWrites(page, { failVariantDelete: true });
   await page.route('**/rest/v1/order_items*', (route) =>
     route.fulfill(ordersCount(0)));
+  // A copy that is part of a bundle is refused by the form before the database is asked («شيله من المجموعات الأول»), and the
+  // live book this picks may well be in some. Here no bundle uses it, so the request reaches the database, which refuses it
+  // because of the in-app purchase: that refusal is what is under test.
+  await page.route('**/rest/v1/bundle_items*', (route) =>
+    route.request().method() === 'GET' ? route.fulfill({ status: 200, contentType: 'application/json', headers: { 'content-range': '*/0' }, body: '[]' }) : route.fallback());
   await page.goto('/books');
   await expect(page.locator('tbody tr').first()).toBeVisible({ timeout: 20_000 });
   const { multi } = await findBooks(page);
