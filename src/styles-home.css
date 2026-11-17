@@ -81,7 +81,7 @@ html.dark {
   background-image: var(--pattern);
   background-size: 260px auto;
   background-position: center top;
-  opacity: var(--home-page-wall-opacity);
+  opacity: calc(var(--home-page-wall-opacity) * var(--store-pattern-k, 1));
   mask-image: radial-gradient(ellipse 120% 90% at 50% 40%, transparent 38%, #000 100%);
 }
 

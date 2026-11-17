@@ -1,3 +1,6 @@
+import { useAppearance } from '@/hooks/useAppearance';
+import { stripTones } from '@/lib/appearance';
+
 /**
  * Section ornaments, drawn as SVG so they stay crisp at any size and take
  * the theme's colours instead of shipping baked-in ones.
@@ -10,7 +13,21 @@
 const UNIT_PITCH = 56.7; // the pattern sheet's horizontal pitch
 const DIVIDER_UNITS = [0, 1, 2];
 
-export function OrnamentDivider({ label }: { label?: string }) {
+/** The four crescents of a unit, in the order the tones are given (see stripTones in lib/appearance). */
+const CRESCENTS = [
+  'M 14.25 1.5 L 27.47 1.5 C 27.47 1.5 21.66 19.94 39.74 34.1 C 39.74 34.1 11.01 27.72 14.25 1.5 Z',
+  'M 66.55 1.5 L 53.33 1.5 C 53.33 1.5 59.14 19.94 41.06 34.1 C 41.06 34.1 69.79 27.72 66.55 1.5 Z',
+  'M 65.55 66.7 L 52.33 66.7 C 52.33 66.7 58.15 48.26 40.06 34.1 C 45.25 35.25 68.94 39.33 65.55 66.7 Z',
+  'M 14.25 66.7 L 27.47 66.7 C 27.47 66.7 21.66 48.26 39.74 34.1 C 39.74 34.1 11.01 40.48 14.25 66.7 Z',
+];
+
+/**
+ * `seed` is the strip's place on the page, so each strip has its own arrangement and keeps it from one visit to the
+ * next. Whether the units are all alike or varied is the dashboard's choice («مظهر المتجر»).
+ */
+export function OrnamentDivider({ label, seed = 1 }: { label?: string; seed?: number }) {
+  const { appearance } = useAppearance();
+  const tones = stripTones(appearance.strip_arrangement, DIVIDER_UNITS.length, seed);
   return (
     <div className="ornament-divider" role="separator" aria-label={label ?? 'فاصل'}>
       <span className="ornament-divider__rule" />
@@ -22,10 +39,7 @@ export function OrnamentDivider({ label }: { label?: string }) {
       >
         {DIVIDER_UNITS.map((i) => (
           <g key={i} transform={`translate(${i * UNIT_PITCH} 0)`}>
-            <path fill="currentColor" d="M 14.25 1.5 L 27.47 1.5 C 27.47 1.5 21.66 19.94 39.74 34.1 C 39.74 34.1 11.01 27.72 14.25 1.5 Z" />
-            <path className="ornament-divider__accent" d="M 66.55 1.5 L 53.33 1.5 C 53.33 1.5 59.14 19.94 41.06 34.1 C 41.06 34.1 69.79 27.72 66.55 1.5 Z" />
-            <path fill="currentColor" d="M 65.55 66.7 L 52.33 66.7 C 52.33 66.7 58.15 48.26 40.06 34.1 C 45.25 35.25 68.94 39.33 65.55 66.7 Z" />
-            <path fill="currentColor" d="M 14.25 66.7 L 27.47 66.7 C 27.47 66.7 21.66 48.26 39.74 34.1 C 39.74 34.1 11.01 40.48 14.25 66.7 Z" />
+            {CRESCENTS.map((d, c) => <path key={c} className={`ornament-tone-${tones[i][c]}`} d={d} />)}
           </g>
         ))}
       </svg>

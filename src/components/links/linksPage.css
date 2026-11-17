@@ -112,10 +112,17 @@
   z-index: -1;
   background-image: var(--lp-pattern);
   background-size: 228px auto;
-  opacity: var(--lp-wash-opacity);
+  /* --lp-pattern-k is the dashboard's strength slider (0 to 2, 1 as designed) */
+  opacity: calc(var(--lp-wash-opacity) * var(--lp-pattern-k, 1));
   -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
   mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
   pointer-events: none;
+}
+/* the pattern can rise from the bottom of the page instead of fading down from the top */
+.lp-pos-bottom .lp-wash {
+  inset: auto 0 0 0;
+  -webkit-mask-image: linear-gradient(0deg, #000 0%, transparent 80%);
+  mask-image: linear-gradient(0deg, #000 0%, transparent 80%);
 }
 .lp-root:not(.lp-bg-pattern) .lp-wash { display: none; }
 
@@ -365,6 +372,10 @@
 
 .lp-mark { flex: none; height: 28px; width: auto; color: var(--lp-ornament); }
 .lp-mark__accent { fill: var(--lp-ornament-accent); }
+/* a crescent is the base colour (navy by day, mint at night) or one of the two house accents */
+.lp-tone-base { fill: currentColor; }
+.lp-tone-teal { fill: var(--lp-ornament-accent); }
+.lp-tone-green { fill: var(--lp-green); }
 .lp-divider__rule { flex: 1; height: 1px; background: linear-gradient(270deg, var(--lp-rule), transparent); }
 .lp-divider__rule--end { background: linear-gradient(90deg, var(--lp-rule), transparent); }
 

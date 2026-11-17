@@ -101,7 +101,7 @@ export default function CardBuyActions({
     );
   } else if (single) {
     main = (
-      <button type="button" className="primary-button book-card__main" onClick={() => add(single)}>
+      <button type="button" className="primary-button book-card__main" data-ab-btn="add_to_cart" onClick={() => add(single)}>
         <ShoppingBag size={15} aria-hidden="true" />
         أضف للسلة
       </button>
@@ -124,6 +124,7 @@ export default function CardBuyActions({
             ref={quickRef}
             type="button"
             className="book-card__quick"
+            data-ab-btn="quick_buy"
             aria-haspopup={single ? undefined : 'dialog'}
             aria-expanded={single ? undefined : picking}
             onClick={() => (single ? buyNow(single) : setPicking((open) => !open))}

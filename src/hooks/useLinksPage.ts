@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import {
-  BLOCK_COLUMNS, SETTINGS_COLUMNS, resolveBlock, resolveSettings, sortBlocks,
+  BLOCK_COLUMNS, LEGACY_SETTINGS_COLUMNS, SETTINGS_COLUMNS, resolveBlock, resolveSettings, sortBlocks,
   type LinksBlock, type LinksPageSettings,
 } from '@/lib/linksPage';
 
@@ -21,10 +21,15 @@ export function useLinksPage() {
     queryKey: ['links-page'],
     queryFn: async (): Promise<LinksPageData | null> => {
       if (!isSupabaseConfigured) return null;
-      const [settings, blocks] = await Promise.all([
+      const [first, blocks] = await Promise.all([
         supabase.from('links_page_settings').select(SETTINGS_COLUMNS).eq('id', 1).maybeSingle(),
         supabase.from('links_page_blocks').select(BLOCK_COLUMNS).order('sort_order', { ascending: true }),
       ]);
+      // A database that does not have the pattern columns yet (42703) is asked again without them, so the
+      // page keeps working whichever of the code and the migration reaches production first.
+      const settings = first.error?.code === '42703'
+        ? await supabase.from('links_page_settings').select(LEGACY_SETTINGS_COLUMNS).eq('id', 1).maybeSingle()
+        : first;
       if (settings.error || blocks.error) return null;
       return {
         settings: resolveSettings(settings.data),

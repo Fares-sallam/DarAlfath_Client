@@ -76,6 +76,10 @@ html.dark .brand-lockup__img--night,
 .ornament-divider { color: var(--brand-ornament); }
 .ornament-divider__mark { width: 22px; height: 24px; }
 .ornament-divider__accent { fill: var(--brand-ornament-accent); }
+/* a crescent is the base colour (navy by day, mint at night) or one of the two house accents */
+.ornament-tone-base { fill: currentColor; }
+.ornament-tone-teal { fill: var(--brand-ornament-accent); }
+.ornament-tone-green { fill: var(--brand-green); }
 
 /* ── Pattern ──────────────────────────────────────────────────────────────
    The tile is the four hand-cut crescents of the brand artwork, staggered in
@@ -102,6 +106,7 @@ html.dark .brand-lockup__img--night,
   /* the tile is 3 rows tall; 90px makes each row exactly the band's 30px */
   background-size: auto 90px;
   background-position: center top;
+  opacity: min(1, var(--store-pattern-k, 1));
   pointer-events: none;
 }
 
@@ -112,7 +117,7 @@ html.dark .brand-lockup__img--night,
   z-index: -1;
   background-image: var(--pattern-night);
   background-size: 228px auto;
-  opacity: 0.09;
+  opacity: calc(0.09 * var(--store-pattern-k, 1));
   mask-image: linear-gradient(180deg, #000, transparent 85%);
   pointer-events: none;
 }

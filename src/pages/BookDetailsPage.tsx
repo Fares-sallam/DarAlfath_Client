@@ -518,6 +518,7 @@ export default function BookDetailsPage() {
             <button
               type="button"
               className={`bk3-cart-btn ${addedToCart ? 'bk3-cart-btn--done' : ''}`}
+              data-ab-btn="add_to_cart"
               disabled={!canAddToCart}
               onClick={handleAddToCart}
             >

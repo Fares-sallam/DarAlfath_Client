@@ -9,6 +9,8 @@ import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentDivider } from '@/components/Ornament';
 import { useReveal } from '@/hooks/useReveal';
+import { useAppearance } from '@/hooks/useAppearance';
+import type { HomeSectionKey } from '@/lib/appearance';
 import {
   useBestSellers,
   useDiscountedProducts,
@@ -62,9 +64,9 @@ export default function HomePage() {
     duration: v.duration ?? '',
   }));
 
-  const shelf = (key: string, title: string, subtitle: string, items: typeof bestSellers, extra: { href?: string; linkLabel?: string; testId?: string }) => (
+  const shelf = (key: string, title: string, subtitle: string, items: typeof bestSellers, extra: { href?: string; linkLabel?: string; linkKind?: 'view_all' | 'view_category'; testId?: string }) => (
     <Reveal key={key} className="shelf-section" data-testid={extra.testId}>
-      <SectionHeader title={title} subtitle={subtitle} href={extra.href} linkLabel={extra.linkLabel} />
+      <SectionHeader title={title} subtitle={subtitle} href={extra.href} linkLabel={extra.linkLabel} linkKind={extra.linkKind} />
       <ScrollRail ariaLabel={title} className="shelf-rail">
         {items.map((product, i) => (
           <div className="shelf-rail__item" key={product.product_id}>
@@ -75,28 +77,33 @@ export default function HomePage() {
     </Reveal>
   );
 
-  const sections: { key: string; node: ReactNode }[] = [];
+  const { appearance } = useAppearance();
+  // `group` is the dashboard's name for the row («صفوف التصنيفات» covers every category row at once).
+  const sections: { key: string; group: HomeSectionKey; node: ReactNode }[] = [];
   if (bestSellers.length > 0) {
-    sections.push({ key: 'best-sellers', node: shelf('best-sellers', 'الأكثر مبيعًا', 'الكتب الأكثر طلبًا من قرّاء الدار', bestSellers, { testId: 'best-sellers' }) });
+    sections.push({ key: 'best-sellers', group: 'best-sellers', node: shelf('best-sellers', 'الأكثر مبيعًا', 'الكتب الأكثر طلبًا من قرّاء الدار', bestSellers, { testId: 'best-sellers' }) });
   }
   if (newArrivals.length > 0) {
-    sections.push({ key: 'new-arrivals', node: shelf('new-arrivals', 'وصل حديثًا', 'أحدث إصدارات الدار', newArrivals, { href: '/books?sort=newest', linkLabel: 'عرض الكل', testId: 'new-arrivals' }) });
+    sections.push({ key: 'new-arrivals', group: 'new-arrivals', node: shelf('new-arrivals', 'وصل حديثًا', 'أحدث إصدارات الدار', newArrivals, { href: '/books?sort=newest', linkLabel: 'عرض الكل', testId: 'new-arrivals' }) });
   }
   if (discounted.length >= MIN_OFFERS_ROW) {
-    sections.push({ key: 'offers', node: shelf('offers', 'عروض وخصومات', 'كتب بسعر أقل من سعرها المعتاد', discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers' }) });
+    sections.push({ key: 'offers', group: 'offers', node: shelf('offers', 'عروض وخصومات', 'كتب بسعر أقل من سعرها المعتاد', discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers' }) });
   }
   for (const entry of categorySections.slice(0, 3)) {
     sections.push({
       key: `category-${entry.category.id}`,
+      group: 'categories',
       node: shelf(`category-${entry.category.id}`, entry.category.name, 'كتب مختارة من هذا التصنيف', entry.products, {
         href: `/books?category=${entry.category.id}`,
         linkLabel: 'عرض التصنيف',
+        linkKind: 'view_category',
       }),
     });
   }
   if (introVideos.length > 0) {
     sections.push({
       key: 'intro-videos',
+      group: 'intro-videos',
       node: (
         <Reveal key="intro-videos">
           <SectionHeader title={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} subtitle="مقاطع مختارة من دار الفتح" />
@@ -108,6 +115,7 @@ export default function HomePage() {
   if (features.length > 0) {
     sections.push({
       key: 'features',
+      group: 'features',
       node: (
         <Reveal key="features" className="features-section">
           <div className="features-grid" data-testid="feature-boxes">
@@ -128,6 +136,12 @@ export default function HomePage() {
     });
   }
 
+  sections.unshift({ key: 'departments', group: 'departments', node: <StoreDepartments key="departments" /> });
+  // The dashboard's order and which sections show; rows the catalog has nothing for are skipped as before.
+  const ordered = appearance.home_sections
+    .filter((setting) => setting.visible)
+    .flatMap((setting) => sections.filter((section) => section.group === setting.key));
+
   return (
     <div className="page-sections page-sections--home">
       <PageCursorLight />
@@ -146,16 +160,17 @@ export default function HomePage() {
              Self-contains its own reveal-on-mount and empty state (renders
              nothing, drops no grid gap, until at least one series exists) —
              unlike the sections below, it isn't wrapped in <Reveal> here. ── */}
-      <StoreDepartments />
+      {/* (the series strip is one of the sections below, so the dashboard can move or hide it) */}
 
       {/* ── The shelves, one after another with the pattern between each: the books picked in the dashboard
              as best sellers (إدارة الإعلانات والأشرطة → الأكثر مبيعًا), what's new and what is on offer (both
              come from the catalog itself, so they fill and empty as it does), a row per category, the intro
              videos, and the boxes above the footer. A row with nothing to show is not drawn, and no divider
              is left standing beside it. ── */}
-      {sections.map((section, i) => (
+      {ordered.map((section, i) => (
         <Fragment key={section.key}>
-          {i > 0 && <OrnamentDivider />}
+          {/* the series strip sits tight to its neighbours, as it always did: no divider on either side of it */}
+          {i > 0 && section.group !== 'departments' && ordered[i - 1].group !== 'departments' && <OrnamentDivider seed={i + 3} />}
           {section.node}
         </Fragment>
       ))}

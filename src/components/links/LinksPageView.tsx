@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type AnchorHTMLAttributes, type CSSProperties, type MouseEvent } from 'react';
 import { Check, ChevronLeft, Clock, Copy, Moon, Sun } from 'lucide-react';
 import { LinkIcon } from './linkIcons';
+import { patternFactor, seedFrom, stripTones, type StripArrangement } from '@/lib/appearance';
 import {
   classifyUrl, endsLabel, groupBlocks, isImageUrl, isLive, resolveLook, sortBlocks,
   type DividerLength, type DividerType, type LinksBlock, type LinksPageSettings,
@@ -61,15 +62,21 @@ function linkProps(url: string | null, newTab: boolean | null, ctx: Ctx): Anchor
 
 const UNIT_PITCH = 56.7;
 
-function PatternMark({ units }: { units: number }) {
+/** The four crescents of a unit, in the order the tones are given. */
+const CRESCENTS = [
+  'M 14.25 1.5 L 27.47 1.5 C 27.47 1.5 21.66 19.94 39.74 34.1 C 39.74 34.1 11.01 27.72 14.25 1.5 Z',
+  'M 66.55 1.5 L 53.33 1.5 C 53.33 1.5 59.14 19.94 41.06 34.1 C 41.06 34.1 69.79 27.72 66.55 1.5 Z',
+  'M 65.55 66.7 L 52.33 66.7 C 52.33 66.7 58.15 48.26 40.06 34.1 C 45.25 35.25 68.94 39.33 65.55 66.7 Z',
+  'M 14.25 66.7 L 27.47 66.7 C 27.47 66.7 21.66 48.26 39.74 34.1 C 39.74 34.1 11.01 40.48 14.25 66.7 Z',
+];
+
+function PatternMark({ units, arrangement = 'uniform', seed = 1 }: { units: number; arrangement?: StripArrangement; seed?: number }) {
+  const tones = stripTones(arrangement, units, seed);
   return (
-    <svg className="lp-mark" viewBox={`10 0 ${61 + UNIT_PITCH * (units - 1)} 68`} aria-hidden="true" focusable="false">
-      {Array.from({ length: units }, (_, i) => (
+    <svg className="lp-mark" viewBox={`10 0 ${61 + UNIT_PITCH * (units - 1)} 68`} aria-hidden="true" focusable="false" data-arrangement={arrangement}>
+      {tones.map((unit, i) => (
         <g key={i} transform={`translate(${i * UNIT_PITCH} 0)`}>
-          <path fill="currentColor" d="M 14.25 1.5 L 27.47 1.5 C 27.47 1.5 21.66 19.94 39.74 34.1 C 39.74 34.1 11.01 27.72 14.25 1.5 Z" />
-          <path className="lp-mark__accent" d="M 66.55 1.5 L 53.33 1.5 C 53.33 1.5 59.14 19.94 41.06 34.1 C 41.06 34.1 69.79 27.72 66.55 1.5 Z" />
-          <path fill="currentColor" d="M 65.55 66.7 L 52.33 66.7 C 52.33 66.7 58.15 48.26 40.06 34.1 C 45.25 35.25 68.94 39.33 65.55 66.7 Z" />
-          <path fill="currentColor" d="M 14.25 66.7 L 27.47 66.7 C 27.47 66.7 21.66 48.26 39.74 34.1 C 39.74 34.1 11.01 40.48 14.25 66.7 Z" />
+          {CRESCENTS.map((d, c) => <path key={c} className={`lp-tone-${unit[c]}`} d={d} />)}
         </g>
       ))}
     </svg>
@@ -88,13 +95,13 @@ function Lockup({ theme }: { theme: LinksTheme }) {
 
 /* ── Pieces ───────────────────────────────────────────────────────────────────────────────── */
 
-export function Divider({ type, length }: { type: DividerType; length: DividerLength }) {
+export function Divider({ type, length, arrangement = 'uniform', seed = 1 }: { type: DividerType; length: DividerLength; arrangement?: StripArrangement; seed?: number }) {
   const cls = `lp-divider lp-divider--${type} lp-len-${length}`;
   if (type === 'pattern' || type === 'ornament') {
     return (
       <div className={cls} role="separator">
         <span className="lp-divider__rule" />
-        <PatternMark units={type === 'pattern' ? 3 : 1} />
+        <PatternMark units={type === 'pattern' ? 3 : 1} arrangement={arrangement} seed={seed} />
         <span className="lp-divider__rule lp-divider__rule--end" />
       </div>
     );
@@ -209,7 +216,7 @@ function BlockView({ block, ctx }: { block: LinksBlock; ctx: Ctx }) {
       return block.body.trim() ? <p className={`lp-text lp-align-${look.align} lp-size-${look.size}`}>{block.body}</p> : null;
 
     case 'divider':
-      return <Divider type={look.dividerType} length={look.dividerLength} />;
+      return <Divider type={look.dividerType} length={look.dividerLength} arrangement={look.stripArrangement} seed={seedFrom(block.id)} />;
   }
 }
 
@@ -232,6 +239,7 @@ function rootClass(settings: LinksPageSettings, preview: boolean) {
     'lp-root',
     `lp-shape-${settings.button_shape}`,
     settings.background === 'pattern' && 'lp-bg-pattern',
+    settings.pattern_position === 'bottom' && 'lp-pos-bottom',
     preview && 'lp-root--preview',
   ].filter(Boolean).join(' ');
 }
@@ -242,7 +250,13 @@ export default function LinksPageView({ settings, blocks, theme, onToggleTheme, 
   const hasTitle = settings.title.trim() !== '';
 
   return (
-    <div className={rootClass(settings, preview)} data-lp-theme={theme} dir="rtl" lang="ar">
+    <div
+      className={rootClass(settings, preview)}
+      style={{ '--lp-pattern-k': patternFactor(settings.pattern_strength) } as CSSProperties}
+      data-lp-theme={theme}
+      dir="rtl"
+      lang="ar"
+    >
       <div className="lp-wash" aria-hidden="true" />
       {onToggleTheme && (
         <button type="button" className="lp-theme" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'التبديل إلى المظهر الفاتح' : 'التبديل إلى المظهر الليلي'}>

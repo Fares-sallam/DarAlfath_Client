@@ -1,0 +1,78 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   APPEARANCE — what the dashboard («مظهر المتجر») decides
+   AppearanceStyle.tsx puts the choices on <html>:
+     --store-pattern-k          the pattern strength, 0 to 2 (the other files multiply their designed opacity by it)
+     data-ab="add_to_cart ..."  the buttons that were given a house colour
+     --ab-<button>-bg / -fg / -hover / -hover-fg   that colour, and the readable text colour on it
+   A button with no colour set is not named in data-ab, so it keeps the look it was designed with.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* «عرض الكل» and «عرض التصنيف», beside the heading of a row of books */
+html[data-ab~="view_all"] .section-heading a[data-ab-btn="view_all"] {
+  background: var(--ab-view-all-bg);
+  color: var(--ab-view-all-fg);
+}
+html[data-ab~="view_all"] .section-heading a[data-ab-btn="view_all"]:hover {
+  background: var(--ab-view-all-hover);
+  color: var(--ab-view-all-hover-fg);
+}
+html[data-ab~="view_category"] .section-heading a[data-ab-btn="view_category"] {
+  background: var(--ab-view-category-bg);
+  color: var(--ab-view-category-fg);
+}
+html[data-ab~="view_category"] .section-heading a[data-ab-btn="view_category"]:hover {
+  background: var(--ab-view-category-hover);
+  color: var(--ab-view-category-hover-fg);
+}
+
+/* «أضف للسلة»: on a book's card and on its page (not while disabled, and not in the «added» moment) */
+html[data-ab~="add_to_cart"] [data-ab-btn="add_to_cart"]:not(:disabled):not(.bk3-cart-btn--done) {
+  background: var(--ab-add-to-cart-bg);
+  background-image: none;
+  color: var(--ab-add-to-cart-fg);
+  border-color: transparent;
+}
+html[data-ab~="add_to_cart"] [data-ab-btn="add_to_cart"]:not(:disabled):not(.bk3-cart-btn--done):hover {
+  background: var(--ab-add-to-cart-hover);
+  background-image: none;
+  color: var(--ab-add-to-cart-hover-fg);
+}
+
+/* «الشراء السريع», under «أضف للسلة» on a book's card */
+html[data-ab~="quick_buy"] .book-card__quick[data-ab-btn="quick_buy"] {
+  background: var(--ab-quick-buy-bg);
+  border-color: var(--ab-quick-buy-bg);
+  color: var(--ab-quick-buy-fg);
+}
+html[data-ab~="quick_buy"] .book-card__quick[data-ab-btn="quick_buy"] svg { color: currentColor; }
+html[data-ab~="quick_buy"] .book-card__quick[data-ab-btn="quick_buy"]:hover {
+  background: var(--ab-quick-buy-hover);
+  border-color: var(--ab-quick-buy-hover);
+  color: var(--ab-quick-buy-hover-fg);
+}
+
+/* The strip shown while the dashboard previews a draft: never seen by customers. */
+.look-preview-bar {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #003166;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.look-preview-bar button {
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  padding: 3px 12px;
+  font: inherit;
+  cursor: pointer;
+}

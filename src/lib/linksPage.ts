@@ -3,6 +3,8 @@
    (pages/LinksPage) and by the dashboard's live preview (إدارة الصفحة والروابط).
    Kept identical in both repos. */
 
+import { STRIP_ARRANGEMENTS, STRIP_ARRANGEMENT_DEFAULT, clampStrength, PATTERN_STRENGTH_DEFAULT, type StripArrangement } from '@/lib/appearance';
+
 /* ── What a block can be, and the choices each one offers ─────────────────────────────────── */
 
 export const BLOCK_KINDS = ['link', 'offer', 'image', 'heading', 'text', 'divider'] as const;
@@ -62,6 +64,11 @@ export type ButtonShape = (typeof BUTTON_SHAPES)[number];
 export const BUTTON_SHAPE_LABEL: Record<ButtonShape, string> = { rounded: 'حواف مدوّرة', pill: 'كبسولة', square: 'حواف حادة' };
 
 export const PAGE_BACKGROUNDS = ['pattern', 'plain'] as const;
+export const PATTERN_POSITIONS = ['top', 'bottom'] as const;
+/** Where the brand pattern sits behind the page: fading down from the top, or rising from the bottom. */
+export type PatternPosition = (typeof PATTERN_POSITIONS)[number];
+export const PATTERN_POSITION_LABEL: Record<PatternPosition, string> = { top: 'من الأعلى فقط', bottom: 'من الأسفل فقط' };
+
 export type PageBackground = (typeof PAGE_BACKGROUNDS)[number];
 export const PAGE_BACKGROUND_LABEL: Record<PageBackground, string> = { pattern: 'باترن الهوية خفيف', plain: 'سادة' };
 
@@ -109,6 +116,9 @@ export interface LinksPageSettings {
   show_logo: boolean;
   button_shape: ButtonShape;
   background: PageBackground;
+  pattern_position: PatternPosition;
+  /** How strongly the pattern shows on this page, 0 to 200 percent of the designed strength. */
+  pattern_strength: number;
   footer_text: string;
   seo_title: string;
   seo_description: string;
@@ -122,6 +132,8 @@ export const DEFAULT_LINKS_SETTINGS: LinksPageSettings = {
   show_logo: true,
   button_shape: 'rounded',
   background: 'pattern',
+  pattern_position: 'top',
+  pattern_strength: PATTERN_STRENGTH_DEFAULT,
   footer_text: '',
   seo_title: '',
   seo_description: '',
@@ -150,6 +162,9 @@ export interface LinksBlock {
 export const BLOCK_COLUMNS =
   'id, kind, sort_order, is_active, starts_at, ends_at, title, body, url, cta_label, image_url, icon, badge, coupon_code, look';
 export const SETTINGS_COLUMNS =
+  'is_enabled, title, tagline, show_logo, button_shape, background, pattern_position, pattern_strength, footer_text, seo_title, seo_description, share_image_url';
+/** The columns before the pattern controls existed: what to ask for if the database has not got the new ones yet. */
+export const LEGACY_SETTINGS_COLUMNS =
   'is_enabled, title, tagline, show_logo, button_shape, background, footer_text, seo_title, seo_description, share_image_url';
 
 /* ── Reading what was saved (a bad value falls back, it never breaks the page) ────────────── */
@@ -174,6 +189,8 @@ export function resolveSettings(raw: unknown): LinksPageSettings {
     show_logo: typeof r.show_logo === 'boolean' ? r.show_logo : d.show_logo,
     button_shape: pick(r.button_shape, BUTTON_SHAPES, d.button_shape),
     background: pick(r.background, PAGE_BACKGROUNDS, d.background),
+    pattern_position: pick(r.pattern_position, PATTERN_POSITIONS, d.pattern_position),
+    pattern_strength: clampStrength(r.pattern_strength, d.pattern_strength),
     footer_text: text(r.footer_text, 300),
     seo_title: text(r.seo_title, 120),
     seo_description: text(r.seo_description, 300),
@@ -217,6 +234,8 @@ export interface ResolvedLook {
   size: Size;
   dividerType: DividerType;
   dividerLength: DividerLength;
+  /** A pattern divider: its units all the same, or varied in colour. */
+  stripArrangement: StripArrangement;
   /** An offer: print "ينتهي يوم …" from its end date. */
   showEnd: boolean;
   /** An image: print its description under it. */
@@ -234,6 +253,7 @@ export function resolveLook(kind: BlockKind, raw: unknown): ResolvedLook {
     size: pick(r.size, SIZES, 'md'),
     dividerType: pick(r.type, DIVIDER_TYPES, 'pattern'),
     dividerLength: pick(r.length, DIVIDER_LENGTHS, 'medium'),
+    stripArrangement: pick(r.arrangement, STRIP_ARRANGEMENTS, STRIP_ARRANGEMENT_DEFAULT),
     showEnd: r.showEnd === true,
     showCaption: r.showCaption === true,
   };
@@ -248,7 +268,7 @@ export function cleanLook(kind: BlockKind, raw: unknown): Record<string, unknown
     case 'image': return { showCaption: l.showCaption, ...(l.newTab === null ? {} : { newTab: l.newTab }) };
     case 'heading': return { align: l.align, size: l.size };
     case 'text': return { align: l.align, size: l.size };
-    case 'divider': return { type: l.dividerType, length: l.dividerLength };
+    case 'divider': return { type: l.dividerType, length: l.dividerLength, ...(l.dividerType === 'pattern' || l.dividerType === 'ornament' ? { arrangement: l.stripArrangement } : {}) };
   }
 }
 
