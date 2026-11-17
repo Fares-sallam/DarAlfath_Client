@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type AnchorHTMLAttributes, type CSSProperties, type MouseEvent } from 'react';
 import { Check, ChevronLeft, Clock, Copy, Moon, Sun } from 'lucide-react';
 import { LinkIcon } from './linkIcons';
-import { patternFactor, seedFrom, stripTones, type StripArrangement } from '@/lib/appearance';
+import { BRAND_COLORS, patternFactor, readableOn, seedFrom, shade, stripTones, type StripArrangement, type Tone } from '@/lib/appearance';
 import {
-  classifyUrl, endsLabel, groupBlocks, isImageUrl, isLive, resolveLook, sortBlocks,
-  type DividerLength, type DividerType, type LinksBlock, type LinksPageSettings,
+  TONEABLE_STYLES, classifyUrl, hasBrandColor, endsLabel, groupBlocks, isImageUrl, isLive, resolveLook, sortBlocks,
+  type ColorStyle, type DividerLength, type DividerType, type LinksBlock, type LinksPageSettings,
 } from '@/lib/linksPage';
 import './linksPage.css';
 
@@ -18,6 +18,7 @@ const SITE_NAME = 'دار الفتح للنشر والتوزيع';
 export type LinksTheme = 'light' | 'dark';
 
 interface Ctx {
+  theme: LinksTheme;
   /** The dashboard's preview: nothing navigates, nothing animates in. */
   preview: boolean;
   /** Moves inside the store without a page load. Absent: an ordinary link. */
@@ -56,6 +57,25 @@ function linkProps(url: string | null, newTab: boolean | null, ctx: Ctx): Anchor
     }
   };
   return props;
+}
+
+/** A button's colours when it has been given a lighter or darker tone of its house colour (null: as designed). */
+function toneStyle(style: ColorStyle, tone: Tone, theme: LinksTheme): CSSProperties | null {
+  if (tone === 0 || !TONEABLE_STYLES.includes(style)) return null;
+  const base = style === 'primary'
+    ? (theme === 'dark' ? BRAND_COLORS.green.hex : BRAND_COLORS.navy.hex)
+    : BRAND_COLORS[style as keyof typeof BRAND_COLORS].hex;
+  const bg = shade(base, tone);
+  const fg = readableOn(bg);
+  const onDark = fg === '#ffffff';
+  return {
+    '--c-bg': bg,
+    '--c-fg': fg,
+    '--c-hover': shade(bg, onDark ? -0.6 : 0.6),
+    '--c-solid': bg,
+    '--c-solid-fg': fg,
+    '--c-chip': onDark ? 'rgba(255, 255, 255, 0.16)' : 'rgba(5, 65, 128, 0.12)',
+  } as CSSProperties;
 }
 
 /* ── The house pattern, as it is drawn on the store's section dividers ───────────────────── */
@@ -154,9 +174,10 @@ function BlockView({ block, ctx }: { block: LinksBlock; ctx: Ctx }) {
       const props = linkProps(block.url, look.newTab, ctx);
       if (!props) return null;
       const hasIcon = !!block.icon;
+      const brand = look.iconColor === 'brand' && hasBrandColor(block.icon);
       return (
-        <a {...props} className={`lp-btn lp-c-${look.style}${hasIcon ? '' : ' lp-btn--plain'}`}>
-          {hasIcon && <span className="lp-btn__icon"><LinkIcon name={block.icon} size={22} /></span>}
+        <a {...props} className={`lp-btn lp-c-${look.style}${hasIcon ? '' : ' lp-btn--plain'}`} style={toneStyle(look.style, look.tone, ctx.theme) ?? undefined}>
+          {hasIcon && <span className={`lp-btn__icon${brand ? ' lp-btn__icon--brand' : ''}`}><LinkIcon name={block.icon} size={22} brand={brand} /></span>}
           <span className="lp-btn__text">
             <span className="lp-btn__title">{block.title}</span>
             {block.body && <span className="lp-btn__sub">{block.body}</span>}
@@ -170,14 +191,16 @@ function BlockView({ block, ctx }: { block: LinksBlock; ctx: Ctx }) {
 
     case 'offer': {
       const props = linkProps(block.url, look.newTab, ctx);
+      const tone = toneStyle(look.style, look.tone, ctx.theme);
+      const brand = look.iconColor === 'brand' && hasBrandColor(block.icon);
       return (
-        <article className={`lp-offer lp-c-${look.style}`}>
+        <article className={`lp-offer lp-c-${look.style}`} style={tone ?? undefined}>
           {isImageUrl(block.image_url) && <img className="lp-offer__img" src={block.image_url!} alt="" loading="lazy" decoding="async" />}
           <div className="lp-offer__body">
             {(block.badge || block.icon) && (
               <div className="lp-offer__top">
                 {block.badge && <span className="lp-badge lp-badge--solid">{block.badge}</span>}
-                {block.icon && <span className="lp-offer__icon"><LinkIcon name={block.icon} size={20} /></span>}
+                {block.icon && <span className={`lp-offer__icon${brand ? ' lp-offer__icon--brand' : ''}`}><LinkIcon name={block.icon} size={20} brand={brand} /></span>}
               </div>
             )}
             <h2 className="lp-offer__title">{block.title}</h2>
@@ -187,7 +210,7 @@ function BlockView({ block, ctx }: { block: LinksBlock; ctx: Ctx }) {
               <p className="lp-offer__ends"><Clock size={14} aria-hidden="true" />{endsLabel(block.ends_at)}</p>
             )}
             {props && (
-              <a {...props} className={`lp-btn lp-btn--cta lp-c-${look.style} lp-btn--plain`}>
+              <a {...props} className={`lp-btn lp-btn--cta lp-c-${look.style} lp-btn--plain`} style={tone ?? undefined}>
                 <span className="lp-btn__text"><span className="lp-btn__title">{block.cta_label || 'تفاصيل العرض'}</span></span>
                 {props.target === '_blank' && <span className="lp-sr"> (يفتح في تبويب جديد)</span>}
               </a>
@@ -239,13 +262,13 @@ function rootClass(settings: LinksPageSettings, preview: boolean) {
     'lp-root',
     `lp-shape-${settings.button_shape}`,
     settings.background === 'pattern' && 'lp-bg-pattern',
-    settings.pattern_position === 'bottom' && 'lp-pos-bottom',
+    settings.background === 'pattern' && `lp-pos-${settings.pattern_position}`,
     preview && 'lp-root--preview',
   ].filter(Boolean).join(' ');
 }
 
 export default function LinksPageView({ settings, blocks, theme, onToggleTheme, preview = false, onNavigate, internalBasePath, now }: Props) {
-  const ctx: Ctx = { preview, onNavigate, internalBasePath };
+  const ctx: Ctx = { theme, preview, onNavigate, internalBasePath };
   const items = groupBlocks(sortBlocks(blocks).filter((b) => isLive(b, now ?? new Date())));
   const hasTitle = settings.title.trim() !== '';
 
@@ -257,7 +280,8 @@ export default function LinksPageView({ settings, blocks, theme, onToggleTheme, 
       dir="rtl"
       lang="ar"
     >
-      <div className="lp-wash" aria-hidden="true" />
+      {settings.pattern_position !== 'bottom' && <div className="lp-wash" aria-hidden="true" />}
+      {settings.pattern_position !== 'top' && <div className="lp-wash lp-wash--end" aria-hidden="true" />}
       {onToggleTheme && (
         <button type="button" className="lp-theme" onClick={onToggleTheme} aria-label={theme === 'dark' ? 'التبديل إلى المظهر الفاتح' : 'التبديل إلى المظهر الليلي'}>
           {theme === 'dark' ? <Sun size={18} aria-hidden="true" /> : <Moon size={18} aria-hidden="true" />}
@@ -281,9 +305,10 @@ export default function LinksPageView({ settings, blocks, theme, onToggleTheme, 
                     const look = resolveLook('link', b.look);
                     const props = linkProps(b.url, look.newTab, ctx);
                     if (!props) return null;
+                    const brand = look.iconColor === 'brand' && hasBrandColor(b.icon);
                     return (
-                      <a {...props} key={b.id} className={`lp-iconbtn lp-c-${look.style}`} aria-label={b.title} title={b.title}>
-                        <LinkIcon name={b.icon ?? 'link'} size={24} />
+                      <a {...props} key={b.id} className={`lp-iconbtn lp-c-${look.style}${brand ? ' lp-iconbtn--brand' : ''}`} style={brand ? undefined : toneStyle(look.style, look.tone, theme) ?? undefined} aria-label={b.title} title={b.title}>
+                        <LinkIcon name={b.icon ?? 'link'} size={24} brand={brand} />
                       </a>
                     );
                   })}

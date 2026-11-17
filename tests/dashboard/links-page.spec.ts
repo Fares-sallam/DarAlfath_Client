@@ -1,8 +1,12 @@
 import { test, expect, type Page, type Route } from '../fixtures';
+import { signInAsFakeOwner } from '../support/fakeOwner';
 
 // "إدارة الصفحة والروابط": the company links page the store shows at /links. The two tables are answered
 // here from a small in-memory copy (the new tables' rows; the rest of the dashboard is the real one), and
 // every write is recorded and applied to that copy instead of reaching the database.
+
+// Signed in as the owner without the real sign-in (see support/fakeOwner): its two tables are answered by this file.
+test.use({ storageState: { cookies: [], origins: [] } });
 
 interface Write { method: string; url: string; body: any }
 interface Row { id: string; kind: string; sort_order: number; [key: string]: unknown }
@@ -42,6 +46,8 @@ const SETTINGS = {
 async function setUp(page: Page, blocks: Row[] = seeded(), settings: Record<string, unknown> = SETTINGS) {
   const state = { blocks: [...blocks], settings: { ...settings } };
   const writes: Write[] = [];
+
+  await signInAsFakeOwner(page);
 
   await page.route('**/rest/v1/links_page_settings*', async (route) => {
     const req = route.request();
@@ -320,9 +326,87 @@ test('المعاينة: فاتح وليلي', async ({ page }) => {
 });
 
 test('جدول مش موجود: رسالة واضحة بدل شاشة فاضية', async ({ page }) => {
+  await signInAsFakeOwner(page);
   await page.route('**/rest/v1/links_page_*', (route) =>
     json(route, { code: '42P01', message: 'relation "public.links_page_blocks" does not exist', details: null, hint: null }, 404));
   await page.goto('/links-page');
   await expect(page.getByRole('alert')).toContainText('تعذّر تحميل الصفحة');
   await expect(page.getByTestId('links-blocks')).toHaveCount(0);
+});
+
+test('مكان الباترن: من الأعلى، من الأسفل، أو الاتنين، ودرجة الوضوح، والمعاينة بتتغيّر فورًا والحفظ في جدول الإعدادات', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await page.goto('/links-page');
+  await expect(blocksOf(page)).toHaveCount(8);
+  await page.getByTestId('links-tab-settings').click();
+
+  const root = preview(page).locator('.lp-root');
+  await expect(page.getByRole('radio', { name: 'من الأعلى فقط' })).toHaveAttribute('aria-checked', 'true');
+  await expect(preview(page).locator('.lp-wash')).toHaveCount(1);
+
+  await page.getByRole('radio', { name: 'من الأعلى والأسفل' }).click();
+  await expect(root).toHaveClass(/lp-pos-both/);
+  await expect(preview(page).locator('.lp-wash')).toHaveCount(2);
+  await expect(preview(page).locator('.lp-wash--end')).toHaveCount(1);
+
+  await page.getByRole('radio', { name: 'من الأسفل فقط' }).click();
+  await expect(root).toHaveClass(/lp-pos-bottom/);
+  await expect(preview(page).locator('.lp-wash')).toHaveCount(1);
+  await expect(preview(page).locator('.lp-wash--end')).toHaveCount(1);
+
+  await page.getByRole('radio', { name: 'من الأعلى والأسفل' }).click();
+  await page.getByTestId('links-pattern-strength-range').fill('170');
+  await page.getByTestId('links-save').click();
+  await expect(saveBar(page)).toHaveCount(0);
+  const settingsWrites = writes.filter((w) => w.url.includes('links_page_settings'));
+  expect(settingsWrites).toHaveLength(1);
+  expect(settingsWrites[0].body).toMatchObject({ pattern_position: 'both', pattern_strength: 170 });
+});
+
+test('درجة لون الزر ولون الأيقونة: بتتغيّر في المعاينة وبتتحفظ في شكل العنصر', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await page.goto('/links-page');
+  await expect(blocksOf(page)).toHaveCount(8);
+
+  // the store button: a tone of its colour (the store icon has no company colour, so there is no icon-colour choice)
+  await open(page, 0);
+  const first = blocksOf(page).nth(0);
+  await expect(first.getByRole('group', { name: 'لون الأيقونة', exact: true })).toHaveCount(0);
+  const face = preview(page).locator('.lp-btn').first();
+  await expect(face).toHaveCSS('background-color', 'rgb(5, 65, 128)');
+  await first.getByRole('group', { name: 'درجة اللون', exact: true }).getByRole('radio', { name: 'أفتح كثيرًا' }).click();
+  await expect(face).not.toHaveCSS('background-color', 'rgb(5, 65, 128)');
+  await expect(face).toHaveCSS('color', 'rgb(255, 255, 255)'); // navy lightened two steps is still dark enough for white text
+
+  // the YouTube icon (an icon-only link, index 7): the company's colours, a white face with the red mark
+  await open(page, 7);
+  const youtube = blocksOf(page).nth(7);
+  const choice = youtube.getByRole('group', { name: 'لون الأيقونة', exact: true });
+  await expect(choice.getByRole('radio', { name: 'ألوان الصفحة' })).toHaveAttribute('aria-checked', 'true');
+  await choice.getByRole('radio', { name: 'ألوان الشركة الأصلية' }).click();
+  const icon = preview(page).locator('.lp-iconbtn--brand');
+  await expect(icon).toHaveCount(1);
+  await expect(icon.locator('svg')).toHaveAttribute('fill', '#FF0000');
+
+  await page.getByTestId('links-save').click();
+  await expect(saveBar(page)).toHaveCount(0);
+  const rows = blockWrites(writes)[0].body as Row[];
+  expect(rows[0].look).toMatchObject({ style: 'primary', display: 'button', tone: -2 });
+  expect(rows[7].look).toMatchObject({ style: 'primary', display: 'icon', iconColor: 'brand' });
+  expect(rows[5].look).not.toHaveProperty('iconColor');
+});
+
+test('«ألوان كل الأيقونات»: بضغطة واحدة كل أيقونات الشركات بألوانها الأصلية أو بألوان الصفحة', async ({ page }) => {
+  await setUp(page);
+  await page.goto('/links-page');
+  await expect(blocksOf(page)).toHaveCount(8);
+
+  const all = page.getByTestId('icon-colors-all');
+  await expect(all).toContainText('3 أيقونة');
+  await expect(preview(page).locator('.lp-iconbtn--brand')).toHaveCount(0);
+  await page.getByTestId('icon-colors-brand').click();
+  await expect(preview(page).locator('.lp-iconbtn--brand')).toHaveCount(3);
+  await expect(all).toContainText('و3 منهم بالألوان الأصلية');
+  await page.getByTestId('icon-colors-theme').click();
+  await expect(preview(page).locator('.lp-iconbtn--brand')).toHaveCount(0);
 });

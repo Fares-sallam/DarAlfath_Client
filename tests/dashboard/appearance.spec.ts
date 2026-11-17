@@ -1,12 +1,11 @@
 import { test, expect, type Page, type Route } from '../fixtures';
+import { signInAsFakeOwner } from '../support/fakeOwner';
 
 // «مظهر المتجر»: the pattern strength, the pattern strips, the home sections and the four button colours.
 //
 // This file does not sign in: the dashboard is given a session for the owner in its local storage, and every
 // call to Supabase is answered here from memory (the one new table is a small in-memory copy; every other table
 // is empty), so nothing reaches the real database and a write is only recorded.
-
-const OWNER = 'faresalsaid780@gmail.com';
 
 interface Write { method: string; url: string; body: any }
 
@@ -19,27 +18,7 @@ async function setUp(page: Page, opts: { tableMissing?: boolean; row?: Record<st
   const state = { row: { ...DEFAULT_ROW, ...(opts.row ?? {}) } as Record<string, unknown> };
   const writes: Write[] = [];
 
-  await page.addInitScript((email) => {
-    const user = {
-      id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email,
-      app_metadata: {}, user_metadata: {}, created_at: '2020-01-01T00:00:00Z',
-    };
-    localStorage.setItem('darelfath-auth-token', JSON.stringify({
-      access_token: 'a.b.c', token_type: 'bearer', expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) + 86_400,
-      refresh_token: 'r', user,
-    }));
-  }, OWNER);
-
-  await page.route('**/auth/v1/**', async (route) => {
-    const url = route.request().url();
-    if (url.includes('/auth/v1/user')) {
-      return json(route, {
-        id: '11111111-1111-4111-8111-111111111111', aud: 'authenticated', role: 'authenticated', email: OWNER,
-        app_metadata: {}, user_metadata: {}, created_at: '2020-01-01T00:00:00Z',
-      });
-    }
-    return json(route, {});
-  });
+  await signInAsFakeOwner(page);
 
   // everything else the dashboard reads is empty (an object read, a missing row)
   await page.route('**/rest/v1/**', async (route) => {
@@ -134,9 +113,10 @@ test('ترتيب الأقسام وإخفاؤها، وتنويع الشريط، �
   expect(row.home_sections.slice(0, 2).map((s: any) => s.key)).toEqual(['best-sellers', 'departments']);
   expect(row.home_sections.find((s: any) => s.key === 'intro-videos').visible).toBe(false);
   expect(row.home_sections.filter((s: any) => s.visible)).toHaveLength(6);
-  expect(row.button_styles.add_to_cart).toEqual({ color: 'teal', tone: -1 });
-  expect(row.button_styles.quick_buy).toEqual({ color: 'green', tone: 0 });
-  expect(row.button_styles.view_all).toEqual({ color: 'default', tone: 0 });
+  const sameAtNight = { color: 'same', tone: 0 };
+  expect(row.button_styles.add_to_cart).toEqual({ color: 'teal', tone: -1, night: sameAtNight });
+  expect(row.button_styles.quick_buy).toEqual({ color: 'green', tone: 0, night: sameAtNight });
+  expect(row.button_styles.view_all).toEqual({ color: 'default', tone: 0, night: sameAtNight });
 });
 
 test('«معاينة المتجر بالتعديلات» بتفتح المتجر بالمسودة اللي على الشاشة، من غير ما تحفظ حاجة', async ({ page }) => {
@@ -151,7 +131,7 @@ test('«معاينة المتجر بالتعديلات» بتفتح المتجر
   const draft = decode((await page.getByTestId('appearance-preview').getAttribute('href'))!);
   expect(draft.pattern_strength).toBe(50);
   expect(draft.home_sections.find((s: any) => s.key === 'features').visible).toBe(false);
-  expect(draft.button_styles.view_all).toEqual({ color: 'navy', tone: 0 });
+  expect(draft.button_styles.view_all).toEqual({ color: 'navy', tone: 0, night: { color: 'same', tone: 0 } });
   expect(writes).toHaveLength(0);
 });
 
@@ -182,4 +162,63 @@ test('لو تحديث قاعدة البيانات لسه ما اتطبقش: ال
   await expect(page.getByTestId('appearance-save-bar')).toBeVisible();
   await expect(page.getByTestId('appearance-save')).toBeDisabled();
   expect(writes).toHaveLength(0);
+});
+
+test('ألوان الأزرار لكل وضع: النهاري والليلي، والعينة بتتعرض على خلفية الوضع اللي بتعدّله، والحفظ بيكتب الاتنين', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await page.goto('/appearance');
+  const add = page.getByTestId('button-add_to_cart');
+  await expect(add).toBeVisible();
+
+  // day is the tab that opens: the sample sits on a light stage and the choices are the original plus the four house colours
+  await expect(page.getByTestId('button-theme-light')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('button-add_to_cart-stage')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(add.getByRole('radio')).toHaveCount(5);
+  await page.getByTestId('button-add_to_cart-teal').click();
+
+  // night: a dark stage, and two more choices: "same as the day" (the start) and the night look the button was designed with
+  await page.getByTestId('button-theme-dark').click();
+  await expect(page.getByTestId('button-theme-dark')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByTestId('button-add_to_cart-stage')).toHaveCSS('background-color', 'rgb(0, 16, 42)');
+  await expect(add.getByRole('radio')).toHaveCount(6);
+  await expect(page.getByTestId('button-add_to_cart-same')).toHaveAttribute('aria-checked', 'true');
+  // same as the day: the sample is the day's teal
+  await expect(page.getByTestId('button-add_to_cart-sample')).toHaveCSS('background-color', 'rgb(42, 163, 171)');
+
+  await page.getByTestId('button-add_to_cart-mint').click();
+  await add.getByRole('radio', { name: 'أغمق', exact: true }).click();
+  await expect(page.getByTestId('button-add_to_cart-sample')).toHaveCSS('background-color', 'rgb(187, 200, 198)');
+
+  // the day colour was not touched by what was chosen for the night
+  await page.getByTestId('button-theme-light').click();
+  await expect(page.getByTestId('button-add_to_cart-teal')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('button-add_to_cart-sample')).toHaveCSS('background-color', 'rgb(42, 163, 171)');
+
+  // quick buy: green by day, the original look at night
+  await page.getByTestId('button-quick_buy-green').click();
+  await page.getByTestId('button-theme-dark').click();
+  await page.getByTestId('button-quick_buy-default').click();
+  await expect(page.getByTestId('button-quick_buy').getByRole('radiogroup').first()).toBeVisible();
+  // "original" at night has no tone to choose
+  await expect(page.getByTestId('button-quick_buy').getByRole('radio', { name: 'أفتح كثيرًا' })).toHaveCount(0);
+
+  await page.getByTestId('appearance-save').click();
+  await expect(page.getByTestId('appearance-save-bar')).toHaveCount(0);
+  expect(writes).toHaveLength(1);
+  const styles = writes[0].body.button_styles;
+  expect(styles.add_to_cart).toEqual({ color: 'teal', tone: 0, night: { color: 'mint', tone: 1 } });
+  expect(styles.quick_buy).toEqual({ color: 'green', tone: 0, night: { color: 'default', tone: 0 } });
+  expect(styles.view_all).toEqual({ color: 'default', tone: 0, night: { color: 'same', tone: 0 } });
+
+  // the preview link carries the night colours too
+  const draft = decode((await page.getByTestId('appearance-preview').getAttribute('href'))!);
+  expect(draft.button_styles.add_to_cart.night).toEqual({ color: 'mint', tone: 1 });
+});
+
+test('صفحة قديمة محفوظة من غير ألوان ليلية: بتفتح و«نفس لون النهار» مختار للأزرار', async ({ page }) => {
+  await setUp(page, { row: { button_styles: { add_to_cart: { color: 'teal', tone: -1 } } } });
+  await page.goto('/appearance');
+  await page.getByTestId('button-theme-dark').click();
+  await expect(page.getByTestId('button-add_to_cart-same')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('button-view_all-same')).toHaveAttribute('aria-checked', 'true');
 });

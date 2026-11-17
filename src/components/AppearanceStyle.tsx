@@ -1,19 +1,22 @@
 import { useEffect } from 'react';
 import { useAppearance } from '@/hooks/useAppearance';
+import { useTheme } from '@/contexts/ThemeContext';
 import { BUTTON_KEYS, PREVIEW_PARAM, buttonCssVars, buttonPaint, patternFactor } from '@/lib/appearance';
 
 /**
- * Puts the dashboard's choices on the page: the pattern strength and the colours of the four buttons, as custom
+ * Puts the dashboard's choices on the page: the pattern strength and the colours of the four buttons (the colour
+ * set for the theme the visitor is in, day or night), as custom
  * properties on <html> that styles-appearance.css reads. A button that was given no colour sets nothing, so it
  * keeps the colours it was designed with. Draws nothing, except a thin strip while a draft is being previewed.
  */
 export default function AppearanceStyle() {
   const { appearance, isPreview } = useAppearance();
+  const { theme } = useTheme();
 
   useEffect(() => {
     const root = document.documentElement;
-    const vars = buttonCssVars(appearance.button_styles);
-    const painted = BUTTON_KEYS.filter((key) => buttonPaint(appearance.button_styles[key]) !== null);
+    const vars = buttonCssVars(appearance.button_styles, theme);
+    const painted = BUTTON_KEYS.filter((key) => buttonPaint(appearance.button_styles[key], theme) !== null);
 
     root.style.setProperty('--store-pattern-k', String(patternFactor(appearance.pattern_strength)));
     Object.entries(vars).forEach(([name, value]) => root.style.setProperty(name, value));
@@ -24,7 +27,7 @@ export default function AppearanceStyle() {
       Object.keys(vars).forEach((name) => root.style.removeProperty(name));
       root.removeAttribute('data-ab');
     };
-  }, [appearance]);
+  }, [appearance, theme]);
 
   if (!isPreview) return null;
   const leave = () => {

@@ -5,6 +5,8 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, '.env.e2e') });
+// the public Supabase address and key (the same ones the app is built with): needed to renew the saved test session
+dotenv.config({ path: path.resolve(__dirname, '.env.local') });
 
 /**
  * مجموعة اختبارات لتطبيقين منفصلين على نفس Supabase:
@@ -36,12 +38,13 @@ export default defineConfig({
     {
       name: 'storefront',
       testDir: './tests/storefront',
+      dependencies: ['session-setup'],
       use: { ...devices['Desktop Chrome'], baseURL: STOREFRONT_URL },
     },
 
     // ── لوحة التحكم: تسجيل دخول مرة واحدة، يُعاد استخدامه في باقي الاختبارات ──
     {
-      name: 'dashboard-setup',
+      name: 'session-setup',
       testDir: './tests/dashboard',
       testMatch: /auth\.setup\.ts/,
       use: { ...devices['Desktop Chrome'], baseURL: DASHBOARD_URL },
@@ -50,7 +53,7 @@ export default defineConfig({
       name: 'dashboard',
       testDir: './tests/dashboard',
       testIgnore: /auth\.setup\.ts/,
-      dependencies: ['dashboard-setup'],
+      dependencies: ['session-setup'],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: DASHBOARD_URL,

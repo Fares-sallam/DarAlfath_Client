@@ -118,8 +118,8 @@
   mask-image: linear-gradient(180deg, #000 0%, transparent 80%);
   pointer-events: none;
 }
-/* the pattern can rise from the bottom of the page instead of fading down from the top */
-.lp-pos-bottom .lp-wash {
+/* the pattern can also rise from the bottom of the page (lp-wash--end): instead of the top one, or beside it */
+.lp-wash--end {
   inset: auto 0 0 0;
   -webkit-mask-image: linear-gradient(0deg, #000 0%, transparent 80%);
   mask-image: linear-gradient(0deg, #000 0%, transparent 80%);
@@ -245,6 +245,12 @@
   -webkit-tap-highlight-color: transparent;
 }
 .lp-c-outline.lp-iconbtn { box-shadow: none; }
+
+/* An icon in the company's own colours: the glyph sits on a white face so every colour (and the black marks) reads on any theme */
+/* (written with the root class too, so it beats the night rules of each colour, which are one attribute heavier) */
+.lp-root .lp-iconbtn.lp-iconbtn--brand { --c-bg: #ffffff; --c-fg: #0e2542; --c-hover: #f1f5f4; --c-border: rgba(14, 37, 66, 0.1); }
+.lp-btn .lp-btn__icon.lp-btn__icon--brand,
+.lp-offer .lp-offer__icon.lp-offer__icon--brand { background: #ffffff; color: #0e2542; border: 0; }
 .lp-iconbtn:active { transform: translateY(0) scale(0.96); }
 
 /* ── Offer ────────────────────────────────────────────────────────────────── */

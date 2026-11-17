@@ -3,7 +3,7 @@
    (pages/LinksPage) and by the dashboard's live preview (إدارة الصفحة والروابط).
    Kept identical in both repos. */
 
-import { STRIP_ARRANGEMENTS, STRIP_ARRANGEMENT_DEFAULT, clampStrength, PATTERN_STRENGTH_DEFAULT, type StripArrangement } from '@/lib/appearance';
+import { STRIP_ARRANGEMENTS, STRIP_ARRANGEMENT_DEFAULT, TONES, clampStrength, PATTERN_STRENGTH_DEFAULT, type StripArrangement, type Tone } from '@/lib/appearance';
 
 /* ── What a block can be, and the choices each one offers ─────────────────────────────────── */
 
@@ -64,10 +64,10 @@ export type ButtonShape = (typeof BUTTON_SHAPES)[number];
 export const BUTTON_SHAPE_LABEL: Record<ButtonShape, string> = { rounded: 'حواف مدوّرة', pill: 'كبسولة', square: 'حواف حادة' };
 
 export const PAGE_BACKGROUNDS = ['pattern', 'plain'] as const;
-export const PATTERN_POSITIONS = ['top', 'bottom'] as const;
-/** Where the brand pattern sits behind the page: fading down from the top, or rising from the bottom. */
+export const PATTERN_POSITIONS = ['top', 'bottom', 'both'] as const;
+/** Where the brand pattern sits behind the page: fading down from the top, rising from the bottom, or both. */
 export type PatternPosition = (typeof PATTERN_POSITIONS)[number];
-export const PATTERN_POSITION_LABEL: Record<PatternPosition, string> = { top: 'من الأعلى فقط', bottom: 'من الأسفل فقط' };
+export const PATTERN_POSITION_LABEL: Record<PatternPosition, string> = { top: 'من الأعلى فقط', bottom: 'من الأسفل فقط', both: 'من الأعلى والأسفل' };
 
 export type PageBackground = (typeof PAGE_BACKGROUNDS)[number];
 export const PAGE_BACKGROUND_LABEL: Record<PageBackground, string> = { pattern: 'باترن الهوية خفيف', plain: 'سادة' };
@@ -105,6 +105,18 @@ export const ICON_OPTIONS: { key: string; label: string }[] = [
   { key: 'graduation', label: 'تعليم' },
   { key: 'link', label: 'رابط عام' },
 ];
+
+/** The icons that have a colour of their own (the company's), so they can be drawn in it instead of the page's colours. */
+export const BRAND_ICON_KEYS = ['facebook', 'instagram', 'whatsapp', 'youtube', 'tiktok', 'telegram', 'x', 'linkedin', 'apple', 'googleplay'] as const;
+export const hasBrandColor = (icon: string | null | undefined): boolean => !!icon && (BRAND_ICON_KEYS as readonly string[]).includes(icon);
+
+/** How an icon is coloured: with the page's colours, or with the company's own colours (red for YouTube...). */
+export const ICON_COLORS = ['theme', 'brand'] as const;
+export type IconColor = (typeof ICON_COLORS)[number];
+export const ICON_COLOR_LABEL: Record<IconColor, string> = { theme: 'ألوان الصفحة', brand: 'ألوان الشركة الأصلية' };
+
+/** The colours a button may be given a tone of (the outline has no colour to lighten or darken). */
+export const TONEABLE_STYLES: readonly ColorStyle[] = ['primary', 'navy', 'teal', 'green', 'mint'];
 
 /* ── The saved shapes ─────────────────────────────────────────────────────────────────────── */
 
@@ -227,6 +239,9 @@ export const sortBlocks = (blocks: LinksBlock[]): LinksBlock[] => [...blocks].so
 /** How a block looks, every choice resolved to something the page knows how to draw. */
 export interface ResolvedLook {
   style: ColorStyle;
+  /** How light or dark the colour is: -2 lightest, 0 as designed, 2 darkest. */
+  tone: Tone;
+  iconColor: IconColor;
   display: LinkDisplay;
   /** null: automatic (a link to another site opens in a new tab, one inside the store does not). */
   newTab: boolean | null;
@@ -247,6 +262,8 @@ export function resolveLook(kind: BlockKind, raw: unknown): ResolvedLook {
   const alignAllowed: readonly Align[] = kind === 'text' ? ['start', 'center', 'justify'] : ['start', 'center', 'end'];
   return {
     style: pick(r.style, COLOR_STYLES, 'primary'),
+    tone: typeof r.tone === 'number' && (TONES as number[]).includes(r.tone) ? (r.tone as Tone) : 0,
+    iconColor: pick(r.iconColor, ICON_COLORS, 'theme'),
     display: kind === 'link' ? pick(r.display, DISPLAYS, 'button') : 'button',
     newTab: typeof r.newTab === 'boolean' ? r.newTab : null,
     align: pick(r.align, alignAllowed, 'center'),
@@ -259,12 +276,15 @@ export function resolveLook(kind: BlockKind, raw: unknown): ResolvedLook {
   };
 }
 
+const toneOf = (l: ResolvedLook) => (l.tone !== 0 && TONEABLE_STYLES.includes(l.style) ? { tone: l.tone } : {});
+const iconOf = (l: ResolvedLook) => (l.iconColor === 'brand' ? { iconColor: l.iconColor } : {});
+
 /** The look worth saving for a block: only the choices its kind has, so a block never carries stale ones. */
 export function cleanLook(kind: BlockKind, raw: unknown): Record<string, unknown> {
   const l = resolveLook(kind, raw);
   switch (kind) {
-    case 'link': return { style: l.style, display: l.display, ...(l.newTab === null ? {} : { newTab: l.newTab }) };
-    case 'offer': return { style: l.style, showEnd: l.showEnd, ...(l.newTab === null ? {} : { newTab: l.newTab }) };
+    case 'link': return { style: l.style, ...toneOf(l), ...iconOf(l), display: l.display, ...(l.newTab === null ? {} : { newTab: l.newTab }) };
+    case 'offer': return { style: l.style, ...toneOf(l), ...iconOf(l), showEnd: l.showEnd, ...(l.newTab === null ? {} : { newTab: l.newTab }) };
     case 'image': return { showCaption: l.showCaption, ...(l.newTab === null ? {} : { newTab: l.newTab }) };
     case 'heading': return { align: l.align, size: l.size };
     case 'text': return { align: l.align, size: l.size };
@@ -404,7 +424,7 @@ const social = (key: string, label: string): LinkPreset => ({
   key,
   group: 'social',
   label,
-  patch: { title: label, icon: key, look: { style: 'primary', display: 'icon' } },
+  patch: { title: label, icon: key, look: { style: 'primary', display: 'icon', iconColor: 'brand' } },
 });
 
 export const LINK_PRESETS: LinkPreset[] = [

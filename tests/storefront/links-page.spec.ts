@@ -90,15 +90,17 @@ test('الروابط: الخارجي بيفتح في تبويب جديد بأم�
   await expect(internal).toHaveAttribute('href', '/store');
 });
 
-test('رابط داخلي: بينقل لصفحة المتجر من غير تحميل جديد', async ({ page }) => {
+test('رابط داخلي: بيفتح صفحة المتجر الحقيقية تحت /store (تحميل عادي: المتجر تطبيق ليه راوتر لوحده)', async ({ page }) => {
   await setUp(page);
   await page.goto('/links');
   await page.evaluate(() => { (window as unknown as { __stayed: number }).__stayed = 1; });
 
   await page.getByRole('link', { name: /تواصل معنا/ }).click();
   await expect(page).toHaveURL(/\/store\/contact$/);
-  // the same page of the app: nothing was reloaded
-  expect(await page.evaluate(() => (window as unknown as { __stayed?: number }).__stayed)).toBe(1);
+  // the store is its own app below /store, so this is a normal page load into it (not a move inside the links page)
+  await expect(page.locator('.lp-root')).toHaveCount(0);
+  await expect(page.locator('header').first()).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __stayed?: number }).__stayed)).toBeUndefined();
 });
 
 test('العرض: الكود بيتنسخ بضغطة، وتاريخ الانتهاء والزر ظاهرين', async ({ page, context }) => {

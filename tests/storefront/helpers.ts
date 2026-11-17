@@ -1,14 +1,28 @@
 import { expect, test, type Page } from '@playwright/test';
+import { hasSavedSession, readSession, storefrontStorageKey } from '../support/session';
 
 const EMAIL = process.env.E2E_ADMIN_EMAIL;
 const PASSWORD = process.env.E2E_ADMIN_PASSWORD;
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 
-/** Buying needs an account, so checkout tests sign in with the E2E test account (from .env.e2e). */
+/**
+ * Buying needs an account, so checkout tests sign in as the E2E test account. Supabase Auth asks a robot for a
+ * Turnstile check it cannot pass, so the session saved by `npm run e2e:login` (and renewed at the start of every run)
+ * is put where the Supabase client looks for it. Without one, the form is tried (it works while the captcha is off).
+ */
 export async function signIn(page: Page) {
-  test.skip(!EMAIL || !PASSWORD, 'حساب الاختبار غير مضبوط في .env.e2e');
+  if (hasSavedSession() && SUPABASE_URL) {
+    const key = storefrontStorageKey(SUPABASE_URL);
+    const session = JSON.stringify(readSession());
+    await page.addInitScript(([k, v]) => window.localStorage.setItem(k, v), [key, session]);
+    await page.goto('/account');
+    await expect(page.getByRole('button', { name: 'تسجيل الخروج' })).toBeVisible({ timeout: 20_000 });
+    return;
+  }
+
+  test.skip(!EMAIL || !PASSWORD, 'مفيش جلسة محفوظة ولا حساب اختبار في .env.e2e: شغّل npm run e2e:login');
   // The live site's real Turnstile key asks an automated browser for a click and sign-in would wait for it (60 s).
-  // Blocking Cloudflare's script makes the page go on without a token, as it does for a person whose
-  // extension blocks it (Supabase's captcha protection is not on yet).
+  // Blocking Cloudflare's script makes the page go on without a token (it fails once Supabase's captcha protection is on).
   await page.route('**://challenges.cloudflare.com/**', (route) => route.abort());
   await page.goto('/account');
   await page.getByPlaceholder('name@example.com').fill(EMAIL!);

@@ -177,24 +177,39 @@ export type Tone = -2 | -1 | 0 | 1 | 2;
 export const TONES: Tone[] = [-2, -1, 0, 1, 2];
 export const TONE_LABELS: Record<Tone, string> = { [-2]: 'أفتح كثيرًا', [-1]: 'أفتح', 0: 'الأصلي', 1: 'أغمق', 2: 'أغمق كثيرًا' };
 
+/** The night colour of a button: "same" keeps the day colour at night too, "default" is the night look it was designed with. */
+export type NightColor = 'same' | ButtonColor;
+export const NIGHT_COLORS: NightColor[] = ['same', 'default', 'navy', 'teal', 'green', 'mint'];
+
 export interface ButtonStyle {
+  /** The colour in the day (light) theme. */
   color: ButtonColor;
   tone: Tone;
+  /** The colour in the night (dark) theme. */
+  night: { color: NightColor; tone: Tone };
 }
 
 export type ButtonStyles = Record<ButtonKey, ButtonStyle>;
 
-export const DEFAULT_BUTTON_STYLE: ButtonStyle = { color: 'default', tone: 0 };
+export type StoreTheme = 'light' | 'dark';
+
+export const DEFAULT_BUTTON_STYLE: ButtonStyle = { color: 'default', tone: 0, night: { color: 'same', tone: 0 } };
+
+const freshStyle = (): ButtonStyle => ({ color: 'default', tone: 0, night: { color: 'same', tone: 0 } });
 
 export const DEFAULT_BUTTON_STYLES: ButtonStyles = {
-  view_all: { ...DEFAULT_BUTTON_STYLE },
-  view_category: { ...DEFAULT_BUTTON_STYLE },
-  add_to_cart: { ...DEFAULT_BUTTON_STYLE },
-  quick_buy: { ...DEFAULT_BUTTON_STYLE },
+  view_all: freshStyle(),
+  view_category: freshStyle(),
+  add_to_cart: freshStyle(),
+  quick_buy: freshStyle(),
 };
 
 function pickColor(value: unknown): ButtonColor {
   return typeof value === 'string' && (BUTTON_COLORS as string[]).includes(value) ? (value as ButtonColor) : 'default';
+}
+
+function pickNightColor(value: unknown): NightColor {
+  return typeof value === 'string' && (NIGHT_COLORS as string[]).includes(value) ? (value as NightColor) : 'same';
 }
 
 function pickTone(value: unknown): Tone {
@@ -207,8 +222,14 @@ export function resolveButtonStyles(raw: unknown): ButtonStyles {
   for (const key of BUTTON_KEYS) {
     const item = source[key];
     const obj = item && typeof item === 'object' ? (item as Record<string, unknown>) : {};
+    const night = obj.night && typeof obj.night === 'object' ? (obj.night as Record<string, unknown>) : {};
     const color = pickColor(obj.color);
-    out[key] = { color, tone: color === 'default' ? 0 : pickTone(obj.tone) };
+    const nightColor = pickNightColor(night.color);
+    out[key] = {
+      color,
+      tone: color === 'default' ? 0 : pickTone(obj.tone),
+      night: { color: nightColor, tone: nightColor === 'same' || nightColor === 'default' ? 0 : pickTone(night.tone) },
+    };
   }
   return out;
 }
@@ -264,21 +285,28 @@ export interface ButtonPaint {
   hoverFg: string;
 }
 
-/** The paint for a chosen colour and tone, or null when the button keeps the colours it was designed with. */
-export function buttonPaint(style: ButtonStyle): ButtonPaint | null {
-  if (style.color === 'default') return null;
-  const base = BRAND_COLORS[style.color].hex;
-  const bg = shade(base, style.tone);
+function paintOf(color: ButtonColor, tone: Tone): ButtonPaint | null {
+  if (color === 'default') return null;
+  const base = BRAND_COLORS[color].hex;
+  const bg = shade(base, tone);
   // The hover is one step further along the same way the colour already leans (darker, unless it is the darkest).
-  const hover = shade(base, Math.min(2, style.tone + 1) === style.tone ? style.tone - 1 : style.tone + 1);
+  const hover = shade(base, Math.min(2, tone + 1) === tone ? tone - 1 : tone + 1);
   return { bg, fg: readableOn(bg), hover, hoverFg: readableOn(hover) };
 }
 
-/** The custom properties the stylesheets read: only for buttons that were given a colour. */
-export function buttonCssVars(styles: ButtonStyles): Record<string, string> {
+/** The paint a button has in a theme, or null when it keeps the colours it was designed with in that theme. */
+export function buttonPaint(style: ButtonStyle, theme: StoreTheme = 'light'): ButtonPaint | null {
+  if (theme === 'light') return paintOf(style.color, style.tone);
+  if (style.night.color === 'same') return paintOf(style.color, style.tone);
+  if (style.night.color === 'default') return null;
+  return paintOf(style.night.color, style.night.tone);
+}
+
+/** The custom properties the stylesheets read in a theme: only for buttons that were given a colour there. */
+export function buttonCssVars(styles: ButtonStyles, theme: StoreTheme = 'light'): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const key of BUTTON_KEYS) {
-    const paint = buttonPaint(styles[key]);
+    const paint = buttonPaint(styles[key], theme);
     if (!paint) continue;
     const name = key.replace(/_/g, '-');
     vars[`--ab-${name}-bg`] = paint.bg;
