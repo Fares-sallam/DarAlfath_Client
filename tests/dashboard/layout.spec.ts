@@ -3,7 +3,7 @@ import { test, expect } from '../fixtures';
 // Wide tables must scroll inside their own box: at a common laptop width no
 // dashboard page may be wider than the screen (it used to push the header
 // buttons, e.g. «تنزيل تقرير», off-screen).
-const PAGES = ['/', '/books', '/orders', '/inventory', '/analytics', '/shipping', '/customers', '/coupons', '/series', '/activity', '/settings'];
+const PAGES = ['/', '/books', '/orders', '/inventory', '/analytics', '/shipping', '/customers', '/coupons', '/catalog', '/activity', '/settings'];
 
 for (const path of PAGES) {
   test(`لا يوجد سكرول أفقي في ${path} على شاشة 1280`, async ({ page }) => {

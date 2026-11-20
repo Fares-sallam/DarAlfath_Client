@@ -51,7 +51,7 @@ test('القايمة الجانبية: «إدارة الإعلانات والأ�
   expect(ads).toBe(videos + 1);
   expect(settings).toBeGreaterThan(ads); // «إدارة الصفحة والروابط» sits right after the ads page, then the settings
   await expect(page.getByRole('heading', { name: 'إدارة الإعلانات والأشرطة' }).first()).toBeVisible();
-  for (const name of ['شريط العروض والإعلانات', 'شريط التصنيفات', 'مربعات أعلى الفوتر', 'الأكثر مبيعًا']) {
+  for (const name of ['شريط العروض والإعلانات', 'مربعات أعلى الفوتر', 'الأكثر مبيعًا']) {
     await expect(tab(page, name)).toBeVisible();
   }
 });
@@ -126,7 +126,7 @@ test('شريط العروض: كل رسالة ليها منصة (الموقع / �
 
 test('شريط التصنيفات: كل التصنيفات بعدد كتبها، والإخفاء والترتيب بيتحفظوا مع بعض، و«كل الكتب» لوحده', async ({ page }) => {
   const writes = await setUp(page);
-  await page.goto('/ads-strips?tab=categories');
+  await page.goto('/catalog?tab=menus');
   const rows = page.getByTestId('category-bar-row');
   await expect(rows.first()).toBeVisible({ timeout: 15_000 });
   const count = await rows.count();

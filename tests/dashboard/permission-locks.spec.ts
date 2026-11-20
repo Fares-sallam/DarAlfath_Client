@@ -73,10 +73,10 @@ test('a closed page still shows the usual refusal, an open one loads', async ({ 
   await expect(lock(page, 'links-page')).toHaveAttribute('data-locked', 'false');
   await expect(page.getByText('غير مسموح لك بالدخول')).toHaveCount(0);
 
-  // books and series still follow can_manage_products
+  // books still follow can_manage_products; the catalog has its own permission
   await page.goto('/books');
   await expect(lock(page, 'books')).toHaveAttribute('data-locked', 'false');
-  await expect(lock(page, 'series')).toHaveAttribute('data-locked', 'false');
+  await expect(lock(page, 'catalog')).toHaveAttribute('data-locked', 'true');
   await expect(page.getByText('غير مسموح لك بالدخول')).toHaveCount(0);
 });
 
