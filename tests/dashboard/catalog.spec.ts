@@ -15,6 +15,7 @@ function node(id: string, over: Record<string, unknown> = {}) {
     image_url: null, icon: null, color: null, is_active: true, featured: false, show_web: true, show_app: true,
     sort_web: 0, sort_app: 0, show_in_menu_web: false, show_in_bar_web: true, show_in_bar_app: true, hide_when_empty: true,
     books_sort_web: 'manual', books_sort_app: 'manual', starts_at: null, ends_at: null, seo_title: null, seo_description: null,
+    intro_ar: null, intro_en: null, video_url: null, page_layout: 'auto', strips_limit: 12, show_as_strip: true,
     legacy_table: null, legacy_id: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
   };
 }
@@ -44,10 +45,28 @@ const LINKS = [
   { product_id: 'p1', node_id: 's1', is_primary: false, sort_order: 0, pinned: false },
 ];
 
+function menu(id: string, over: Record<string, unknown> = {}) {
+  return {
+    id, channel: 'web', parent_id: null, kind: 'group', node_id: null, label_ar: id, label_en: null, url: null,
+    sort_order: 0, visible: true, auto_children: false, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
+  };
+}
+const MENU = [
+  menu('m1', { kind: 'home', label_ar: null, sort_order: 0 }),
+  menu('m2', { kind: 'node', node_id: 's1', label_ar: null, sort_order: 1, auto_children: true }),
+  menu('m3', { kind: 'contact', label_ar: null, sort_order: 2 }),
+];
+const LAYOUT = [
+  { channel: 'web', section_key: 'departments', kind: 'departments', visible: true, sort_order: 0, item_limit: null },
+  { channel: 'web', section_key: 'new-arrivals', kind: 'new-arrivals', visible: false, sort_order: 1, item_limit: null },
+  { channel: 'web', section_key: 'categories', kind: 'categories', visible: true, sort_order: 2, item_limit: 3 },
+  { channel: 'app', section_key: 'best-sellers', kind: 'best-sellers', visible: true, sort_order: 0, item_limit: null },
+];
+
 interface Write { method: string; url: string; body: any }
 interface Rpc { name: string; body: any }
 
-async function setUp(page: Page) {
+async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU) {
   const writes: Write[] = [];
   const rpcs: Rpc[] = [];
   await signInAsFakeOwner(page);
@@ -88,6 +107,12 @@ async function setUp(page: Page) {
       writes.push({ method: req.method(), url, body: req.method() === 'DELETE' ? null : req.postDataJSON() });
       return route.fulfill({ status: 204, body: '' });
     }
+    if (url.includes('/rest/v1/menu_items')) {
+      if (get) return json(route, menuRows);
+      writes.push({ method: req.method(), url, body: req.method() === 'DELETE' ? null : req.postDataJSON() });
+      return route.fulfill({ status: 204, body: '' });
+    }
+    if (url.includes('/rest/v1/home_layout') && get) return json(route, LAYOUT);
     if (url.includes('/rest/v1/products') && get) return json(route, PRODUCTS);
     return route.fallback();
   });
@@ -296,7 +321,11 @@ test('الصفحات القديمة: /series و«شريط التصنيفات» �
 
   await page.goto('/ads-strips?tab=categories');
   await expect(page).toHaveURL(/\/catalog\?tab=menus/);
-  await expect(page.getByRole('heading', { name: 'شريط التصنيفات' })).toBeVisible();
+  await expect(page.getByTestId('tab-menus')).toHaveAttribute('aria-selected', 'true');
+
+  await page.goto('/ads-strips?tab=menu');
+  await expect(page).toHaveURL(/\/catalog\?tab=map/);
+  await expect(page.getByTestId('display-map')).toBeVisible();
 
   await page.goto('/settings');
   await page.getByRole('button', { name: /تصنيفات الكتب/ }).first().click();
@@ -320,4 +349,126 @@ test('ترتيب كتب السلسلة: السهم بيبعت الترتيب ا�
   await page.getByTestId('node-editor').getByTitle('لأعلى').nth(1).click();
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0]).toEqual({ name: 'catalog_reorder_node_books', body: { p_node: 's1', p_product_ids: ['p2', 'p1'] } });
+});
+
+test('خريطة العرض: القايمة بتتعرض رئيسي وفرعي، وكل فرعي مكتوب جوه إيه', async ({ page }) => {
+  await setUp(page);
+  await page.goto('/catalog?tab=map');
+
+  await expect(page.getByTestId('preview-main')).toHaveText(['الرئيسية', 'سلسلة أ', 'تواصل معنا']);
+  await expect(page.getByTestId('preview-main').nth(1).getByLabel('فيه فروع')).toBeVisible();
+  await expect(page.getByTestId('preview-main').nth(0).getByLabel('فيه فروع')).toHaveCount(0);
+
+  await expect(page.getByTestId('menu-main')).toHaveCount(3);
+  const subs = page.getByTestId('menu-main').nth(1).getByTestId('menu-sub');
+  await expect(subs).toHaveCount(2);
+  await expect(subs.nth(0)).toContainText('تصنيف 1');
+  await expect(subs.nth(0).getByTestId('sub-placement')).toHaveText('فرعي داخل: سلسلة أ');
+  await expect(subs.nth(0)).toHaveAttribute('data-auto', 'true');
+  await expect(page.getByTestId('menu-main').nth(1)).toContainText('فيه 2 فرع (2 تلقائي)');
+});
+
+test('خريطة العرض: ترتيب الرئيسيين بيبعت الترتيب الجديد', async ({ page }) => {
+  const { rpcs } = await setUp(page);
+  await page.goto('/catalog?tab=map');
+
+  await page.getByRole('button', { name: 'تأخير الرئيسية' }).click();
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m2', 'm1', 'm3'] } });
+});
+
+test('خريطة العرض: إخفاء فرع تلقائي بيحفظ صف مخفي لنفس الابن جوه نفس الرئيسي', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await page.goto('/catalog?tab=map');
+
+  await page.getByRole('button', { name: 'إخفاء تصنيف 1' }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].method).toBe('POST');
+  expect(writes[0].body).toMatchObject({ kind: 'node', node_id: 'c1', parent_id: 'm2', visible: false, sort_order: 0 });
+});
+
+test('خريطة العرض: تثبيت الفروع التلقائية', async ({ page }) => {
+  const { rpcs } = await setUp(page);
+  await page.goto('/catalog?tab=map');
+
+  await page.getByRole('button', { name: 'تثبيت فروع سلسلة أ' }).click();
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'menu_materialize_children', body: { p_id: 'm2' } });
+});
+
+test('خريطة العرض: إضافة فرع (رابط) جوه رئيسي معيّن، والرابط الغلط بيتمنع', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await page.goto('/catalog?tab=map');
+
+  await page.getByRole('button', { name: 'إضافة فرع داخل سلسلة أ' }).click();
+  await expect(page.getByTestId('menu-parent')).toHaveValue('m2');
+  await page.getByTestId('menu-kind').selectOption('link');
+  await page.getByTestId('menu-label-ar').fill('عروض خاصة');
+  await page.getByTestId('menu-url').fill('javascript:alert(1)');
+  await page.getByTestId('menu-save').click();
+  await expect(page.getByText(/الرابط لازم يبدأ بـ/)).toBeVisible();
+  expect(writes.length).toBe(0);
+
+  await page.getByTestId('menu-url').fill('/books?sale=1');
+  await page.getByTestId('menu-save').click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].body).toMatchObject({ kind: 'link', label_ar: 'عروض خاصة', url: '/books?sale=1', parent_id: 'm2', visible: true, sort_order: 0 });
+});
+
+test('خريطة العرض: نقل فرعي لرئيسي تاني أو لمستوى رئيسي', async ({ page }) => {
+  const { rpcs } = await setUp(page, [...MENU, menu('m4', { kind: 'link', label_ar: 'رابط يدوي', url: '/x', parent_id: 'm2', sort_order: 0 })]);
+  await page.goto('/catalog?tab=map');
+
+  const row = page.getByTestId('menu-main').nth(1).getByTestId('menu-sub').first();
+  await expect(row).toContainText('رابط يدوي');
+  const options = await row.getByTestId('sub-move').locator('option').allTextContents();
+  expect(options).toEqual(['اجعله رئيسي', 'داخل: الرئيسية', 'داخل: سلسلة أ', 'داخل: تواصل معنا']);
+  await row.getByTestId('sub-move').selectOption('');
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'menu_move_item', body: { p_id: 'm4', p_parent: null } });
+});
+
+test('خريطة العرض: التطبيق للقراءة، وأقسام الرئيسية بترتيبها', async ({ page }) => {
+  await setUp(page);
+  await page.goto('/catalog?tab=map');
+
+  await expect(page.getByTestId('map-sections').locator('li')).toHaveText([/كروت «أقسام المتجر»/, /وصل حديثًا/, /رفوف التصنيفات/]);
+  await expect(page.getByTestId('map-sections').locator('li').nth(1)).toContainText('مخفي');
+  await expect(page.getByTestId('map-bar')).toContainText('تصنيف 1');
+
+  await page.getByTestId('map-channel-app').click();
+  await expect(page.getByTestId('app-note')).toContainText('التطبيق مفيهوش قايمة علوية');
+  await expect(page.getByTestId('menu-list')).toHaveCount(0);
+  await expect(page.getByTestId('map-sections').locator('li')).toHaveText([/الأكثر مبيعًا/]);
+});
+
+test('صفحة العرض للسلسلة: الكلمة التعريفية والفيديو والأشرطة', async ({ page }) => {
+  const { writes, rpcs } = await setUp(page);
+  await page.goto('/catalog');
+
+  await page.getByRole('button', { name: 'تعديل سلسلة أ' }).click();
+  await page.getByTestId('node-editor').getByRole('tab', { name: 'صفحة العرض' }).click();
+
+  await expect(page.getByTestId('strip-row')).toHaveText([/تصنيف 1/, /تصنيف 2/]);
+  await page.getByRole('button', { name: 'تأخير الشريط تصنيف 1' }).click();
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'catalog_reorder_nodes', body: { p_ids: ['c2', 'c1'], p_channel: 'web' } });
+
+  await page.getByRole('button', { name: 'إخفاء شريط تصنيف 2' }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].body).toEqual({ show_as_strip: false });
+  expect(writes[0].url).toContain('id=eq.c2');
+
+  await page.getByTestId('field-intro-ar').fill('منهج متكامل لتعليم الأطفال');
+  await page.getByTestId('field-video').fill('http://not-secure.example/video');
+  await page.getByTestId('field-layout').selectOption('strips');
+  await page.getByTestId('save-node').click();
+  await expect(page.getByText('رابط الفيديو لازم يبدأ بـ https://')).toBeVisible();
+  expect(writes.length).toBe(1);
+
+  await page.getByTestId('field-video').fill('https://www.youtube.com/watch?v=abc');
+  await page.getByTestId('field-strips-limit').fill('8');
+  await page.getByTestId('save-node').click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(writes[1].body).toEqual({ intro_ar: 'منهج متكامل لتعليم الأطفال', video_url: 'https://www.youtube.com/watch?v=abc', page_layout: 'strips', strips_limit: 8 });
 });
