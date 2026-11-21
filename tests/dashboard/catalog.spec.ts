@@ -66,7 +66,7 @@ const LAYOUT = [
 interface Write { method: string; url: string; body: any }
 interface Rpc { name: string; body: any }
 
-async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU) {
+async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU, nodeRows: Record<string, unknown>[] = NODES) {
   const writes: Write[] = [];
   const rpcs: Rpc[] = [];
   await signInAsFakeOwner(page);
@@ -84,7 +84,7 @@ async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU) {
     }
 
     if (url.includes('/rest/v1/catalog_nodes')) {
-      if (get) return json(route, NODES);
+      if (get) return json(route, nodeRows);
       const body = req.method() === 'DELETE' ? null : req.postDataJSON();
       writes.push({ method: req.method(), url, body });
       if (req.method() === 'POST') return json(route, { ...node('new'), ...body, id: 'new-id' }, 201);
@@ -558,6 +558,23 @@ test('خريطة العرض: إخفاء فرع تلقائي بيحفظ صف مخ
   await expect.poll(() => writes.length).toBe(1);
   expect(writes[0].method).toBe('POST');
   expect(writes[0].body).toMatchObject({ kind: 'node', node_id: 'c1', parent_id: 'm2', visible: false, sort_order: 0 });
+});
+
+test('خريطة العرض: الفروع التلقائية بتنزل مع الشجرة، وإخفاء فرع جوه فرع بيتحفظ تحت الرئيسي المخزّن', async ({ page }) => {
+  const nodes = [...NODES, node('c1a', { id: 'c1a', parent_id: 'c1', slug: 'cat-1a', sort_web: 0 })].map((n) => (n.id === 'c1a' ? { ...n, name_ar: 'تصنيف 1 أ' } : n));
+  const { writes } = await setUp(page, MENU, nodes);
+  await page.goto('/catalog?tab=map');
+
+  // the tree's third level shows as an automatic row inside the second, and says exactly where it sits
+  const deep = page.locator('[data-testid="menu-sub"][data-level="3"]');
+  await expect(deep).toHaveCount(1);
+  await expect(deep.first().getByTestId('sub-placement').first()).toHaveText('فرعي داخل: سلسلة أ ‹ تصنيف 1');
+  await expect(deep.first().getByText('تلقائي من الشجرة').first()).toBeVisible();
+
+  // hiding it stores a hidden row under the stored item above (the main item), which stands in for its automatic copy
+  await page.getByRole('button', { name: 'إخفاء تصنيف 1 أ' }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].body).toMatchObject({ kind: 'node', node_id: 'c1a', parent_id: 'm2', visible: false });
 });
 
 test('خريطة العرض: تثبيت الفروع التلقائية', async ({ page }) => {

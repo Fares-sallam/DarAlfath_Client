@@ -1,0 +1,93 @@
+/* ── The top menu drawn from the dashboard's «خريطة العرض»: rows that open the next level beside themselves ──
+   Same look and the same hover grace as the older series menus (see .nav-dropdown* in styles.css); the difference is that
+   a row can hold another menu, to any depth, so every "open when hovered" rule here names the DIRECT child (>) — a
+   descendant rule would open every level at once. */
+
+.nav-flyout__item { position: relative; }
+
+.nav-dropdown__row--group { cursor: default; }
+.nav-dropdown__trigger--group {
+  position: relative;
+  color: #13355e;
+  font-weight: 800;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: default;
+  transition: color 0.22s ease, background 0.22s ease;
+}
+.nav-dropdown:hover > .nav-dropdown__trigger--group,
+.nav-dropdown:focus-within > .nav-dropdown__trigger--group {
+  background: linear-gradient(180deg, rgba(57, 142, 129, 0.2), rgba(57, 142, 129, 0.08));
+}
+
+.nav-flyout__item:hover > .nav-dropdown__row,
+.nav-flyout__item:focus-within > .nav-dropdown__row { background: #dbf1ee; }
+
+/* a menu inside a menu */
+.nav-flyout__panel {
+  position: absolute;
+  top: 0;
+  right: calc(100% + 8px);
+  width: 270px;
+  padding: 10px;
+  border: 1px solid rgba(94, 145, 136, 0.3);
+  border-radius: 18px;
+  background: rgba(249, 255, 254, 0.98);
+  box-shadow: 0 22px 48px rgba(14, 37, 66, 0.14);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(8px);
+  transition: opacity 0.18s ease 0.2s, transform 0.18s ease 0.2s, visibility 0s linear 0.38s;
+}
+/* the bridge over the gap between the row and its menu */
+.nav-flyout__panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: -10px;
+  width: 10px;
+}
+.nav-dropdown--flip .nav-flyout__panel { right: auto; left: calc(100% + 8px); transform: translateX(-8px); }
+.nav-dropdown--flip .nav-flyout__panel::before { right: auto; left: -10px; }
+
+.nav-flyout__item:hover > .nav-flyout__panel,
+.nav-flyout__item:focus-within > .nav-flyout__panel,
+.nav-flyout__item:hover > .nav-dropdown__submenu,
+.nav-flyout__item:focus-within > .nav-dropdown__submenu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s;
+}
+
+/* one menu at a time among neighbours: moving to another row closes the previous one at once */
+:is(.nav-dropdown__menu, .nav-flyout__panel):has(> .nav-flyout__item:hover) > .nav-flyout__item:not(:hover) > :is(.nav-flyout__panel, .nav-dropdown__submenu) {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+/* a long menu opens its last rows' lists upward so they are not cut off by a short screen */
+.nav-dropdown__menu--dense > .nav-flyout__item:nth-last-child(-n + 5) > :is(.nav-flyout__panel, .nav-dropdown__submenu) {
+  top: auto;
+  bottom: 0;
+}
+
+.nav-flyout__panel .nav-dropdown__all { margin-bottom: 6px; padding: 8px 12px; font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-flyout__panel { transition: opacity 0s linear 0.2s, transform 0s linear 0.2s, visibility 0s linear 0.2s; }
+  .nav-flyout__item:hover > .nav-flyout__panel,
+  .nav-flyout__item:focus-within > .nav-flyout__panel { transition: none; }
+}
+
+html.dark .nav-dropdown__trigger--group { color: #c0d7d4; }
+html.dark .nav-flyout__panel {
+  background: #001d41;
+  border: 1px solid #054180;
+  border-radius: 18px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+html.dark .nav-flyout__item:hover > .nav-dropdown__row,
+html.dark .nav-flyout__item:focus-within > .nav-dropdown__row { color: #93dbe0; background: rgba(42, 163, 171, 0.06); }

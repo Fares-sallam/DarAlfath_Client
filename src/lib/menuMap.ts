@@ -1,8 +1,9 @@
 // The website's top menu as the dashboard edits it: a main item can hold sub-items, which can hold further
 // sub-items, up to MAX_MENU_DEPTH levels (main + 3 levels). An item is linked to a page, a catalog node, a custom
 // link, or is a group (a heading that gathers sub-items, e.g. «المواد» holding reading, writing and maths).
-// A node item can fill its sub-items automatically from the node's children; a manual row for the same child
-// anywhere under that item (hidden, moved into a group) wins over the automatic one. Pure helpers.
+// A node item can fill its sub-items automatically from the node's children, and those from theirs (down to the depth
+// limit); a manual row for the same child anywhere under that item (hidden, moved into a group) wins over the automatic
+// one. Pure helpers.
 import type { CatalogNode } from '@/lib/catalogTree';
 
 export type MenuKind = 'home' | 'books' | 'contact' | 'node' | 'link' | 'group';
@@ -87,6 +88,28 @@ export function resolveMenu(items: readonly MenuItem[], nodes: readonly CatalogN
     return out;
   };
 
+  /**
+   * The tree's children of a node as automatic sub-items, and theirs in turn, down to the menu's depth limit
+   * (so a category placed under another one in the tree opens as a menu inside a menu). A node a manual row stands
+   * for anywhere under the item is left out, and so is everything below it.
+   */
+  const autoChildren = (
+    nodeId: string, parent: ResolvedMenuItem, level: number, represented: Set<string>, ownerId: string, trail: Set<string>,
+  ): ResolvedMenuItem[] => {
+    if (level > MAX_MENU_DEPTH) return [];
+    return nodes
+      .filter((n) => n.parent_id === nodeId && n.is_active && !represented.has(n.id) && !trail.has(n.id))
+      .sort((a, b) => a.sort_web - b.sort_web || a.name_ar.localeCompare(b.name_ar, 'ar'))
+      .map((child) => {
+        const entry: ResolvedMenuItem = {
+          item: null, key: `auto-${ownerId}-${child.id}`, kind: 'node', nodeId: child.id, label: child.name_ar,
+          visible: true, auto: true, level, parent, children: [],
+        };
+        entry.children = autoChildren(child.id, entry, level + 1, represented, ownerId, new Set(trail).add(child.id));
+        return entry;
+      });
+  };
+
   const build = (item: MenuItem, parent: ResolvedMenuItem | null, level: number, seen: Set<string>): ResolvedMenuItem => {
     const resolved: ResolvedMenuItem = {
       item, key: item.id, kind: item.kind, nodeId: item.node_id, label: itemLabel(item, nodes),
@@ -99,15 +122,7 @@ export function resolveMenu(items: readonly MenuItem[], nodes: readonly CatalogN
 
     if (item.auto_children && item.node_id && level < MAX_MENU_DEPTH) {
       const represented = nodesUnder(item.id, new Set([item.id]));
-      const auto = nodes
-        .filter((n) => n.parent_id === item.node_id && n.is_active && !represented.has(n.id))
-        .sort((a, b) => a.sort_web - b.sort_web || a.name_ar.localeCompare(b.name_ar, 'ar'));
-      for (const child of auto) {
-        subs.push({
-          item: null, key: `auto-${item.id}-${child.id}`, kind: 'node', nodeId: child.id, label: child.name_ar,
-          visible: true, auto: true, level: level + 1, parent: resolved, children: [],
-        });
-      }
+      subs.push(...autoChildren(item.node_id, resolved, level + 1, represented, item.id, new Set([item.node_id])));
     }
     resolved.children = subs;
     return resolved;

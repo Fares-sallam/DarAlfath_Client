@@ -49,7 +49,7 @@ const STUB = stubPicture();
  * depend on the actual pictures, so reads from the public image buckets are answered with a tiny
  * stand-in of the same shape. Writes are untouched (tests that upload fake them on their own).
  */
-export const test = base.extend<{ stubStorageImages: void; untouchedLook: void }>({
+export const test = base.extend<{ stubStorageImages: void; untouchedLook: void; olderTopMenu: void }>({
   /**
    * How the store looks is decided in the dashboard («مظهر المتجر») and saved in the live database: sections can be hidden or
    * reordered, strips varied, buttons recoloured. Tests about the store's own layout must not depend on what happens to be
@@ -66,6 +66,21 @@ export const test = base.extend<{ stubStorageImages: void; untouchedLook: void }
           headers: { 'access-control-allow-origin': '*' },
           body: JSON.stringify({ pattern_strength: 100, strip_arrangement: 'uniform', home_sections: [], button_styles: {} }),
         });
+      });
+      await use();
+    },
+    { auto: true },
+  ],
+  /**
+   * The top menu is drawn from the dashboard's «خريطة العرض» (saved in the live database); when there is none it falls back to
+   * the older series menus. Tests about those older menus (their own mocks of the series and books) must not depend on what is
+   * saved, so by default no menu is saved. A test about the saved menu answers `menu_items` itself (a route set on the page wins).
+   */
+  olderTopMenu: [
+    async ({ context }, use) => {
+      await context.route('**/rest/v1/menu_items*', (route) => {
+        if (route.request().method() !== 'GET' && route.request().method() !== 'HEAD') return route.fallback();
+        return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' });
       });
       await use();
     },

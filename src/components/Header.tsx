@@ -4,13 +4,16 @@ import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import LiveSearch from '@/components/LiveSearch';
+import SiteNav from '@/components/SiteNav';
 import { useCountry } from '@/contexts/CountryContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useAllCategoryNames, useHeaderNav, useProductExtraCategorySlugs, useProducts, useSeries } from '@/hooks/useStorefront';
+import { useCatalogNodes, useProductNodeLinks, useWebMenuItems } from '@/hooks/useCatalogTree';
 import { HEADER_NAV_FIXED, resolveHeaderNav, seriesIdOf } from '@/lib/headerNav';
+import { buildMenuView } from '@/lib/menuView';
 import type { StoreSettings } from '@/types/store';
 
 const navItems = [
@@ -27,13 +30,24 @@ export default function Header({ settings }: { settings: StoreSettings }) {
   const { count: cartCount } = useCart();
   const { user } = useAuth();
   const { isDark, toggleTheme } = useTheme();
-  const { data: products = [] } = useProducts();
+  const { data: products = [], isLoading: loadingProducts } = useProducts();
   const { data: extraCategorySlugs } = useProductExtraCategorySlugs();
   const { data: allSeries = [] } = useSeries();
   const { data: allCategoryNames } = useAllCategoryNames();
   const { data: savedHeaderNav } = useHeaderNav();
+  const { data: menuItems = [], isLoading: loadingMenu } = useWebMenuItems();
+  const { data: catalogNodes = [], isLoading: loadingNodes } = useCatalogNodes();
+  const { data: nodeLinks = [], isLoading: loadingLinks } = useProductNodeLinks();
   const [query, setQuery] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // The menu the dashboard lays out in «خريطة العرض» (menus inside menus, groups, links). Until it has loaded, the
+  // three fixed links are all there is (as before); if it can't be read or is empty, the older series menus are drawn.
+  const treeLoading = loadingMenu || loadingNodes || loadingLinks || loadingProducts;
+  const treeMenu = useMemo(
+    () => (treeLoading ? [] : buildMenuView(menuItems, catalogNodes, nodeLinks, products)),
+    [treeLoading, menuItems, catalogNodes, nodeLinks, products],
+  );
 
   // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -136,7 +150,12 @@ export default function Header({ settings }: { settings: StoreSettings }) {
       const next = new Set<string>();
       navRef.current?.querySelectorAll<HTMLElement>('.nav-dropdown[data-series]').forEach((dropdown) => {
         const menu = dropdown.querySelector<HTMLElement>('.nav-dropdown__menu');
-        if (menu && menu.getBoundingClientRect().left < FLYOUT) next.add(dropdown.dataset.series!);
+        if (!menu) return;
+        // every flyout that opens one after another from this menu needs room on the same side
+        const need = FLYOUT * Math.max(1, Number(dropdown.dataset.flyouts ?? 1));
+        const rect = menu.getBoundingClientRect();
+        const rightRoom = document.documentElement.clientWidth - rect.right;
+        if (rect.left < need && rightRoom > rect.left) next.add(dropdown.dataset.series!);
       });
       setFlipped((prev) => (prev.size === next.size && [...next].every((id) => prev.has(id)) ? prev : next));
     };
@@ -145,7 +164,7 @@ export default function Header({ settings }: { settings: StoreSettings }) {
     // Web fonts change the row's widths once they arrive.
     void document.fonts?.ready.then(measure);
     return () => window.removeEventListener('resize', measure);
-  }, [barItems]);
+  }, [barItems, treeMenu]);
 
   return (
     <header className="site-header">
@@ -204,7 +223,13 @@ export default function Header({ settings }: { settings: StoreSettings }) {
           row, flex-wrap on .site-header__nav is the safety net if it ever
           doesn't fit on one line (see that rule's own comment). */}
       <div className="container site-header__nav" ref={navRef}>
-        {barItems.map((item) => {
+        {treeLoading
+          ? (['home', 'books', 'contact'] as const).map((key) => (
+              <NavLink key={key} to={HEADER_NAV_FIXED[key].to} end={key === 'home'}>{HEADER_NAV_FIXED[key].label}</NavLink>
+            ))
+          : null}
+        {!treeLoading && treeMenu.length > 0 ? <SiteNav entries={treeMenu} flipped={flipped} /> : null}
+        {treeLoading || treeMenu.length > 0 ? null : barItems.map((item) => {
           if (item.kind === 'link') {
             return <NavLink key={item.key} to={item.to} end={item.to === '/'}>{item.label}</NavLink>;
           }

@@ -19,6 +19,7 @@ import './styles-brand.css';        // ✦ Brand layer — house fonts, swatches
 import './styles-auth.css';         // ✦ Auth layer — the customer sign-in / sign-up page, drawn with the pattern
 import './styles-appearance.css';   // ✦ What the dashboard decides: pattern strength, button colours
 import './styles-node-page.css';    // ✦ Series / section pages: welcome text, video and strips of books
+import './styles-menu-tree.css';    // ✦ Top menu from the dashboard's display map: nested menus
 import { isStorePath, STORE_BASE_PATH } from '@/lib/storePaths';
 
 const queryClient = new QueryClient({
