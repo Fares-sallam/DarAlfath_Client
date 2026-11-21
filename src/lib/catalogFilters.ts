@@ -14,6 +14,8 @@ export interface CatalogFilters {
   category: string;
   /** A series id. */
   series: string;
+  /** A node of the catalog tree (a section, series, category or collection): the books under it and everything below it. */
+  node: string;
   /** An author key (see authorKey): spelling variants of one name are one author. */
   author: string;
   type: string;
@@ -49,6 +51,7 @@ export function parseFilters(params: URLSearchParams): CatalogFilters {
     q: params.get('q') ?? '',
     category: params.get('category') ?? '',
     series: params.get('series') ?? '',
+    node: params.get('node') ?? '',
     author: params.get('author') ?? '',
     type: params.get('type') ?? '',
     min: number(params.get('min')),
@@ -61,7 +64,7 @@ export function parseFilters(params: URLSearchParams): CatalogFilters {
 
 /** How many filters (not counting the search words and the order) are on. */
 export function activeFilterCount(f: CatalogFilters): number {
-  return [f.category, f.series, f.author, f.type].filter(Boolean).length + (f.min != null || f.max != null ? 1 : 0) + (f.availableOnly ? 1 : 0) + (f.saleOnly ? 1 : 0);
+  return [f.category, f.series, f.node, f.author, f.type].filter(Boolean).length + (f.min != null || f.max != null ? 1 : 0) + (f.availableOnly ? 1 : 0) + (f.saleOnly ? 1 : 0);
 }
 
 /* ── authors ───────────────────────────────────────────────────────── */
@@ -124,6 +127,8 @@ export interface FilterContext {
   extraCategorySlugs?: Map<string, Set<string>>;
   /** The member ids of the chosen series (null while they are unknown). */
   seriesProductIds?: ReadonlySet<string> | null;
+  /** The books under the chosen tree node (the `node` filter, or a series the tree knows), itself and everything below it. Null = not filtering by one. */
+  nodeProductIds?: ReadonlySet<string> | null;
   /** Ids that can be bought now; null when unknown (the availability filter is then skipped). */
   availableIds?: ReadonlySet<string> | null;
 }
@@ -134,6 +139,7 @@ export function applyFilters(products: readonly ProductItem[], f: CatalogFilters
     if (f.q.trim() && !matchesSearch(p, f.q)) return false;
     if (f.category && p.category_slug !== f.category && !ctx.extraCategorySlugs?.get(p.product_id)?.has(f.category)) return false;
     if (f.series && ctx.seriesProductIds && !ctx.seriesProductIds.has(p.product_id)) return false;
+    if (ctx.nodeProductIds && !ctx.nodeProductIds.has(p.product_id)) return false;
     if (f.type && p.type !== f.type) return false;
     if (author && authorKey(p.author ?? '') !== author) return false;
     if (f.min != null && p.max_price < f.min) return false;

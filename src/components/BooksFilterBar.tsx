@@ -7,6 +7,8 @@ interface Option { value: string; label: string }
 export interface FilterOptions {
   categories: Option[];
   series: Option[];
+  /** Every node of the catalog tree, labelled with its kind («سلسلة: …»), for the chip of a page opened from the menu. */
+  nodes?: Option[];
   authors: AuthorOption[];
   types: string[];
   /** Cheapest and dearest price in the catalog, as hints in the price fields. */
@@ -82,6 +84,7 @@ export default function BooksFilterBar({
   const chips: { key: string; text: string; remove: () => void }[] = [
     filters.category && { key: 'category', text: `التصنيف: ${label(options.categories, filters.category)}`, remove: () => setParam('category', '') },
     filters.series && { key: 'series', text: `السلسلة: ${label(options.series, filters.series)}`, remove: () => setParam('series', '') },
+    filters.node && { key: 'node', text: label(options.nodes ?? [], filters.node), remove: () => setParam('node', '') },
     filters.author && { key: 'author', text: `المؤلف: ${options.authors.find((a) => a.key === filters.author)?.label ?? filters.author}`, remove: () => setParam('author', '') },
     filters.type && { key: 'type', text: `النوع: ${filters.type}`, remove: () => setParam('type', '') },
     priceLabel && { key: 'price', text: `السعر: ${priceLabel}`, remove: () => setParams({ min: '', max: '' }) },

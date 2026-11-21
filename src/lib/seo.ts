@@ -162,18 +162,31 @@ export function websiteLd(origin: string) {
 
 export function booksListSeo(
   origin: string,
-  opts: { categorySlug?: string | null; categoryName?: string | null; seriesName?: string | null; seriesId?: string | null; searched?: boolean },
+  opts: {
+    categorySlug?: string | null; categoryName?: string | null; seriesName?: string | null; seriesId?: string | null;
+    /** A page of the catalog tree opened by its id (a section, a collection…): `name` is its name. */
+    nodeId?: string | null; nodeName?: string | null;
+    /** What the dashboard wrote for the page's search-result title and description (they replace the standard ones). */
+    seoTitle?: string | null; seoDescription?: string | null;
+    searched?: boolean;
+  },
 ): Seo {
   const base = staticSeo('books', origin);
-  const name = opts.categoryName || opts.seriesName;
+  const name = opts.categoryName || opts.seriesName || opts.nodeName;
   if (!name) return { ...base, noindex: opts.searched || undefined };
   const path = opts.categorySlug
     ? `/store/books?category=${encodeURIComponent(opts.categorySlug)}`
-    : `/store/books?series=${encodeURIComponent(opts.seriesId ?? '')}`;
+    : opts.seriesId
+      ? `/store/books?series=${encodeURIComponent(opts.seriesId)}`
+      : `/store/books?node=${encodeURIComponent(opts.nodeId ?? '')}`;
+  const ownTitle = opts.seoTitle?.trim();
+  const ownDescription = opts.seoDescription?.trim();
   return {
     ...base,
-    title: titleFor(name.trim()),
-    description: shorten(`كتب «${name.trim()}» من دار الفتح للنشر والتوزيع: تصفّح الإصدارات بنسخها الورقية والرقمية وأسعارها.`),
+    title: ownTitle ? titleFor(ownTitle) : titleFor(name.trim()),
+    description: ownDescription
+      ? shorten(ownDescription)
+      : shorten(`كتب «${name.trim()}» من دار الفتح للنشر والتوزيع: تصفّح الإصدارات بنسخها الورقية والرقمية وأسعارها.`),
     path,
     noindex: opts.searched || undefined,
   };

@@ -1,0 +1,63 @@
+import { useQuery } from '@tanstack/react-query';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import type { CatalogNode, ProductLink } from '@/lib/catalogTree';
+import type { MenuItem } from '@/lib/menuMap';
+
+/**
+ * The catalog tree the dashboard manages («السلاسل والتصنيفات»): sections, series, categories and collections,
+ * and which books sit in which. The database already hides what is switched off or outside its dates; the
+ * ones switched off for the website are dropped here. Every read answers "nothing" on a failure, so a page
+ * that can fall back to the older lists simply does.
+ */
+
+const PAGE = 1000;
+
+/** Reads a whole table in pages (the API caps one answer at 1000 rows). */
+async function readAll<T>(table: string, columns: string, filter?: (q: any) => any): Promise<T[] | null> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    let query = supabase.from(table).select(columns).range(from, from + PAGE - 1);
+    if (filter) query = filter(query);
+    const { data, error } = await query;
+    if (error || !data) return null;
+    rows.push(...(data as unknown as T[]));
+    if (data.length < PAGE) return rows;
+  }
+}
+
+/** The nodes the website may show, in no particular order (use childrenOf(…, 'web') to order them). */
+export function useCatalogNodes() {
+  return useQuery({
+    queryKey: ['catalog-nodes-web'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<CatalogNode[]> => {
+      if (!isSupabaseConfigured) return [];
+      const rows = await readAll<CatalogNode>('catalog_nodes', '*');
+      return (rows ?? []).filter((node) => node.show_web);
+    },
+  });
+}
+
+/** Which book sits in which node (only the direct links; "everything under a node" is worked out from the tree). */
+export function useProductNodeLinks() {
+  return useQuery({
+    queryKey: ['catalog-product-links'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<ProductLink[]> => {
+      if (!isSupabaseConfigured) return [];
+      return (await readAll<ProductLink>('product_nodes', 'product_id, node_id, is_primary, sort_order')) ?? [];
+    },
+  });
+}
+
+/** The website's top menu rows (the dashboard's «خريطة العرض»). Empty = draw the older menu. */
+export function useWebMenuItems() {
+  return useQuery({
+    queryKey: ['menu-items-web'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<MenuItem[]> => {
+      if (!isSupabaseConfigured) return [];
+      return (await readAll<MenuItem>('menu_items', '*', (q) => q.eq('channel', 'web'))) ?? [];
+    },
+  });
+}

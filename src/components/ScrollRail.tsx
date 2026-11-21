@@ -10,15 +10,20 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
  * screen readers all behave the way the platform already does; the arrows are
  * an addition on top of that, shown only when there is somewhere to go and
  * only on pointer devices where a drag isn't natural.
+ *
+ * `drag`: with a mouse the strip can also be grabbed and pulled sideways (a touch screen already swipes it);
+ * a pull is not a click, so the card under the pointer is not opened when it ends.
  */
 export default function ScrollRail({
   children,
   ariaLabel,
   className = '',
+  drag = false,
 }: {
   children: React.ReactNode;
   ariaLabel: string;
   className?: string;
+  drag?: boolean;
 }) {
   const railRef = useRef<HTMLDivElement | null>(null);
   const [atStart, setAtStart] = useState(true);
@@ -60,6 +65,39 @@ export default function ScrollRail({
 
   const hideAll = atStart && atEnd; // nothing overflows: no arrows at all
 
+  // Pulling the strip with a mouse. scrollLeft moves the same way in both text directions: it is the
+  // position of the view, so dragging the content right means the view goes left (a smaller scrollLeft).
+  const pull = useRef<{ x: number; from: number; moved: boolean } | null>(null);
+  const [pulling, setPulling] = useState(false);
+  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag || event.pointerType !== 'mouse' || event.button !== 0 || !railRef.current) return;
+    pull.current = { x: event.clientX, from: railRef.current.scrollLeft, moved: false };
+  };
+  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = pull.current;
+    const el = railRef.current;
+    if (!state || !el) return;
+    const dx = event.clientX - state.x;
+    if (!state.moved) {
+      if (Math.abs(dx) < 6) return;
+      state.moved = true;
+      setPulling(true);
+      el.setPointerCapture?.(event.pointerId);
+    }
+    el.scrollLeft = state.from - dx;
+  };
+  const endPull = (event: React.PointerEvent<HTMLDivElement>) => {
+    const state = pull.current;
+    pull.current = null;
+    if (!state?.moved) return;
+    railRef.current?.releasePointerCapture?.(event.pointerId);
+    setPulling(false);
+    // the click that follows the release belongs to the pull, not to the card under the pointer
+    const swallow = (e: MouseEvent) => { e.stopPropagation(); e.preventDefault(); };
+    window.addEventListener('click', swallow, { capture: true, once: true });
+    setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 60);
+  };
+
   return (
     <div className={`scroll-rail ${className}`.trim()}>
       {!hideAll && (
@@ -75,7 +113,18 @@ export default function ScrollRail({
         </button>
       )}
 
-      <div className="scroll-rail__track" ref={railRef} role="group" aria-label={ariaLabel} tabIndex={0}>
+      <div
+        className={`scroll-rail__track${drag ? ' scroll-rail__track--drag' : ''}${pulling ? ' scroll-rail__track--pulling' : ''}`}
+        ref={railRef}
+        role="group"
+        aria-label={ariaLabel}
+        tabIndex={0}
+        onPointerDown={drag ? onPointerDown : undefined}
+        onPointerMove={drag ? onPointerMove : undefined}
+        onPointerUp={drag ? endPull : undefined}
+        onPointerCancel={drag ? endPull : undefined}
+        onDragStart={drag ? (event) => event.preventDefault() : undefined}
+      >
         {children}
       </div>
 
