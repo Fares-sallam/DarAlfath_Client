@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '../fixtures';
-import { qrDataUri } from '../../src/lib/qr';
+import { qrDataUri, qrSvgFromModules } from '../../src/lib/qr';
 
 // The book page's QR button: beside the heart and the share button, it opens a large code for the
 // book's page. The code must lead to the same address the share button copies. Nothing is written
@@ -73,4 +73,17 @@ test('نافذة QR: Escape وضغطة الخلفية بيقفلوها، وضغ�
   await qrButton(page).click();
   await closeButton(page).click();
   await expect(dialog(page)).toBeHidden();
+});
+
+test('شكل الكود: الخانات الكبيرة في الأركان الثلاثة بحواف مدوّرة، والباقي مربعات عادية', () => {
+  // A 25 x 25 grid with every module dark: the three finder zones (7 x 7) are drawn as rounded shapes, nothing else is.
+  const svg = qrSvgFromModules(25, () => true);
+  const arcs = svg.match(/a2\.1 2\.1 0 0 1/g) ?? [];
+  expect(arcs).toHaveLength(3 * 4); // four rounded corners on each of the three outer rings
+  expect(svg.match(/fill-rule="evenodd"/g)).toHaveLength(1);
+
+  // The data modules path has no module inside the finder zones: top-left corner module (row 0, col 0) is not in it.
+  const dataPath = /<path fill="#002046" d="([^"]*)"/.exec(svg)![1];
+  expect(dataPath.startsWith('M9 2')).toBe(true); // first data module: row 0, col 7 → after the 7-module finder and the 2-module quiet zone
+  expect(dataPath).not.toMatch(/^M2 2/);
 });
