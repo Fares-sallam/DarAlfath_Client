@@ -1,7 +1,10 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useProducts } from '@/hooks/useStorefront';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { CatalogNode, ProductLink } from '@/lib/catalogTree';
 import type { MenuItem } from '@/lib/menuMap';
+import { bookCounts } from '@/lib/webCatalog';
 
 /**
  * The catalog tree the dashboard manages («السلاسل والتصنيفات»): sections, series, categories and collections,
@@ -60,4 +63,27 @@ export function useWebMenuItems() {
       return (await readAll<MenuItem>('menu_items', '*', (q) => q.eq('channel', 'web'))) ?? [];
     },
   });
+}
+
+/**
+ * Everything the website's lists need from the tree in one go: the nodes it may show, the book links, the books the
+ * visitor's country sees, and how many each node holds. `hasTree` is false when the tree can't be read or is empty:
+ * the lists then use the older tables.
+ */
+export function useWebTree() {
+  const nodesQuery = useCatalogNodes();
+  const linksQuery = useProductNodeLinks();
+  const productsQuery = useProducts();
+  const nodes = nodesQuery.data;
+  const links = linksQuery.data;
+  const products = productsQuery.data;
+  const counts = useMemo(() => bookCounts(nodes ?? [], links ?? [], products ?? []), [nodes, links, products]);
+  return {
+    nodes: nodes ?? [],
+    links: links ?? [],
+    products: products ?? [],
+    counts,
+    loading: nodesQuery.isLoading || linksQuery.isLoading || productsQuery.isLoading,
+    hasTree: (nodes?.length ?? 0) > 0,
+  };
 }

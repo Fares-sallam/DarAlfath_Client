@@ -429,9 +429,10 @@ export function useCategories() {
 /** Real book_series rows (what the dashboard's "إدارة السلاسل" manages) —
  *  not to be confused with the category-derived groupings below. RLS
  *  (series_anon_select) already scopes this to is_active=true for anon. */
-export function useSeries() {
+export function useSeries({ enabled = true }: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ['book-series'],
+    enabled,
     queryFn: async (): Promise<SeriesItem[]> => {
       if (!isSupabaseConfigured) return [];
 
@@ -1061,11 +1062,12 @@ export function useAnnouncements() {
  * own category or an extra one), minus any switched off in the dashboard; the ones given a place
  * first, the rest after them alphabetically.
  */
-export function useCategoryBar() {
+export function useCategoryBar({ enabled = true }: { enabled?: boolean } = {}) {
   const productsQuery = useProducts();
   const { data: extraSlugs } = useProductExtraCategorySlugs();
   const settingsQuery = useQuery({
     queryKey: ['category-bar'],
+    enabled,
     queryFn: async () => {
       if (!isSupabaseConfigured) return { categories: [], items: [] };
       const [cats, items] = await Promise.all([

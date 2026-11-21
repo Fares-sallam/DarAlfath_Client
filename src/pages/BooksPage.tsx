@@ -50,6 +50,9 @@ export default function BooksPage() {
   const treeNodeId = filters.node || (seriesInTree ? filters.series : '');
   const selectedNode = useMemo(() => nodes.find((item) => item.id === treeNodeId) ?? null, [nodes, treeNodeId]);
 
+  // A category's own record in the tree (found by its address name): what the dashboard wrote for its search-result title.
+  const categoryNode = useMemo(() => (filters.category ? nodes.find((item) => item.slug === filters.category) ?? null : null), [nodes, filters.category]);
+
   // A series or section opened on its own (no search, filter, order or «show all» on top of it) is a page with its
   // own welcome text, video and one strip of books for each node under it, as the dashboard set it up.
   const pageNodeId = useMemo(() => {
@@ -71,15 +74,15 @@ export default function BooksPage() {
   useSeo(
     booksListSeo(siteOrigin(), {
       categorySlug: filters.category || null,
-      categoryName: selectedCategory?.name ?? null,
+      categoryName: selectedCategory?.name ?? categoryNode?.name_ar.trim() ?? null,
       seriesName: selectedSeries?.name ?? null,
       seriesId: filters.series || null,
       nodeId: selectedNode?.id ?? null,
       nodeName: selectedNode?.name_ar ?? null,
-      seoTitle: (nodePage?.node ?? selectedNode)?.seo_title ?? null,
-      seoDescription: (nodePage?.node ?? selectedNode)?.seo_description ?? null,
+      seoTitle: (nodePage?.node ?? selectedNode ?? categoryNode)?.seo_title ?? null,
+      seoDescription: (nodePage?.node ?? selectedNode ?? categoryNode)?.seo_description ?? null,
       searched: Boolean(
-        filters.q.trim() || filters.type || filters.author || searchParams.get('sort') ||
+        filters.q.trim() || filters.type || filters.author || searchParams.get('sort') || searchParams.get('view') ||
           filters.min != null || filters.max != null || filters.availableOnly || filters.saleOnly,
       ),
     }),

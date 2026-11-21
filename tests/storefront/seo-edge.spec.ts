@@ -196,6 +196,68 @@ test('تصنيف وسلسلة والبحث: عنوان التصنيف، وراب
   }
 });
 
+test('سلسلة وقسم وتصنيف من الشجرة: العنوان والوصف اللي كتبتهم اللوحة، والرابط الأساسي، وlinks view=all مش بتتفهرس', async () => {
+  const SERIES = '0b617ab5-2d5a-4915-82bb-0f911a2ca678';
+  const world = mockWorld({
+    catalog_nodes: [{ name_ar: 'سلسلة الفتح الرباني', seo_title: 'الفتح الرباني: كتب ومناهج', seo_description: 'وصف السلسلة من اللوحة' }],
+  });
+  try {
+    let html = await (await pageHandler(request(`/api/page?kind=books&series=${SERIES}`))).text();
+    expect(html).toContain('<title>الفتح الرباني: كتب ومناهج — دار الفتح للنشر والتوزيع</title>');
+    expect(meta(html, 'name', 'description')).toContain('وصف السلسلة من اللوحة');
+    expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/store/books?series=${SERIES}`);
+    expect(meta(html, 'name', 'robots')).toContain('index');
+
+    html = await (await pageHandler(request(`/api/page?kind=books&node=${SERIES}`))).text();
+    expect(meta(html, 'property', 'og:url')).toBe(`https://darolfath.com/store/books?node=${SERIES}`);
+
+    // the plain list of everything is a second view of the same page: not for search results
+    html = await (await pageHandler(request(`/api/page?kind=books&series=${SERIES}&view=all`))).text();
+    expect(meta(html, 'name', 'robots')).toContain('noindex');
+
+    // a node id that isn't a plain value never reaches the database query
+    world.queries.length = 0;
+    await pageHandler(request(`/api/page?kind=books&node=${encodeURIComponent('x&select=*')}`));
+    expect(world.queries.filter((q) => q.startsWith('/rest/v1/catalog_nodes'))).toHaveLength(0);
+  } finally {
+    world.restore();
+  }
+});
+
+test('sitemap.xml من الشجرة: تصنيف وسلسلة وقسم فيهم كتب بس، والفاضي والمخفي مش موجودين', async () => {
+  const world = mockWorld({
+    products_public_catalog: [{ product_id: ID, created_at: '2026-10-03T10:00:00Z' }],
+    categories: [{ slug: 'قديم-مش-هيظهر' }],
+    catalog_nodes: [
+      { id: 'ser', parent_id: null, type: 'series', slug: 'ser' },
+      { id: 'cat', parent_id: 'ser', type: 'category', slug: 'كتب-المعلم' },
+      { id: 'cat-empty', parent_id: 'ser', type: 'category', slug: 'فاضي' },
+      { id: 'sec', parent_id: null, type: 'section', slug: null },
+      { id: 'under-sec', parent_id: 'sec', type: 'series', slug: 'under' },
+      { id: 'sec-empty', parent_id: null, type: 'section', slug: null },
+    ],
+    product_nodes: [
+      { product_id: ID, node_id: 'cat' },
+      { product_id: ID, node_id: 'under-sec' },
+    ],
+  });
+  try {
+    const xml = await (await sitemapHandler(request('/sitemap.xml', 'darolfath.com'))).text();
+    const locs = [...xml.matchAll(/<loc>([^<]+)<\/loc>/g)].map((m) => m[1]);
+    const at = (p: string) => `https://darolfath.com${p}`;
+    expect(locs).toContain(at(`/store/books?category=${encodeURIComponent('كتب-المعلم')}`));
+    expect(locs).toContain(at('/store/books?series=ser'));          // holds the book through its category
+    expect(locs).toContain(at('/store/books?node=sec'));            // a section: through the series inside it
+    expect(locs).toContain(at('/store/books?series=under-sec'));
+    expect(locs).not.toContain(at(`/store/books?category=${encodeURIComponent('فاضي')}`));
+    expect(locs).not.toContain(at('/store/books?node=sec-empty'));
+    // the tree answered: the older categories table is not consulted for the list
+    expect(locs).not.toContain(at(`/store/books?category=${encodeURIComponent('قديم-مش-هيظهر')}`));
+  } finally {
+    world.restore();
+  }
+});
+
 test('الصفحات الأساسية: لكل صفحة عنوان ووصف ورابط', async () => {
   const world = mockWorld({});
   try {

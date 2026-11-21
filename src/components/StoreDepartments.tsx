@@ -2,15 +2,17 @@ import { Link } from 'react-router-dom';
 import { LibraryBig } from 'lucide-react';
 import SectionHeader from '@/components/SectionHeader';
 import ScrollRail from '@/components/ScrollRail';
+import { useWebTree } from '@/hooks/useCatalogTree';
 import { useSeries } from '@/hooks/useStorefront';
+import { webSeries } from '@/lib/webCatalog';
 import { useReveal } from '@/hooks/useReveal';
 import type { SeriesItem } from '@/types/store';
 
 /**
  * "أقسام المتجر" — a quick-nav strip of department cards under the hero
- * banner, each one a book_series row (the same table + admin page as
- * "إدارة السلاسل" in the dashboard: reused deliberately rather than adding
- * a parallel "departments" concept — the admin manages these images there).
+ * banner, each one a series of the catalog tree (the dashboard's
+ * «السلاسل والتصنيفات»: the website's own switch and order, its picture),
+ * or, when the tree can't be read, a book_series row as before.
  *
  * Renders nothing (and drops no space) until at least one series exists.
  * Each card links to /books?series=<id>, filtered via useSeriesProductIds.
@@ -37,7 +39,17 @@ function DepartmentCard({ series }: { series: SeriesItem }) {
 }
 
 export default function StoreDepartments() {
-  const { data: series = [] } = useSeries();
+  const tree = useWebTree();
+  const { data: legacySeries = [] } = useSeries({ enabled: !tree.loading && !tree.hasTree });
+  const series: SeriesItem[] = tree.hasTree
+    ? webSeries(tree.nodes, tree.counts).map((node) => ({
+        id: node.id,
+        name: node.name_ar.trim(),
+        description: node.description_ar,
+        cover_url: node.image_url,
+        products_count: tree.counts.get(node.id) ?? 0,
+      }))
+    : tree.loading ? [] : legacySeries;
   // Called unconditionally (rules of hooks) even though the section itself
   // returns null below when empty — a ref that never gets attached is fine.
   const ref = useReveal<HTMLElement>();

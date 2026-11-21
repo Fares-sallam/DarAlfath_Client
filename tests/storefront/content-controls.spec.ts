@@ -34,6 +34,9 @@ interface Content {
 
 async function withContent(page: Page, c: Content) {
   const state: { cats: { id: string; slug: string; name: string }[]; ids: string[]; titles: Map<string, string> } = { cats: [], ids: [], titles: new Map() };
+  // The category strip reads the catalog tree when it can; these checks are about the older table it falls back to
+  // (the tree's own switches are checked in web-lists.spec.ts), so the tree is answered as empty here.
+  await page.route('**/rest/v1/catalog_nodes*', (r) => reply(r, []));
   await page.route('**/rest/v1/site_announcements*', (r) => reply(r, c.announcements ?? []));
   await page.route('**/rest/v1/site_content_settings*', (r) => reply(r, [c.settings ?? { all_books_in_bar: true, intro_videos_title: 'فيديوهات تعريفية' }]));
   await page.route('**/rest/v1/home_feature_boxes*', (r) => (c.boxes === 'error' ? json(r, { message: 'down' }, 500) : reply(r, c.boxes ?? [])));

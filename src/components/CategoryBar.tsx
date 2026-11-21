@@ -1,17 +1,25 @@
 import { NavLink } from 'react-router-dom';
+import { useWebTree } from '@/hooks/useCatalogTree';
 import { useCategoryBar, useSiteContent } from '@/hooks/useStorefront';
+import { webBarCategories } from '@/lib/webCatalog';
 
 /**
  * Persistent category strip under the header, on every page — the one-click jump (the header's hover
  * menus hold the full submenus).
  *
- * Which categories show, and in what order, is set in the dashboard (إدارة الإعلانات والأشرطة →
- * شريط التصنيفات), as is "كل الكتب" at its head; "كل التصنيفات" (the page of every category) always
+ * Which categories show, and in what order, is set in the dashboard (السلاسل والتصنيفات → شريط
+ * التصنيفات: the website's own switch and order), as is "كل الكتب" at its head; "كل التصنيفات" (the page of every category) always
  * follows it. Only categories with books in them are ever listed,
  * so the strip fills in on its own as the catalog grows.
  */
 export default function CategoryBar() {
-  const { data: categories, isLoading } = useCategoryBar();
+  const tree = useWebTree();
+  // The older table is read only when the tree can't be (nothing to draw from).
+  const legacy = useCategoryBar({ enabled: !tree.loading && !tree.hasTree });
+  const categories = tree.hasTree
+    ? webBarCategories(tree.nodes, tree.counts).map((node) => ({ id: node.slug, name: node.name_ar.trim() }))
+    : legacy.data;
+  const isLoading = tree.loading || (!tree.hasTree && legacy.isLoading);
   const { data: content, isLoading: contentLoading } = useSiteContent();
   const showAll = content?.all_books_in_bar ?? true;
 

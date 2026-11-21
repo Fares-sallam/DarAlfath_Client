@@ -76,12 +76,33 @@ async function seoFor(kind: string, params: URLSearchParams, origin: string): Pr
   if (kind === 'books') {
     const category = safeFilterValue(params.get('category'));
     const series = safeFilterValue(params.get('series'));
-    const searched = ['q', 'sort', 'type', 'author', 'min', 'max', 'available', 'sale'].some((key) => (params.get(key) ?? '') !== '');
-    let categoryName: string | null = null;
-    let seriesName: string | null = null;
-    if (category) categoryName = (await rest<{ name: string }>(`categories?select=name&slug=eq.${encodeURIComponent(category)}&limit=1`))?.[0]?.name ?? null;
-    else if (series) seriesName = (await rest<{ name: string }>(`book_series?select=name&id=eq.${encodeURIComponent(series)}&limit=1`))?.[0]?.name ?? null;
-    return { seo: booksListSeo(origin, { categorySlug: category, categoryName, seriesName, seriesId: series, searched }), status: 200 };
+    const node = safeFilterValue(params.get('node'));
+    const searched = ['q', 'sort', 'type', 'author', 'min', 'max', 'available', 'sale', 'view'].some((key) => (params.get(key) ?? '') !== '');
+    // The catalog tree first (it carries the title and description the dashboard wrote for the page), then the older tables.
+    type TreeRow = { name_ar: string; seo_title: string | null; seo_description: string | null };
+    const treeSelect = 'catalog_nodes?select=name_ar,seo_title,seo_description';
+    let name: string | null = null;
+    let tree: TreeRow | undefined;
+    if (category) {
+      tree = (await rest<TreeRow>(`${treeSelect}&slug=eq.${encodeURIComponent(category)}&limit=1`))?.[0];
+      name = tree?.name_ar ?? (await rest<{ name: string }>(`categories?select=name&slug=eq.${encodeURIComponent(category)}&limit=1`))?.[0]?.name ?? null;
+    } else if (series) {
+      tree = (await rest<TreeRow>(`${treeSelect}&id=eq.${encodeURIComponent(series)}&limit=1`))?.[0];
+      name = tree?.name_ar ?? (await rest<{ name: string }>(`book_series?select=name&id=eq.${encodeURIComponent(series)}&limit=1`))?.[0]?.name ?? null;
+    } else if (node) {
+      tree = (await rest<TreeRow>(`${treeSelect}&id=eq.${encodeURIComponent(node)}&limit=1`))?.[0];
+      name = tree?.name_ar ?? null;
+    }
+    return {
+      seo: booksListSeo(origin, {
+        categorySlug: category, categoryName: category ? name : null,
+        seriesName: series ? name : null, seriesId: series,
+        nodeId: node, nodeName: node ? name : null,
+        seoTitle: tree?.seo_title, seoDescription: tree?.seo_description,
+        searched,
+      }),
+      status: 200,
+    };
   }
 
   if (kind === 'links') {
