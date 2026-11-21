@@ -409,7 +409,7 @@ test('خريطة العرض: القايمة بتتعرض رئيسي وفرعي،
   await expect(subs.nth(0)).toContainText('تصنيف 1');
   await expect(subs.nth(0).getByTestId('sub-placement')).toHaveText('فرعي داخل: سلسلة أ');
   await expect(subs.nth(0)).toHaveAttribute('data-auto', 'true');
-  await expect(page.getByTestId('menu-main').nth(1)).toContainText('فيه 2 فرع (2 تلقائي)');
+  await expect(page.getByTestId('menu-main').nth(1)).toContainText('فيه 2 (2 تلقائي)');
 });
 
 test('خريطة العرض: السحب بيرتّب الرئيسيين', async ({ page }) => {
@@ -444,14 +444,110 @@ test('خريطة العرض: سحب فرعي جوه رئيسي تاني، أو �
   expect(rpcs[3]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m1', 'm2', 'm4', 'm3'] } });
 });
 
-test('خريطة العرض: رئيسي جواه فروع مينفعش يتحط جوه رئيسي تاني', async ({ page }) => {
+test('خريطة العرض: عنصر جواه فروع ينفع يتحط جوه عنصر تاني (الفروع بتروح معاه)', async ({ page }) => {
   const { rpcs } = await setUp(page, [...MENU, menu('m4', { kind: 'link', label_ar: 'رابط يدوي', url: '/x', parent_id: 'm2', sort_order: 0 })]);
   await page.setViewportSize({ width: 1400, height: 1500 });
   await page.goto('/catalog?tab=map');
 
   const mains = page.getByTestId('menu-main-row');
   await dragOnto(mains.nth(1).getByTestId('drag-handle'), mains.nth(2), 'inside');
+  await expect.poll(() => rpcs.length).toBe(2);
+  expect(rpcs[0]).toEqual({ name: 'menu_move_item', body: { p_id: 'm2', p_parent: 'm3' } });
+  expect(rpcs[1]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m2'] } });
+});
+
+test('خريطة العرض: حد 4 مستويات: مفيش زر فرع تحت المستوى الرابع، والسحب جواه بيترفض', async ({ page }) => {
+  const chain = [
+    menu('d1', { kind: 'group', label_ar: 'مستوى 1', sort_order: 0 }),
+    menu('d2', { kind: 'group', label_ar: 'مستوى 2', parent_id: 'd1' }),
+    menu('d3', { kind: 'group', label_ar: 'مستوى 3', parent_id: 'd2' }),
+    menu('d4', { kind: 'group', label_ar: 'مستوى 4', parent_id: 'd3' }),
+    menu('x', { kind: 'group', label_ar: 'عنصر تاني', sort_order: 1 }),
+  ];
+  const { rpcs } = await setUp(page, chain);
+  await page.setViewportSize({ width: 1400, height: 1800 });
+  await page.goto('/catalog?tab=map');
+
+  await expect(page.locator('[data-level="4"]')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: 'إضافة فرع داخل مستوى 3' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'إضافة فرع داخل مستوى 4' })).toHaveCount(0);
+  await expect(page.locator('[data-level="4"]').getByTestId('sub-placement')).toHaveText('فرعي داخل: مستوى 1 ‹ مستوى 2 ‹ مستوى 3');
+
+  await dragOnto(page.locator('[data-id="x"]').getByTestId('drag-handle').first(), page.locator('[data-id="d4"]').getByTestId('menu-sub-row').first(), 'inside');
   expect(rpcs).toHaveLength(0);
+});
+
+test('خريطة العرض: تجميع فروع تلقائية في مجموعة اسمها «المواد»', async ({ page }) => {
+  const { rpcs } = await setUp(page);
+  await page.goto('/catalog?tab=map');
+
+  const subs = page.getByTestId('menu-main').nth(1).getByTestId('menu-sub');
+  await subs.nth(0).getByTestId('menu-select').check();
+  await subs.nth(1).getByTestId('menu-select').check();
+  await expect(page.getByTestId('group-bar')).toContainText('اخترت 2 عنصر داخل «سلسلة أ»');
+  await page.getByTestId('group-start').click();
+  await page.getByTestId('group-name').fill('المواد');
+  await page.getByTestId('group-confirm').click();
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'menu_group_items', body: { p_parent: 'm2', p_label_ar: 'المواد', p_item_ids: [], p_node_ids: ['c1', 'c2'] } });
+});
+
+test('خريطة العرض: التجميع بيجمع المخزّن والتلقائي مع بعض، والاختيار بيتفرّغ لما تغيّر الأب', async ({ page }) => {
+  const rows = [
+    ...MENU,
+    menu('m4', { kind: 'link', label_ar: 'رابط يدوي', url: '/x', parent_id: 'm2', sort_order: 0 }),
+    menu('m5', { kind: 'link', label_ar: 'رابط تاني', url: '/y', parent_id: 'm3', sort_order: 0 }),
+  ];
+  const { rpcs } = await setUp(page, rows);
+  await page.setViewportSize({ width: 1400, height: 1500 });
+  await page.goto('/catalog?tab=map');
+
+  const under = (parent: string) => page.locator(`[data-id="${parent}"]`).locator('xpath=./div[@data-testid="menu-sub"]');
+  await under('m2').nth(0).getByTestId('menu-select').check(); // رابط يدوي (stored)
+  await under('m2').nth(1).getByTestId('menu-select').check(); // تصنيف 1 (automatic)
+  await expect(page.getByTestId('group-bar')).toContainText('اخترت 2');
+  // a row from another parent starts a new selection
+  await under('m3').nth(0).getByTestId('menu-select').check();
+  await expect(page.getByTestId('group-bar')).toContainText('اخترت 1 عنصر داخل «تواصل معنا»');
+  await under('m3').nth(0).getByTestId('menu-select').uncheck();
+  await expect(page.getByTestId('group-bar')).toHaveCount(0);
+
+  await under('m2').nth(0).getByTestId('menu-select').check();
+  await under('m2').nth(1).getByTestId('menu-select').check();
+  await page.getByTestId('group-start').click();
+  await page.getByTestId('group-name').fill('مجموعة');
+  await page.getByTestId('group-name').press('Enter');
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0].body).toEqual({ p_parent: 'm2', p_label_ar: 'مجموعة', p_item_ids: ['m4'], p_node_ids: ['c1'] });
+});
+
+test('خريطة العرض: مجموعة جواها عنصر: مكتوب جوه إيه بالظبط، وفك المجموعة', async ({ page }) => {
+  const rows = [
+    ...MENU,
+    menu('g', { kind: 'group', label_ar: 'المواد', parent_id: 'm2', sort_order: 0 }),
+    menu('n1', { kind: 'node', node_id: 'c1', label_ar: null, parent_id: 'g', sort_order: 0 }),
+  ];
+  const { rpcs } = await setUp(page, rows);
+  await page.goto('/catalog?tab=map');
+
+  const inGroup = page.locator('[data-id="n1"]');
+  await expect(inGroup).toHaveAttribute('data-level', '3');
+  await expect(inGroup.getByTestId('sub-placement')).toHaveText('فرعي داخل: سلسلة أ ‹ المواد');
+  // «تصنيف 1» sits inside the group, so it is not repeated as an automatic child of the series
+  await expect(page.getByTestId('menu-main').nth(1).locator('[data-auto="true"]')).toHaveCount(1);
+
+  await page.getByRole('button', { name: 'فك مجموعة المواد' }).click();
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'menu_ungroup', body: { p_group: 'g' } });
+});
+
+test('رفوف الصفحة الرئيسية: الاسم الصح في الخريطة، وزر الإضافة «إضافة عنصر»', async ({ page }) => {
+  await setUp(page);
+  await page.goto('/catalog?tab=map');
+  await expect(page.getByTestId('shelves-title')).toHaveText('رفوف الصفحة الرئيسية (الموقع)');
+  await expect(page.getByTestId('menu-add')).toHaveText('إضافة عنصر');
+  await page.getByTestId('map-channel-app').click();
+  await expect(page.getByTestId('shelves-title')).toHaveText('رفوف الصفحة الرئيسية (التطبيق)');
 });
 
 test('خريطة العرض: إخفاء فرع تلقائي بيحفظ صف مخفي لنفس الابن جوه نفس الرئيسي', async ({ page }) => {
@@ -499,7 +595,7 @@ test('خريطة العرض: نقل فرعي لرئيسي تاني أو لمست
   const row = page.getByTestId('menu-main').nth(1).getByTestId('menu-sub').first();
   await expect(row).toContainText('رابط يدوي');
   const options = await row.getByTestId('sub-move').locator('option').allTextContents();
-  expect(options).toEqual(['اجعله رئيسي', 'داخل: الرئيسية', 'داخل: سلسلة أ', 'داخل: تواصل معنا']);
+  expect(options).toEqual(['رئيسي', 'داخل: الرئيسية', 'داخل: سلسلة أ', 'داخل: تواصل معنا']);
   await row.getByTestId('sub-move').selectOption('');
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0]).toEqual({ name: 'menu_move_item', body: { p_id: 'm4', p_parent: null } });
