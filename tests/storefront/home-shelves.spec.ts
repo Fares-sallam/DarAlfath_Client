@@ -32,7 +32,7 @@ const LINKS = [
 ];
 
 const row = (nodeId: string, order: number, over: Record<string, unknown> = {}) => ({
-  section_key: `shelf:${nodeId}`, node_id: nodeId, title_ar: null, item_limit: null, visible: true, sort_order: order, ...over,
+  section_key: `shelf:${nodeId}`, kind: 'category-shelf', node_id: nodeId, title_ar: null, item_limit: null, visible: true, sort_order: order, ...over,
 });
 
 async function stub(page: Page, shelves: unknown[]) {

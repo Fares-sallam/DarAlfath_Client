@@ -49,7 +49,7 @@ const STUB = stubPicture();
  * depend on the actual pictures, so reads from the public image buckets are answered with a tiny
  * stand-in of the same shape. Writes are untouched (tests that upload fake them on their own).
  */
-export const test = base.extend<{ stubStorageImages: void; untouchedLook: void; olderTopMenu: void }>({
+export const test = base.extend<{ stubStorageImages: void; untouchedLook: void; olderTopMenu: void; olderHomeLayout: void }>({
   /**
    * How the store looks is decided in the dashboard («مظهر المتجر») and saved in the live database: sections can be hidden or
    * reordered, strips varied, buttons recoloured. Tests about the store's own layout must not depend on what happens to be
@@ -79,6 +79,22 @@ export const test = base.extend<{ stubStorageImages: void; untouchedLook: void; 
   olderTopMenu: [
     async ({ context }, use) => {
       await context.route('**/rest/v1/menu_items*', (route) => {
+        if (route.request().method() !== 'GET' && route.request().method() !== 'HEAD') return route.fallback();
+        return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' });
+      });
+      await use();
+    },
+    { auto: true },
+  ],
+  /**
+   * The home page's blocks follow the layout saved in the dashboard («الصفحة الرئيسية»); with none saved they follow the older
+   * order from «مظهر المتجر». Tests about the home page's own structure must not depend on what happens to be saved, so by
+   * default no layout is saved (an empty answer). A test about the saved layout answers `home_layout` itself (a route set on
+   * the page wins over this one).
+   */
+  olderHomeLayout: [
+    async ({ context }, use) => {
+      await context.route('**/rest/v1/home_layout*', (route) => {
         if (route.request().method() !== 'GET' && route.request().method() !== 'HEAD') return route.fallback();
         return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '[]' });
       });

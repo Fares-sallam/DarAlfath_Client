@@ -8,6 +8,8 @@ export interface HomeShelf {
   section_key: string;
   node_id: string | null;
   title_ar: string | null;
+  /** a line under the title (null = the standard one for the kind of node) */
+  subtitle_ar?: string | null;
   /** how many books the shelf holds (null = all of them) */
   item_limit: number | null;
   visible: boolean;

@@ -63,8 +63,9 @@ test('«مظهر المتجر» في القايمة تحت «إدارة الصف
   const linksPage = links.findIndex((t) => t.includes('إدارة الصفحة والروابط'));
   expect(links.findIndex((t) => t.includes('مظهر المتجر'))).toBe(linksPage + 1);
 
-  // an empty saved row is the house look: every section, in the order the home page always had, all showing
-  expect(await sectionKeys(page)).toEqual(['departments', 'best-sellers', 'new-arrivals', 'offers', 'categories', 'intro-videos', 'features']);
+  // the home page's sections moved to the catalog hub: here only a way to it
+  await expect(page.getByTestId('home-blocks-link')).toHaveAttribute('href', '/catalog?tab=home');
+  expect(await sectionKeys(page)).toEqual([]);
   await expect(page.getByTestId('appearance-save-bar')).toHaveCount(0);
   for (const key of ['view_all', 'view_category', 'add_to_cart', 'quick_buy']) {
     await expect(page.getByTestId(`button-${key}-default`)).toHaveAttribute('aria-checked', 'true');
@@ -75,12 +76,7 @@ test('«مظهر المتجر» في القايمة تحت «إدارة الصف
 test('ترتيب الأقسام وإخفاؤها، وتنويع الشريط، ودرجة الباترن، وألوان الأزرار: تتحفظ كلها مرة واحدة', async ({ page }) => {
   const { writes } = await setUp(page);
   await page.goto('/appearance');
-  await expect(page.getByTestId('home-section-departments')).toBeVisible();
-
-  // order: the first section goes down one place; the third is hidden
-  await page.getByRole('button', { name: 'حرّك السلاسل (الأقسام السريعة) لأسفل' }).click();
-  expect((await sectionKeys(page)).slice(0, 2)).toEqual(['best-sellers', 'departments']);
-  await page.locator('label[title="إظهار فيديوهات «من الدار»"]').click();
+  await expect(page.getByTestId('appearance-sections')).toBeVisible();
 
   // strips: varied
   await page.getByTestId('appearance-strip').getByRole('radio', { name: /متنوع/ }).first().click();
@@ -110,9 +106,9 @@ test('ترتيب الأقسام وإخفاؤها، وتنويع الشريط، �
   expect(row.id).toBe(1);
   expect(row.pattern_strength).toBe(140);
   expect(row.strip_arrangement).toBe('varied');
-  expect(row.home_sections.slice(0, 2).map((s: any) => s.key)).toEqual(['best-sellers', 'departments']);
-  expect(row.home_sections.find((s: any) => s.key === 'intro-videos').visible).toBe(false);
-  expect(row.home_sections.filter((s: any) => s.visible)).toHaveLength(6);
+  // the sections are no longer edited here: what was saved before is kept as it was (every section, the house order)
+  expect(row.home_sections.map((s: any) => s.key)).toEqual(['departments', 'best-sellers', 'new-arrivals', 'offers', 'categories', 'intro-videos', 'features']);
+  expect(row.home_sections.every((s: any) => s.visible)).toBe(true);
   const sameAtNight = { color: 'same', tone: 0 };
   expect(row.button_styles.add_to_cart).toEqual({ color: 'teal', tone: -1, night: sameAtNight });
   expect(row.button_styles.quick_buy).toEqual({ color: 'green', tone: 0, night: sameAtNight });
@@ -122,15 +118,13 @@ test('ترتيب الأقسام وإخفاؤها، وتنويع الشريط، �
 test('«معاينة المتجر بالتعديلات» بتفتح المتجر بالمسودة اللي على الشاشة، من غير ما تحفظ حاجة', async ({ page }) => {
   const { writes } = await setUp(page);
   await page.goto('/appearance');
-  await expect(page.getByTestId('home-section-features')).toBeVisible();
+  await expect(page.getByTestId('appearance-sections')).toBeVisible();
 
-  await page.locator('label[title="إظهار مربعات المزايا"]').click();
   await page.getByTestId('button-view_all-navy').click();
   await page.getByTestId('store-pattern-strength-range').fill('50');
 
   const draft = decode((await page.getByTestId('appearance-preview').getAttribute('href'))!);
   expect(draft.pattern_strength).toBe(50);
-  expect(draft.home_sections.find((s: any) => s.key === 'features').visible).toBe(false);
   expect(draft.button_styles.view_all).toEqual({ color: 'navy', tone: 0, night: { color: 'same', tone: 0 } });
   expect(writes).toHaveLength(0);
 });

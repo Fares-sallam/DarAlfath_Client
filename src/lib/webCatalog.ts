@@ -143,7 +143,7 @@ export function buildHomeShelves(
     views.push({
       key: row.section_key,
       title: row.title_ar?.trim() || node.name_ar.trim(),
-      subtitle: SUBTITLE[node.type],
+      subtitle: row.subtitle_ar?.trim() || SUBTITLE[node.type],
       href: shelfHref(node, nodes.some((n) => n.parent_id === node.id)),
       books: row.item_limit != null ? ordered.slice(0, row.item_limit) : ordered,
     });

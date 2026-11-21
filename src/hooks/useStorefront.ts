@@ -787,15 +787,15 @@ export function useDiscountedProducts() {
   return { ...productsQuery, data };
 }
 
-export function useRelatedProducts(categorySlug?: string | null, excludedId?: string) {
+export function useRelatedProducts(categorySlug?: string | null, excludedId?: string, limit = 5) {
   const productsQuery = useProducts();
   const related = useMemo(() => {
     const products = productsQuery.data ?? [];
     return products
       .filter((item) => item.product_id !== excludedId)
       .filter((item) => (categorySlug ? item.category_slug === categorySlug : true))
-      .slice(0, 5);
-  }, [productsQuery.data, categorySlug, excludedId]);
+      .slice(0, limit);
+  }, [productsQuery.data, categorySlug, excludedId, limit]);
 
   return { ...productsQuery, data: related };
 }

@@ -38,7 +38,7 @@ function DepartmentCard({ series }: { series: SeriesItem }) {
   );
 }
 
-export default function StoreDepartments() {
+export default function StoreDepartments({ title = 'أقسام المتجر' }: { title?: string }) {
   const tree = useWebTree();
   const { data: legacySeries = [] } = useSeries({ enabled: !tree.loading && !tree.hasTree });
   const series: SeriesItem[] = tree.hasTree
@@ -58,8 +58,8 @@ export default function StoreDepartments() {
 
   return (
     <section ref={ref} className="reveal store-departments">
-      <SectionHeader title="أقسام المتجر" href="/books" linkLabel="الكل" />
-      <ScrollRail ariaLabel="أقسام المتجر" className="store-departments__rail">
+      <SectionHeader title={title} href="/books" linkLabel="الكل" />
+      <ScrollRail ariaLabel={title} className="store-departments__rail">
         {series.map((item) => (
           <div className="store-departments__item" key={item.id}>
             <DepartmentCard series={item} />

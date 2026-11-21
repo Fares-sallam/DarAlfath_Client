@@ -15,6 +15,8 @@ import {
   useProductVariants,
   useRelatedProducts,
 } from '@/hooks/useStorefront';
+import { useHomeLayoutRows } from '@/hooks/useCatalogTree';
+import { BOOK_RELATED_KEY, pageStripOf } from '@/lib/homeBlocks';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
 import { flyToCart } from '@/lib/flyToCart';
@@ -84,9 +86,14 @@ export default function BookDetailsPage() {
   const { data: variants = [], isLoading: variantsLoading } = useProductVariants(
     product?.product_id ?? productId
   );
+  // «كتب قد تعجبك»: shown, titled and counted as the dashboard says («الصفحة الرئيسية ← أشرطة الصفحات التانية»)
+  const { data: layoutRows = [] } = useHomeLayoutRows();
+  const relatedStrip = pageStripOf(layoutRows, BOOK_RELATED_KEY);
+  const relatedLimit = Math.min(Math.max(relatedStrip?.limit ?? 4, 1), 12);
   const { data: related = [] } = useRelatedProducts(
     product?.category_slug,
-    product?.product_id
+    product?.product_id,
+    relatedLimit,
   );
   // Every category the book is in (its own plus the extra ones it is also tagged into).
   const categories = useProductCategories(product);
@@ -632,11 +639,11 @@ export default function BookDetailsPage() {
       </section>
 
       {/* ── Related ─── */}
-      {related.length > 0 && (
-        <section className="bk3-related" style={{ '--i': 12 } as React.CSSProperties}>
-          <h2 className="bk3-related__hd">كتب قد تعجبك</h2>
+      {related.length > 0 && relatedStrip?.visible !== false && (
+        <section className="bk3-related" style={{ '--i': 12 } as React.CSSProperties} data-testid="book-related">
+          <h2 className="bk3-related__hd">{relatedStrip?.title ?? 'كتب قد تعجبك'}</h2>
           <div className="bk3-related__grid">
-            {related.slice(0, 4).map((item) => (
+            {related.slice(0, relatedLimit).map((item) => (
               <ProductCard key={item.product_id} product={item} />
             ))}
           </div>

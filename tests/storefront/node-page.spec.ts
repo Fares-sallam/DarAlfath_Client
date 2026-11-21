@@ -127,12 +127,15 @@ test('الشريط بيتسحب بالماوس يمين وشمال، والسح�
   expect(afterPull).toBeLessThan(startLeft);
   expect(new URL(page.url()).pathname).toMatch(/\/books$/); // no book was opened by the pull
 
-  // and back the other way
+  // and back the other way (once the strip has settled onto a book: a second pull must start from where it rests)
+  await expect.poll(async () => { const a = await track.evaluate((el) => el.scrollLeft); await page.waitForTimeout(150); return a === (await track.evaluate((el) => el.scrollLeft)); }).toBe(true);
+  const settled = await track.evaluate((el) => el.scrollLeft);
   await page.mouse.move(box.x + box.width * 0.7, y);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.2, y, { steps: 8 });
   await page.mouse.up();
-  expect(await track.evaluate((el) => el.scrollLeft)).toBeGreaterThan(afterPull);
+  // (the strip settles onto a book after the release, so the position is read until it has)
+  await expect.poll(() => track.evaluate((el) => el.scrollLeft)).toBeGreaterThan(settled);
 });
 
 test('حد الشريط من اللوحة: بيعرض أول ٣ كتب والعدّاد بيقول كام كتاب فيه', async ({ page }) => {

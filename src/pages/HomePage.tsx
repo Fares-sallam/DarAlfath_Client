@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useMemo, type ReactNode } from 'react';
 import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
@@ -21,7 +21,8 @@ import {
   useSiteContent,
 } from '@/hooks/useStorefront';
 import { featureIcon } from '@/lib/featureIcons';
-import { useHomeShelfSections } from '@/hooks/useCatalogTree';
+import { useHomeLayoutRows, useHomeShelfSections } from '@/hooks/useCatalogTree';
+import { blockText, hasHomeLayout, resolveHomeBlocks } from '@/lib/homeBlocks';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { staticSeo } from '@/lib/seo';
 
@@ -54,7 +55,14 @@ export default function HomePage() {
   const features = featuresFailed ? FALLBACK_FEATURES : featureRows ?? [];
   const { data: categorySections = [] } = useHomeCategorySections();
   const chosen = useHomeShelfSections();
-  const { data: newArrivals = [] } = useNewArrivals(12);
+  // The page's blocks in the order, titles and counts the dashboard's «الصفحة الرئيسية» sets. Until that has been read, or when it
+  // can't be, the older order from «مظهر المتجر» is followed, with the standard texts and counts.
+  const layout = useHomeLayoutRows();
+  const layoutRows = useMemo(() => layout.data ?? [], [layout.data]);
+  const layoutOn = hasHomeLayout(layoutRows);
+  const blocks = useMemo(() => resolveHomeBlocks(layoutRows), [layoutRows]);
+  const textOf = (key: HomeSectionKey) => blockText(layoutOn ? blocks.find((b) => b.std === key) : undefined, key);
+  const { data: newArrivals = [] } = useNewArrivals(textOf('new-arrivals').limit ?? 12);
   const { data: discounted = [] } = useDiscountedProducts();
   const { data: introVideoRows = [] } = useIntroVideos();
 
@@ -83,45 +91,45 @@ export default function HomePage() {
   // `group` is the dashboard's name for the row («صفوف التصنيفات» covers every category row at once).
   const sections: { key: string; group: HomeSectionKey; node: ReactNode }[] = [];
   if (bestSellers.length > 0) {
-    sections.push({ key: 'best-sellers', group: 'best-sellers', node: shelf('best-sellers', 'الأكثر مبيعًا', 'الكتب الأكثر طلبًا من قرّاء الدار', bestSellers, { testId: 'best-sellers' }) });
+    const t = textOf('best-sellers');
+    sections.push({ key: 'best-sellers', group: 'best-sellers', node: shelf('best-sellers', t.title, t.subtitle ?? '', t.limit != null ? bestSellers.slice(0, t.limit) : bestSellers, { testId: 'best-sellers' }) });
   }
   if (newArrivals.length > 0) {
-    sections.push({ key: 'new-arrivals', group: 'new-arrivals', node: shelf('new-arrivals', 'وصل حديثًا', 'أحدث إصدارات الدار', newArrivals, { href: '/books?sort=newest', linkLabel: 'عرض الكل', testId: 'new-arrivals' }) });
+    const t = textOf('new-arrivals');
+    sections.push({ key: 'new-arrivals', group: 'new-arrivals', node: shelf('new-arrivals', t.title, t.subtitle ?? '', newArrivals, { href: '/books?sort=newest', linkLabel: 'عرض الكل', testId: 'new-arrivals' }) });
   }
   if (discounted.length >= MIN_OFFERS_ROW) {
-    sections.push({ key: 'offers', group: 'offers', node: shelf('offers', 'عروض وخصومات', 'كتب بسعر أقل من سعرها المعتاد', discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers' }) });
+    const t = textOf('offers');
+    sections.push({ key: 'offers', group: 'offers', node: shelf('offers', t.title, t.subtitle ?? '', t.limit != null ? discounted.slice(0, t.limit) : discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers' }) });
   }
-  // The category shelves: the ones chosen in the dashboard («الصفحة الرئيسية»), or, when none were chosen, the first three
-  // categories as the page always had them. Nothing is drawn until it is known which.
-  const categoryShelves = chosen.loading
-    ? []
-    : chosen.shelves ??
-      categorySections.slice(0, 3).map((entry) => ({
-        key: `category-${entry.category.id}`,
-        title: entry.category.name,
-        subtitle: 'كتب مختارة من هذا التصنيف',
-        href: `/books?category=${entry.category.id}`,
-        books: entry.products,
-      }));
+  // The category shelves. With the dashboard's layout they are blocks of their own, each where it was put (and the automatic
+  // «first N categories» block steps aside once any is chosen). Without it: the chosen ones, or the first three categories as
+  // the page always had them, all at the place of «صفوف التصنيفات». Nothing is drawn until it is known which.
+  const hasShelfRows = layoutRows.some((r) => r.kind === 'category-shelf');
+  const autoCount = textOf('categories').limit ?? 3;
+  const autoShelves = categorySections.slice(0, autoCount).map((entry) => ({
+    key: `category-${entry.category.id}`,
+    title: entry.category.name,
+    subtitle: 'كتب مختارة من هذا التصنيف',
+    href: `/books?category=${entry.category.id}`,
+    books: entry.products,
+  }));
+  const shelfNode = (entry: { key: string; title: string; subtitle: string; href: string; books: typeof bestSellers }) =>
+    shelf(entry.key, entry.title, entry.subtitle, entry.books, { href: entry.href, linkLabel: 'عرض التصنيف', linkKind: 'view_category' });
+  const categoryShelves = chosen.loading ? [] : layoutOn ? (hasShelfRows ? [] : autoShelves) : chosen.shelves ?? autoShelves;
   for (const entry of categoryShelves) {
-    sections.push({
-      key: entry.key,
-      group: 'categories',
-      node: shelf(entry.key, entry.title, entry.subtitle, entry.books, {
-        href: entry.href,
-        linkLabel: 'عرض التصنيف',
-        linkKind: 'view_category',
-      }),
-    });
+    sections.push({ key: entry.key, group: 'categories', node: shelfNode(entry) });
   }
+  // the videos' title: written here, else the one from the videos' own settings, else the standard
+  const videosTitle = (layoutOn ? blocks.find((b) => b.std === 'intro-videos')?.title : null) || siteContent?.intro_videos_title || 'فيديوهات تعريفية';
   if (introVideos.length > 0) {
     sections.push({
       key: 'intro-videos',
       group: 'intro-videos',
       node: (
         <Reveal key="intro-videos">
-          <SectionHeader title={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} subtitle="مقاطع مختارة من دار الفتح" />
-          <VideoRail videos={introVideos} ariaLabel={siteContent?.intro_videos_title || 'فيديوهات تعريفية'} />
+          <SectionHeader title={videosTitle} subtitle={textOf('intro-videos').subtitle ?? ''} />
+          <VideoRail videos={introVideos} ariaLabel={videosTitle} />
         </Reveal>
       ),
     });
@@ -150,11 +158,24 @@ export default function HomePage() {
     });
   }
 
-  sections.unshift({ key: 'departments', group: 'departments', node: <StoreDepartments key="departments" /> });
-  // The dashboard's order and which sections show; rows the catalog has nothing for are skipped as before.
-  const ordered = appearance.home_sections
-    .filter((setting) => setting.visible)
-    .flatMap((setting) => sections.filter((section) => section.group === setting.key));
+  sections.unshift({ key: 'departments', group: 'departments', node: <StoreDepartments key="departments" title={textOf('departments').title} /> });
+  // The dashboard's order and which blocks show; rows the catalog has nothing for are skipped as before.
+  const shelfByKey = new Map((chosen.shelves ?? []).map((view) => [view.key, view]));
+  const ordered: { key: string; group: string; node: ReactNode }[] = layout.isLoading
+    ? []
+    : layoutOn
+      ? blocks
+          .filter((block) => block.visible)
+          .flatMap((block): { key: string; group: string; node: ReactNode }[] => {
+            if (block.std === null) {
+              const view = shelfByKey.get(block.key);
+              return view ? [{ key: block.key, group: 'categories', node: shelfNode(view) }] : [];
+            }
+            return sections.filter((section) => section.group === block.std);
+          })
+      : appearance.home_sections
+          .filter((setting) => setting.visible)
+          .flatMap((setting) => sections.filter((section) => section.group === setting.key));
 
   return (
     <div className="page-sections page-sections--home">
