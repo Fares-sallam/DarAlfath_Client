@@ -438,6 +438,7 @@ test('خريطة العرض: سحب فرعي جوه رئيسي تاني، أو �
   expect(rpcs[1]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m4'] } });
 
   // beside «سلسلة أ» (below it): becomes a main item between it and «تواصل معنا»
+  await page.waitForTimeout(400); // the list redraws after the first move; a second drag must start from the redrawn row
   await dragOnto(sub.getByTestId('drag-handle'), mains.nth(1), 'after');
   await expect.poll(() => rpcs.length).toBe(4);
   expect(rpcs[2]).toEqual({ name: 'menu_move_item', body: { p_id: 'm4', p_parent: null } });

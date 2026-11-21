@@ -21,6 +21,7 @@ import {
   useSiteContent,
 } from '@/hooks/useStorefront';
 import { featureIcon } from '@/lib/featureIcons';
+import { useHomeShelfSections } from '@/hooks/useCatalogTree';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { staticSeo } from '@/lib/seo';
 
@@ -52,6 +53,7 @@ export default function HomePage() {
   const { data: featureRows, isError: featuresFailed } = useFeatureBoxes();
   const features = featuresFailed ? FALLBACK_FEATURES : featureRows ?? [];
   const { data: categorySections = [] } = useHomeCategorySections();
+  const chosen = useHomeShelfSections();
   const { data: newArrivals = [] } = useNewArrivals(12);
   const { data: discounted = [] } = useDiscountedProducts();
   const { data: introVideoRows = [] } = useIntroVideos();
@@ -89,12 +91,24 @@ export default function HomePage() {
   if (discounted.length >= MIN_OFFERS_ROW) {
     sections.push({ key: 'offers', group: 'offers', node: shelf('offers', 'عروض وخصومات', 'كتب بسعر أقل من سعرها المعتاد', discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers' }) });
   }
-  for (const entry of categorySections.slice(0, 3)) {
-    sections.push({
-      key: `category-${entry.category.id}`,
-      group: 'categories',
-      node: shelf(`category-${entry.category.id}`, entry.category.name, 'كتب مختارة من هذا التصنيف', entry.products, {
+  // The category shelves: the ones chosen in the dashboard («الصفحة الرئيسية»), or, when none were chosen, the first three
+  // categories as the page always had them. Nothing is drawn until it is known which.
+  const categoryShelves = chosen.loading
+    ? []
+    : chosen.shelves ??
+      categorySections.slice(0, 3).map((entry) => ({
+        key: `category-${entry.category.id}`,
+        title: entry.category.name,
+        subtitle: 'كتب مختارة من هذا التصنيف',
         href: `/books?category=${entry.category.id}`,
+        books: entry.products,
+      }));
+  for (const entry of categoryShelves) {
+    sections.push({
+      key: entry.key,
+      group: 'categories',
+      node: shelf(entry.key, entry.title, entry.subtitle, entry.books, {
+        href: entry.href,
         linkLabel: 'عرض التصنيف',
         linkKind: 'view_category',
       }),

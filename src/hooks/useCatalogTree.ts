@@ -4,7 +4,8 @@ import { useProducts } from '@/hooks/useStorefront';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { CatalogNode, ProductLink } from '@/lib/catalogTree';
 import type { MenuItem } from '@/lib/menuMap';
-import { bookCounts } from '@/lib/webCatalog';
+import { SHELF_KIND, type HomeShelf } from '@/lib/homeShelves';
+import { bookCounts, buildHomeShelves, type HomeShelfView } from '@/lib/webCatalog';
 
 /**
  * The catalog tree the dashboard manages («السلاسل والتصنيفات»): sections, series, categories and collections,
@@ -86,4 +87,37 @@ export function useWebTree() {
     loading: nodesQuery.isLoading || linksQuery.isLoading || productsQuery.isLoading,
     hasTree: (nodes?.length ?? 0) > 0,
   };
+}
+
+/** The category shelves chosen in the dashboard for the home page (empty = none chosen). */
+export function useHomeShelfRows() {
+  return useQuery({
+    queryKey: ['home-shelf-rows'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<HomeShelf[]> => {
+      if (!isSupabaseConfigured) return [];
+      const { data, error } = await supabase
+        .from('home_layout')
+        .select('section_key, node_id, title_ar, item_limit, visible, sort_order')
+        .eq('channel', 'web')
+        .eq('kind', SHELF_KIND);
+      if (error || !data) return [];
+      return data as HomeShelf[];
+    },
+  });
+}
+
+/**
+ * The home page's category shelves as chosen in the dashboard, or null when none were chosen (or the tree can't be read):
+ * the page then draws its first three categories, as it always did. `loading` is true until it is known which.
+ */
+export function useHomeShelfSections(): { loading: boolean; shelves: HomeShelfView[] | null } {
+  const rowsQuery = useHomeShelfRows();
+  const tree = useWebTree();
+  const rows = rowsQuery.data;
+  const shelves = useMemo(
+    () => (rows && rows.length > 0 && tree.hasTree ? buildHomeShelves(rows, tree.nodes, tree.links, tree.products) : null),
+    [rows, tree.hasTree, tree.nodes, tree.links, tree.products],
+  );
+  return { loading: rowsQuery.isLoading || tree.loading, shelves };
 }

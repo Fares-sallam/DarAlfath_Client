@@ -6,7 +6,8 @@
  * hides it), and `useCatalogNodes` drops what is switched off for the website.
  */
 import type { CatalogNode, ProductLink } from '@/lib/catalogTree';
-import { productIdsUnder } from '@/lib/nodePage';
+import { shelvesToShow, type HomeShelf } from '@/lib/homeShelves';
+import { nodeHref, orderBooks, productIdsUnder } from '@/lib/nodePage';
 import type { ProductItem } from '@/types/store';
 
 /** How many of the country's books a node holds (itself and everything below it). */
@@ -94,4 +95,58 @@ export function categoryGroups(nodes: readonly CatalogNode[], counts: ReadonlyMa
     ...holders.map((parent) => ({ parent, categories: groups.get(parent.id)! })),
     ...(groups.has(null) ? [{ parent: null, categories: groups.get(null)! }] : []),
   ];
+}
+
+export interface HomeShelfView {
+  key: string;
+  title: string;
+  subtitle: string;
+  /** where «عرض التصنيف» goes */
+  href: string;
+  books: ProductItem[];
+}
+
+/** A shelf's own page: a category by its address name (or by id when it has categories inside it), a series or section by id. */
+function shelfHref(node: CatalogNode, hasChildren: boolean): string {
+  if ((node.type === 'category' || node.type === 'collection') && node.slug && !hasChildren) return `/books?category=${encodeURIComponent(node.slug)}`;
+  return nodeHref(node).replace('/books?series=', node.type === 'series' ? '/books?series=' : '/books?node=');
+}
+
+const SUBTITLE: Record<CatalogNode['type'], string> = {
+  category: 'كتب مختارة من هذا التصنيف',
+  collection: 'كتب مختارة من هذه المجموعة',
+  series: 'كتب من هذه السلسلة',
+  section: 'كتب من هذا القسم',
+};
+
+/**
+ * The home page's chosen category shelves (saved in the dashboard's «الصفحة الرئيسية»): the ones switched on, in their
+ * order, each with its own title (or the node's name), the node's books in the order set for the website, cut to the
+ * number asked. A shelf with no books for the visitor's country is left out.
+ */
+export function buildHomeShelves(
+  rows: readonly HomeShelf[],
+  nodes: readonly CatalogNode[],
+  links: readonly ProductLink[],
+  products: readonly ProductItem[],
+): HomeShelfView[] {
+  const byNode = new Map(nodes.map((n) => [n.id, n]));
+  const byProduct = new Map<string, ProductItem>();
+  for (const product of products) if (!byProduct.has(product.product_id)) byProduct.set(product.product_id, product);
+
+  const views: HomeShelfView[] = [];
+  for (const row of shelvesToShow(rows, new Set(byNode.keys()))) {
+    const node = byNode.get(row.node_id!)!;
+    const own = [...productIdsUnder(nodes, links, node.id)].map((id) => byProduct.get(id)).filter((p): p is ProductItem => Boolean(p));
+    if (own.length === 0) continue;
+    const ordered = orderBooks(own, node.id, links, node.books_sort_web);
+    views.push({
+      key: row.section_key,
+      title: row.title_ar?.trim() || node.name_ar.trim(),
+      subtitle: SUBTITLE[node.type],
+      href: shelfHref(node, nodes.some((n) => n.parent_id === node.id)),
+      books: row.item_limit != null ? ordered.slice(0, row.item_limit) : ordered,
+    });
+  }
+  return views;
 }
