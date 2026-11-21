@@ -135,7 +135,7 @@ test('شريط التصنيفات: كل التصنيفات بعدد كتبها،
   await expect(save).toBeDisabled();
 
   const secondName = (await rows.nth(1).locator('p').first().textContent())!.trim();
-  await page.getByRole('button', { name: `نقل ${secondName} لأعلى` }).click();
+  await rows.nth(1).getByTestId('drag-handle').dragTo(rows.nth(0), { targetPosition: { x: 200, y: 4 } }); // above the first row
   await rows.nth(0).locator('label').click(); // the switch, now on secondName
   await expect(rows.nth(0).getByRole('checkbox')).not.toBeChecked();
   await expect(page.getByTestId('category-bar-preview')).not.toContainText(secondName);

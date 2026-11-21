@@ -1,4 +1,4 @@
-import { test, expect, type Page, type Route } from '../fixtures';
+import { test, expect, type Locator, type Page, type Route } from '../fixtures';
 import { signInAsFakeOwner } from '../support/fakeOwner';
 
 // «السلاسل والتصنيفات»: the tree, the node editor, books, health checks and the old pages' redirects.
@@ -119,6 +119,13 @@ async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU) {
   return { writes, rpcs };
 }
 
+/** Drag a row's grip onto another row: above it (before), below it (after) or in its middle (inside). */
+async function dragOnto(handle: Locator, row: Locator, zone: 'before' | 'after' | 'inside') {
+  const box = (await row.boundingBox())!;
+  const y = zone === 'before' ? box.height * 0.1 : zone === 'after' ? box.height * 0.9 : box.height * 0.5;
+  await handle.dragTo(row, { targetPosition: { x: box.width / 2, y } });
+}
+
 const names = (page: Page) => page.getByTestId('tree-row').locator('p.font-bold');
 
 test('الشجرة: الجذور ظاهرة، والأبناء بيظهروا لما تفتح الأب، والبحث بيفتح الطريق', async ({ page }) => {
@@ -149,12 +156,13 @@ test('الشجرة: القناة بتغيّر الترتيب المعروض، و
   await expect(page.locator('[data-node-id="c3"]')).toContainText('مخفي');
 });
 
-test('الترتيب: السهم بيبعت الترتيب الجديد للقناة المختارة', async ({ page }) => {
+test('الترتيب: السحب بيرتّب القناة المختارة بس', async ({ page }) => {
   const { rpcs } = await setUp(page);
   await page.goto('/catalog');
 
   await page.getByTestId('channel-app').click();
-  await page.getByRole('button', { name: 'تأخير سلسلة ب' }).click();
+  // the app's order is سلسلة ب، سلسلة أ، تصنيف فاضي: drop the first one below the second
+  await dragOnto(page.getByRole('button', { name: 'اسحب سلسلة ب للترتيب' }), page.locator('[data-node-id="s1"]'), 'after');
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0]).toEqual({ name: 'catalog_reorder_nodes', body: { p_ids: ['s1', 's2', 'c3'], p_channel: 'app' } });
 });
@@ -163,7 +171,42 @@ test('الترتيب: «الاتنين» بيرتّب الموقع والتطب�
   const { rpcs } = await setUp(page);
   await page.goto('/catalog');
 
-  await page.getByRole('button', { name: 'تأخير سلسلة أ' }).click();
+  await dragOnto(page.getByRole('button', { name: 'اسحب سلسلة أ للترتيب' }), page.locator('[data-node-id="s2"]'), 'after');
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0].body).toEqual({ p_ids: ['s2', 's1', 'c3'], p_channel: 'both' });
+});
+
+test('السحب جوه عنصر: بيتحط تحته ويتحفظ ترتيبه، والعنصر مينفعش يتحط جوه أبنائه', async ({ page }) => {
+  const { writes, rpcs } = await setUp(page);
+  await page.goto('/catalog');
+
+  // تصنيف فاضي goes inside سلسلة ب (its middle)
+  await dragOnto(page.getByRole('button', { name: 'اسحب تصنيف فاضي للترتيب' }), page.locator('[data-node-id="s2"]'), 'inside');
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(writes).toHaveLength(1);
+  expect(writes[0].method).toBe('PATCH');
+  expect(writes[0].body).toEqual({ parent_id: 's2' });
+  expect(writes[0].url).toContain('id=eq.c3');
+  expect(rpcs[0]).toEqual({ name: 'catalog_reorder_nodes', body: { p_ids: ['c3'], p_channel: 'both' } });
+});
+
+test('السحب: عنصر مينفعش يتحط جوه نفسه أو أبنائه', async ({ page }) => {
+  const { writes, rpcs } = await setUp(page);
+  await page.goto('/catalog');
+  await page.getByRole('button', { name: 'فتح الكل' }).click();
+
+  await dragOnto(page.getByRole('button', { name: 'اسحب سلسلة أ للترتيب' }), page.locator('[data-node-id="c1"]'), 'inside');
+  await dragOnto(page.getByRole('button', { name: 'اسحب سلسلة أ للترتيب' }), page.locator('[data-node-id="c2"]'), 'after');
+  expect(writes).toHaveLength(0);
+  expect(rpcs).toHaveLength(0);
+});
+
+test('الترتيب بالكيبورد: المقبض + السهم لأسفل', async ({ page }) => {
+  const { rpcs } = await setUp(page);
+  await page.goto('/catalog');
+
+  await page.getByRole('button', { name: 'اسحب سلسلة أ للترتيب' }).focus();
+  await page.keyboard.press('ArrowDown');
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0].body).toEqual({ p_ids: ['s2', 's1', 'c3'], p_channel: 'both' });
 });
@@ -339,14 +382,15 @@ test('القايمة الجانبية: «السلاسل والتصنيفات» �
   await expect(page.getByRole('link', { name: /السلاسل والتصنيفات/ }).first()).toBeVisible();
 });
 
-test('ترتيب كتب السلسلة: السهم بيبعت الترتيب الجديد كله', async ({ page }) => {
+test('ترتيب كتب السلسلة: السحب بيبعت الترتيب الجديد كله', async ({ page }) => {
   const { rpcs } = await setUp(page);
   await page.goto('/catalog');
 
   await page.getByRole('button', { name: 'تعديل سلسلة أ' }).click();
   await page.getByTestId('node-editor').getByRole('tab', { name: 'الكتب' }).click();
   await expect(page.getByTestId('node-book-row')).toHaveText([/كتاب مصنّف/, /كتاب بلا تصنيف/]);
-  await page.getByTestId('node-editor').getByTitle('لأعلى').nth(1).click();
+  const rows = page.getByTestId('node-book-row');
+  await dragOnto(rows.nth(1).getByTestId('drag-handle'), rows.nth(0), 'before');
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0]).toEqual({ name: 'catalog_reorder_node_books', body: { p_node: 's1', p_product_ids: ['p2', 'p1'] } });
 });
@@ -368,13 +412,46 @@ test('خريطة العرض: القايمة بتتعرض رئيسي وفرعي،
   await expect(page.getByTestId('menu-main').nth(1)).toContainText('فيه 2 فرع (2 تلقائي)');
 });
 
-test('خريطة العرض: ترتيب الرئيسيين بيبعت الترتيب الجديد', async ({ page }) => {
+test('خريطة العرض: السحب بيرتّب الرئيسيين', async ({ page }) => {
   const { rpcs } = await setUp(page);
   await page.goto('/catalog?tab=map');
 
-  await page.getByRole('button', { name: 'تأخير الرئيسية' }).click();
+  const rows = page.getByTestId('menu-main-row');
+  await dragOnto(rows.nth(0).getByTestId('drag-handle'), rows.nth(1), 'after');
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m2', 'm1', 'm3'] } });
+});
+
+test('خريطة العرض: سحب فرعي جوه رئيسي تاني، أو بجنب رئيسي عشان يبقى رئيسي', async ({ page }) => {
+  const { rpcs } = await setUp(page, [...MENU, menu('m4', { kind: 'link', label_ar: 'رابط يدوي', url: '/x', parent_id: 'm2', sort_order: 0 })]);
+  await page.setViewportSize({ width: 1400, height: 1500 }); // everything on screen: a drag does not scroll in the test browser
+  await page.goto('/catalog?tab=map');
+
+  const sub = page.getByTestId('menu-main').nth(1).getByTestId('menu-sub').first();
+  const mains = page.getByTestId('menu-main-row');
+  await expect(sub).toContainText('رابط يدوي');
+
+  // into «تواصل معنا» (its middle)
+  await dragOnto(sub.getByTestId('drag-handle'), mains.nth(2), 'inside');
+  await expect.poll(() => rpcs.length).toBe(2);
+  expect(rpcs[0]).toEqual({ name: 'menu_move_item', body: { p_id: 'm4', p_parent: 'm3' } });
+  expect(rpcs[1]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m4'] } });
+
+  // beside «سلسلة أ» (below it): becomes a main item between it and «تواصل معنا»
+  await dragOnto(sub.getByTestId('drag-handle'), mains.nth(1), 'after');
+  await expect.poll(() => rpcs.length).toBe(4);
+  expect(rpcs[2]).toEqual({ name: 'menu_move_item', body: { p_id: 'm4', p_parent: null } });
+  expect(rpcs[3]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m1', 'm2', 'm4', 'm3'] } });
+});
+
+test('خريطة العرض: رئيسي جواه فروع مينفعش يتحط جوه رئيسي تاني', async ({ page }) => {
+  const { rpcs } = await setUp(page, [...MENU, menu('m4', { kind: 'link', label_ar: 'رابط يدوي', url: '/x', parent_id: 'm2', sort_order: 0 })]);
+  await page.setViewportSize({ width: 1400, height: 1500 });
+  await page.goto('/catalog?tab=map');
+
+  const mains = page.getByTestId('menu-main-row');
+  await dragOnto(mains.nth(1).getByTestId('drag-handle'), mains.nth(2), 'inside');
+  expect(rpcs).toHaveLength(0);
 });
 
 test('خريطة العرض: إخفاء فرع تلقائي بيحفظ صف مخفي لنفس الابن جوه نفس الرئيسي', async ({ page }) => {
@@ -449,8 +526,9 @@ test('صفحة العرض للسلسلة: الكلمة التعريفية وال
   await page.getByRole('button', { name: 'تعديل سلسلة أ' }).click();
   await page.getByTestId('node-editor').getByRole('tab', { name: 'صفحة العرض' }).click();
 
-  await expect(page.getByTestId('strip-row')).toHaveText([/تصنيف 1/, /تصنيف 2/]);
-  await page.getByRole('button', { name: 'تأخير الشريط تصنيف 1' }).click();
+  const strips = page.getByTestId('strip-row');
+  await expect(strips).toHaveText([/تصنيف 1/, /تصنيف 2/]);
+  await dragOnto(strips.nth(0).getByTestId('drag-handle'), strips.nth(1), 'after');
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0]).toEqual({ name: 'catalog_reorder_nodes', body: { p_ids: ['c2', 'c1'], p_channel: 'web' } });
 
