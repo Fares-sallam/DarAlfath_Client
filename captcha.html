@@ -12,7 +12,9 @@
       { type: 'token', token }  a fresh token (works once)
       { type: 'nokey' }         the site has no Turnstile key: go on without one
       { type: 'interactive' }   Cloudflare wants a click: the app should show this page
-      { type: 'error' }         the check failed or timed out
+      { type: 'error', code }   the check failed for good (a setup problem, a refused hostname, a
+                                click that was never made). Passing hiccups are NOT reported: Cloudflare
+                                retries them itself (every RETRY_MS) and the app's own timer is the limit.
   -->
   <style>
     html, body { margin: 0; height: 100%; background: transparent; font-family: system-ui, -apple-system, sans-serif; }
@@ -28,31 +30,63 @@
   <script>
     (function () {
       var KEY = '%VITE_TURNSTILE_SITE_KEY%';
+      var failed = false; // a fatal error is reported once, however often Cloudflare repeats it
+      function fail(code) {
+        if (failed) return;
+        failed = true;
+        send({ type: 'error', code: String(code) });
+      }
       function send(msg) {
         var text = JSON.stringify(msg);
         if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) window.ReactNativeWebView.postMessage(text);
         else if (window.parent !== window) window.parent.postMessage(text, '*');
       }
       if (!KEY || KEY.charAt(0) === '%') { send({ type: 'nokey' }); return; }
+      // Codes that mean the setup is wrong (110xxx: key / hostname / config, 400xxx: bad parameters).
+      // Retrying cannot fix those, so the app is told straight away. Everything else (network blips,
+      // a challenge frame that failed to load, 300xxx / 600xxx) is retried by Cloudflare itself.
+      var RETRY_MS = 2000; // the app waits only a few seconds for a quiet check
+      function isFatal(code) { return /^(110|400)/.test(String(code || '')); }
+      var rendered = false;
       window.onTurnstileLoad = function () {
+        if (rendered) return;
+        rendered = true;
         try {
           window.turnstile.render('#box', {
             sitekey: KEY,
             language: 'ar',
             theme: 'light',
+            retry: 'auto',
+            'retry-interval': RETRY_MS,
+            'refresh-expired': 'auto',
             callback: function (token) { send({ type: 'token', token: token }); },
-            'error-callback': function () { send({ type: 'error' }); },
-            'expired-callback': function () { send({ type: 'error' }); },
-            'timeout-callback': function () { send({ type: 'error' }); },
+            'error-callback': function (code) {
+              if (isFatal(code)) fail(code);
+              // otherwise: Cloudflare is already retrying, keep waiting for a token
+              return true;
+            },
+            'expired-callback': function () { /* refresh-expired renews it; the app asks again anyway */ },
+            'timeout-callback': function () { fail('interactive-timeout'); },
+            'unsupported-callback': function () { fail('unsupported'); },
             'before-interactive-callback': function () { send({ type: 'interactive' }); }
           });
-        } catch (e) { send({ type: 'error' }); }
+        } catch (e) { fail('render'); }
       };
-      var s = document.createElement('script');
-      s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad';
-      s.async = true;
-      s.onerror = function () { send({ type: 'error' }); };
-      document.head.appendChild(s);
+      // api.js is a separate request: a dropped connection there used to fail the whole check at once.
+      var attempts = 0;
+      function loadScript() {
+        attempts += 1;
+        var s = document.createElement('script');
+        s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileLoad';
+        s.async = true;
+        s.onerror = function () {
+          s.remove();
+          if (attempts < 3) setTimeout(loadScript, 1000);
+          else fail('script');
+        };
+        document.head.appendChild(s);
+      }
+      loadScript();
     })();
   </script>
 </body>
