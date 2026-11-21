@@ -379,3 +379,103 @@ export function copyLayout(
   const remove = targetBlocks.filter((b) => b.saved && !nextKeys.has(b.key)).map((b) => b.key);
   return { rows: rowsFor(next), remove };
 }
+
+// ─── The look of a block ─────────────────────────────────────────────────────────────────────────────────────────────────
+// How a shelf is laid out, the band behind a block, the divider above it and its «عرض الكل» link. Kept in the row's
+// `config.look`, only the values that differ from the standard, so a block with none looks exactly as it always did.
+
+export type ShelfLayout = 'rail' | 'grid';
+export type BlockBackground = 'none' | 'soft' | 'mint';
+export type DividerMode = 'auto' | 'none';
+
+export interface BlockLook {
+  /** a row that scrolls sideways, or a grid showing every book */
+  layout: ShelfLayout;
+  /** the band behind the block */
+  background: BlockBackground;
+  /** whether the ornament divider is drawn above the block (the website only) */
+  divider: DividerMode;
+  /** the words of the shelf's link (null = the standard «عرض الكل») */
+  linkLabel: string | null;
+  /** hide the shelf's link altogether */
+  linkHidden: boolean;
+  /** a page inside the app the link opens, in the app's address format (null = the shelf's own page) */
+  linkUrl: string | null;
+}
+
+export const DEFAULT_LOOK: BlockLook = { layout: 'rail', background: 'none', divider: 'auto', linkLabel: null, linkHidden: false, linkUrl: null };
+export const MAX_LINK_LABEL = 24;
+export const LAYOUT_LABELS: Record<ShelfLayout, string> = { rail: 'صف بيتحرك يمين وشمال', grid: 'شبكة (كل الكتب ظاهرة)' };
+export const BACKGROUND_LABELS: Record<BlockBackground, string> = { none: 'من غير خلفية', soft: 'هادية (رمادي فاتح)', mint: 'نعناعي (لون الدار)' };
+export const DIVIDER_LABELS: Record<DividerMode, string> = { auto: 'تلقائي', none: 'من غير زخرفة فوقه' };
+
+/** The look a row carries (anything unreadable counts as the standard one). */
+export function lookOf(config: Record<string, unknown> | null | undefined): BlockLook {
+  const raw = config?.look;
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return DEFAULT_LOOK;
+  const r = raw as Record<string, unknown>;
+  const label = typeof r.link_label === 'string' ? r.link_label.trim().slice(0, MAX_LINK_LABEL) : '';
+  const url = typeof r.link_url === 'string' ? r.link_url.trim() : '';
+  return {
+    layout: r.layout === 'grid' ? 'grid' : 'rail',
+    background: r.background === 'soft' || r.background === 'mint' ? r.background : 'none',
+    divider: r.divider === 'none' ? 'none' : 'auto',
+    linkLabel: label !== '' ? label : null,
+    linkHidden: r.link_hidden === true,
+    linkUrl: url.startsWith('/') && !url.startsWith('//') ? url : null,
+  };
+}
+
+/** The config with its look set to `look` (only the values that differ from the standard are written; none = no `look`). */
+export function withLook(config: Record<string, unknown> | null | undefined, look: BlockLook): Record<string, unknown> {
+  const { look: _old, ...rest } = config ?? {};
+  void _old;
+  const out: Record<string, unknown> = {};
+  if (look.layout !== DEFAULT_LOOK.layout) out.layout = look.layout;
+  if (look.background !== DEFAULT_LOOK.background) out.background = look.background;
+  if (look.divider !== DEFAULT_LOOK.divider) out.divider = look.divider;
+  if (look.linkHidden) out.link_hidden = true;
+  const label = look.linkLabel?.trim().slice(0, MAX_LINK_LABEL);
+  if (label) out.link_label = label;
+  const url = look.linkUrl?.trim();
+  if (url && url.startsWith('/') && !url.startsWith('//')) out.link_url = url;
+  return Object.keys(out).length > 0 ? { ...rest, look: out } : rest;
+}
+
+export type LookField = 'layout' | 'background' | 'divider' | 'link' | 'linkText';
+
+/**
+ * Which parts of the look a block can have. The series strip keeps its own tight place; a shelf has everything; a block that
+ * is not a shelf has a band and a divider; a promo strip has its own colours; the automatic category shelves share their
+ * link's words but each opens its own category. The app draws no dividers.
+ */
+export function lookFieldsFor(block: Pick<HomeBlock, 'std' | 'kind'>, channel: HomeChannel): LookField[] {
+  let fields: LookField[];
+  if (block.std === 'departments' || block.std === 'ebook-library') fields = [];
+  else if (block.std === 'categories') fields = ['layout', 'background', 'divider', 'linkText'];
+  else if (block.std === 'intro-videos' || block.std === 'features') fields = ['background', 'divider'];
+  else if (block.std !== null || block.kind === SHELF_KIND || block.kind === BOOK_SHELF_KIND || block.kind === FILTER_SHELF_KIND) {
+    fields = ['layout', 'background', 'divider', 'link'];
+  } else fields = ['divider'];
+  return channel === 'app' ? fields.filter((f) => f !== 'divider') : fields;
+}
+
+/** The look with everything the block has no use for put back to the standard (so a stale value never lingers). */
+export function normalizeLook(look: BlockLook, fields: readonly LookField[]): BlockLook {
+  const has = (f: LookField) => fields.includes(f);
+  return {
+    layout: has('layout') ? look.layout : DEFAULT_LOOK.layout,
+    background: has('background') ? look.background : DEFAULT_LOOK.background,
+    divider: has('divider') ? look.divider : DEFAULT_LOOK.divider,
+    // a hidden link keeps no words and no destination (nothing stale behind the checkbox)
+    linkLabel: (has('link') || has('linkText')) && !look.linkHidden ? look.linkLabel : null,
+    linkHidden: has('link') || has('linkText') ? look.linkHidden : false,
+    linkUrl: has('link') && !look.linkHidden ? look.linkUrl : null,
+  };
+}
+
+/** Whether a block's look is anything but the standard (for the little «الشكل» mark in the dashboard's list). */
+export const hasCustomLook = (config: Record<string, unknown> | null | undefined): boolean => {
+  const l = lookOf(config);
+  return l.layout !== 'rail' || l.background !== 'none' || l.divider !== 'auto' || l.linkLabel !== null || l.linkHidden || l.linkUrl !== null;
+};

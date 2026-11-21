@@ -1,4 +1,4 @@
-import { Fragment, useMemo, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, type ReactNode } from 'react';
 import FeatureCard from '@/components/FeatureCard';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
@@ -27,7 +27,9 @@ import { useHomeLayoutRows, useHomeShelfSections, useWebTree } from '@/hooks/use
 import { useCountry } from '@/contexts/CountryContext';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { useNow } from '@/hooks/useNow';
-import { blockStatus, blockText, hasHomeLayout, resolveHomeBlocks, type LiveContext } from '@/lib/homeBlocks';
+import { DEFAULT_LOOK, blockStatus, blockText, hasHomeLayout, lookOf, resolveHomeBlocks, type BlockLook, type HomeBlockKey, type LiveContext } from '@/lib/homeBlocks';
+import { isPreviewMode, startPreviewBridge, usePreview } from '@/lib/homePreview';
+import { webHrefForAppLink } from '@/lib/homeLink';
 import { SHELF_KIND } from '@/lib/homeShelves';
 import { buildCustomBlocks } from '@/lib/webCatalog';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
@@ -44,11 +46,14 @@ const FALLBACK_FEATURES = [
   { id: 'delivery', title: 'تسليم موثوق', description: 'نتعاون مع شركات شحن معتمدة لضمان وصول كتبك بأمان وسرعة.', icon_key: 'truck', image_url: null },
 ];
 
+/** The band behind a block, as a class (none = no band). */
+const bandClass = (look: BlockLook) => (look.background === 'none' ? '' : ` home-band home-band--${look.background}`);
+
 /** Sections fade up as they arrive; the hook no-ops under reduced motion. */
-function Reveal({ children, className = '', 'data-testid': testId }: { children: React.ReactNode; className?: string; 'data-testid'?: string }) {
+function Reveal({ children, className = '', 'data-testid': testId, blockKey }: { children: React.ReactNode; className?: string; 'data-testid'?: string; blockKey?: string }) {
   const ref = useReveal<HTMLElement>();
   return (
-    <section ref={ref} className={`reveal ${className}`.trim()} data-testid={testId}>
+    <section ref={ref} className={`reveal ${className}`.trim()} data-testid={testId} data-block-key={blockKey}>
       {children}
     </section>
   );
@@ -70,7 +75,11 @@ export default function HomePage() {
   const blocks = useMemo(() => resolveHomeBlocks(layoutRows), [layoutRows]);
   // When and for whom each block shows: its dates, the visitor's country, phone or computer.
   const { selectedCountry } = useCountry();
-  const now = useNow();
+  const realNow = useNow();
+  const preview = usePreview();
+  const now = preview.now ?? realNow;
+  // on the dashboard's preview page: take the rows it sends, ignore links
+  useEffect(() => (isPreviewMode() ? startPreviewBridge() : undefined), []);
   const onPhone = useMediaQuery('(max-width: 760px)');
   const live = useMemo<LiveContext>(
     () => ({ now, country: selectedCountry?.code ?? null, device: onPhone ? 'mobile' : 'desktop' }),
@@ -102,33 +111,55 @@ export default function HomePage() {
     duration: v.duration ?? '',
   }));
 
-  const shelf = (key: string, title: string, subtitle: string, items: typeof bestSellers, extra: { href?: string; linkLabel?: string; linkKind?: 'view_all' | 'view_category'; testId?: string }) => (
-    <Reveal key={key} className="shelf-section" data-testid={extra.testId}>
-      <SectionHeader title={title} subtitle={subtitle} href={extra.href} linkLabel={extra.linkLabel} linkKind={extra.linkKind} />
-      <ScrollRail ariaLabel={title} className="shelf-rail">
-        {items.map((product, i) => (
-          <div className="shelf-rail__item" key={product.product_id}>
-            <ProductCard product={product} index={i} />
+  /** The look of a standard block (the standard look when the page follows the older order, which has none). */
+  const lookOfStd = (key: HomeBlockKey): BlockLook => (layoutOn ? lookOf(blocks.find((b) => b.std === key)?.config) : DEFAULT_LOOK);
+
+  const shelf = (
+    key: string, title: string, subtitle: string, items: typeof bestSellers,
+    extra: { href?: string; linkLabel?: string; linkKind?: 'view_all' | 'view_category'; testId?: string; look?: BlockLook; blockKey?: string },
+  ) => {
+    const look = extra.look ?? DEFAULT_LOOK;
+    // the owner can name the link, point it at another page of the app (the website opens the matching page) or hide it
+    const href = (look.linkUrl ? webHrefForAppLink(look.linkUrl, tree.nodes) : null) ?? extra.href;
+    const showLink = !look.linkHidden && Boolean(href);
+    return (
+      <Reveal key={key} className={`shelf-section${bandClass(look)}`} data-testid={extra.testId} blockKey={extra.blockKey ?? key}>
+        <SectionHeader title={title} subtitle={subtitle} href={showLink ? href : undefined} linkLabel={look.linkLabel ?? extra.linkLabel} linkKind={extra.linkKind} />
+        {look.layout === 'grid' ? (
+          <div className="shelf-grid" data-testid="shelf-grid">
+            {items.map((product, i) => (
+              <div className="shelf-grid__item" key={product.product_id}>
+                <ProductCard product={product} index={i} />
+              </div>
+            ))}
           </div>
-        ))}
-      </ScrollRail>
-    </Reveal>
-  );
+        ) : (
+          <ScrollRail ariaLabel={title} className="shelf-rail">
+            {items.map((product, i) => (
+              <div className="shelf-rail__item" key={product.product_id}>
+                <ProductCard product={product} index={i} />
+              </div>
+            ))}
+          </ScrollRail>
+        )}
+      </Reveal>
+    );
+  };
 
   const { appearance } = useAppearance();
   // `group` is the dashboard's name for the row («صفوف التصنيفات» covers every category row at once).
   const sections: { key: string; group: HomeSectionKey; node: ReactNode }[] = [];
   if (bestSellers.length > 0) {
     const t = textOf('best-sellers');
-    sections.push({ key: 'best-sellers', group: 'best-sellers', node: shelf('best-sellers', t.title, t.subtitle ?? '', t.limit != null ? bestSellers.slice(0, t.limit) : bestSellers, { testId: 'best-sellers' }) });
+    sections.push({ key: 'best-sellers', group: 'best-sellers', node: shelf('best-sellers', t.title, t.subtitle ?? '', t.limit != null ? bestSellers.slice(0, t.limit) : bestSellers, { testId: 'best-sellers', look: lookOfStd('best-sellers') }) });
   }
   if (newArrivals.length > 0) {
     const t = textOf('new-arrivals');
-    sections.push({ key: 'new-arrivals', group: 'new-arrivals', node: shelf('new-arrivals', t.title, t.subtitle ?? '', newArrivals, { href: '/books?sort=newest', linkLabel: 'عرض الكل', testId: 'new-arrivals' }) });
+    sections.push({ key: 'new-arrivals', group: 'new-arrivals', node: shelf('new-arrivals', t.title, t.subtitle ?? '', newArrivals, { href: '/books?sort=newest', linkLabel: 'عرض الكل', testId: 'new-arrivals', look: lookOfStd('new-arrivals') }) });
   }
   if (discounted.length >= MIN_OFFERS_ROW) {
     const t = textOf('offers');
-    sections.push({ key: 'offers', group: 'offers', node: shelf('offers', t.title, t.subtitle ?? '', t.limit != null ? discounted.slice(0, t.limit) : discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers' }) });
+    sections.push({ key: 'offers', group: 'offers', node: shelf('offers', t.title, t.subtitle ?? '', t.limit != null ? discounted.slice(0, t.limit) : discounted, { href: '/books?sale=1&sort=discount', linkLabel: 'عرض الكل', testId: 'offers', look: lookOfStd('offers') }) });
   }
   // The category shelves. With the dashboard's layout they are blocks of their own, each where it was put (and the automatic
   // «first N categories» block steps aside once any is chosen). Without it: the chosen ones, or the first three categories as
@@ -142,11 +173,11 @@ export default function HomePage() {
     href: `/books?category=${entry.category.id}`,
     books: entry.products,
   }));
-  const shelfNode = (entry: { key: string; title: string; subtitle: string; href: string; books: typeof bestSellers }) =>
-    shelf(entry.key, entry.title, entry.subtitle, entry.books, { href: entry.href, linkLabel: 'عرض التصنيف', linkKind: 'view_category' });
+  const shelfNode = (entry: { key: string; title: string; subtitle: string; href: string; books: typeof bestSellers }, look: BlockLook, blockKey: string) =>
+    shelf(entry.key, entry.title, entry.subtitle, entry.books, { href: entry.href, linkLabel: 'عرض التصنيف', linkKind: 'view_category', look, blockKey });
   const categoryShelves = chosen.loading ? [] : layoutOn ? (hasShelfRows ? [] : autoShelves) : chosen.shelves ?? autoShelves;
   for (const entry of categoryShelves) {
-    sections.push({ key: entry.key, group: 'categories', node: shelfNode(entry) });
+    sections.push({ key: entry.key, group: 'categories', node: shelfNode(entry, { ...lookOfStd('categories'), linkUrl: null }, 'categories') });
   }
   // the videos' title: written here, else the one from the videos' own settings, else the standard
   const videosTitle = (layoutOn ? blocks.find((b) => b.std === 'intro-videos')?.title : null) || siteContent?.intro_videos_title || 'فيديوهات تعريفية';
@@ -155,7 +186,7 @@ export default function HomePage() {
       key: 'intro-videos',
       group: 'intro-videos',
       node: (
-        <Reveal key="intro-videos">
+        <Reveal key="intro-videos" className={bandClass(lookOfStd('intro-videos')).trim()} blockKey="intro-videos">
           <SectionHeader title={videosTitle} subtitle={textOf('intro-videos').subtitle ?? ''} />
           <VideoRail videos={introVideos} ariaLabel={videosTitle} />
         </Reveal>
@@ -167,7 +198,7 @@ export default function HomePage() {
       key: 'features',
       group: 'features',
       node: (
-        <Reveal key="features" className="features-section">
+        <Reveal key="features" className={`features-section${bandClass(lookOfStd('features'))}`} blockKey="features">
           <div className="features-grid" data-testid="feature-boxes">
             {features.map((box) => {
               const Icon = featureIcon(box.icon_key);
@@ -186,44 +217,39 @@ export default function HomePage() {
     });
   }
 
-  sections.unshift({ key: 'departments', group: 'departments', node: <StoreDepartments key="departments" title={textOf('departments').title} /> });
+  sections.unshift({ key: 'departments', group: 'departments', node: <StoreDepartments key="departments" title={textOf('departments').title} blockKey="departments" /> });
   // The dashboard's order and which blocks show; rows the catalog has nothing for are skipped as before.
   const shelfByKey = new Map((chosen.shelves ?? []).map((view) => [view.key, view]));
-  const ordered: { key: string; group: string; node: ReactNode }[] = layout.isLoading
+  type Entry = { key: string; group: string; node: ReactNode; divider: 'auto' | 'none' };
+  const entry = (key: string, group: string, node: ReactNode, look: BlockLook): Entry => ({ key, group, node, divider: look.divider });
+  const ordered: Entry[] = layout.isLoading
     ? []
     : layoutOn
       ? blocks
           .filter((block) => blockStatus(block, live).live)
-          .flatMap((block): { key: string; group: string; node: ReactNode }[] => {
-            if (block.std !== null) return sections.filter((section) => section.group === block.std);
+          .flatMap((block): Entry[] => {
+            const look = lookOf(block.config);
+            if (block.std !== null) return sections.filter((section) => section.group === block.std).map((section) => entry(section.key, section.group, section.node, look));
             if (block.kind === SHELF_KIND) {
               const view = shelfByKey.get(block.key);
-              return view ? [{ key: block.key, group: 'categories', node: shelfNode(view) }] : [];
+              return view ? [entry(block.key, 'categories', shelfNode(view, look, block.key), look)] : [];
             }
             const view = customViews.get(block.key);
             if (!view) return [];
             if (view.type === 'promo') {
-              return [{
-                key: block.key,
-                group: 'custom',
-                node: (
-                  <Reveal key={block.key} data-testid="custom-promo">
-                    <HomePromoBlock title={view.title} text={view.text} imageUrl={view.imageUrl} href={view.href} buttonLabel={view.buttonLabel} tone={view.tone} />
-                  </Reveal>
-                ),
-              }];
+              return [entry(block.key, 'custom', (
+                <Reveal key={block.key} data-testid="custom-promo" blockKey={block.key}>
+                  <HomePromoBlock title={view.title} text={view.text} imageUrl={view.imageUrl} href={view.href} buttonLabel={view.buttonLabel} tone={view.tone} />
+                </Reveal>
+              ), look)];
             }
-            return [{
-              key: block.key,
-              group: 'custom',
-              node: shelf(view.key, view.title, view.subtitle, view.books, {
-                href: view.href ?? undefined, linkLabel: 'عرض الكل', testId: `custom-${view.kind}`,
-              }),
-            }];
+            return [entry(block.key, 'custom', shelf(view.key, view.title, view.subtitle, view.books, {
+              href: view.href ?? undefined, linkLabel: 'عرض الكل', testId: `custom-${view.kind}`, look, blockKey: block.key,
+            }), look)];
           })
       : appearance.home_sections
           .filter((setting) => setting.visible)
-          .flatMap((setting) => sections.filter((section) => section.group === setting.key));
+          .flatMap((setting) => sections.filter((section) => section.group === setting.key).map((section) => entry(section.key, section.group, section.node, DEFAULT_LOOK)));
 
   return (
     <div className="page-sections page-sections--home">
@@ -253,7 +279,7 @@ export default function HomePage() {
       {ordered.map((section, i) => (
         <Fragment key={section.key}>
           {/* the series strip sits tight to its neighbours, as it always did: no divider on either side of it */}
-          {i > 0 && section.group !== 'departments' && ordered[i - 1].group !== 'departments' && <OrnamentDivider seed={i + 3} />}
+          {i > 0 && section.divider !== 'none' && section.group !== 'departments' && ordered[i - 1].group !== 'departments' && <OrnamentDivider seed={i + 3} />}
           {section.node}
         </Fragment>
       ))}

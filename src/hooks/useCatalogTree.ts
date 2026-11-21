@@ -5,6 +5,7 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { CatalogNode, ProductLink } from '@/lib/catalogTree';
 import type { MenuItem } from '@/lib/menuMap';
 import type { HomeLayoutRow } from '@/lib/homeBlocks';
+import { usePreview } from '@/lib/homePreview';
 import { SHELF_KIND } from '@/lib/homeShelves';
 import { bookCounts, buildHomeShelves, type HomeShelfView } from '@/lib/webCatalog';
 
@@ -92,7 +93,9 @@ export function useWebTree() {
 
 /** Every saved row of the website's home page layout: the blocks, the category shelves and the other pages' strips. */
 export function useHomeLayoutRows() {
-  return useQuery({
+  // on the dashboard's preview page the rows being edited replace the saved ones
+  const preview = usePreview();
+  const query = useQuery({
     queryKey: ['home-layout-rows'],
     staleTime: 5 * 60_000,
     queryFn: async (): Promise<HomeLayoutRow[]> => {
@@ -105,6 +108,7 @@ export function useHomeLayoutRows() {
       return data as HomeLayoutRow[];
     },
   });
+  return preview.rows ? ({ ...query, data: preview.rows, isLoading: false } as typeof query) : query;
 }
 
 /**

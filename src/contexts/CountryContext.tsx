@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { usePreview } from '@/lib/homePreview';
 import type { CountryItem } from '@/types/store';
 
 interface CountryContextValue {
@@ -70,16 +71,20 @@ export function CountryProvider({ children }: { children: React.ReactNode }) {
     else localStorage.removeItem(STORAGE_KEY);
   };
 
+  // the dashboard's preview can look at the page as a visitor of another country (nothing is saved)
+  const previewCountry = usePreview().country;
+  const shownCountry = (previewCountry ? countries.find((c) => c.code?.toUpperCase() === previewCountry) : null) ?? selectedCountry;
+
   const value = useMemo<CountryContextValue>(
     () => ({
       countries,
-      selectedCountry,
+      selectedCountry: shownCountry,
       loading,
-      currencySymbol: selectedCountry?.currency_symbol ?? 'ج.م',
-      currencyCode: selectedCountry?.currency ?? 'EGP',
+      currencySymbol: shownCountry?.currency_symbol ?? 'ج.م',
+      currencyCode: shownCountry?.currency ?? 'EGP',
       setSelectedCountryById,
     }),
-    [countries, selectedCountry, loading]
+    [countries, shownCountry, loading]
   );
 
   return <CountryContext.Provider value={value}>{children}</CountryContext.Provider>;

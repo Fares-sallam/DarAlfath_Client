@@ -1002,3 +1002,25 @@ html.dark .category-bar__pill.active {
   .home-promo__button { transition: none; }
   .home-promo__button:hover { transform: none; }
 }
+
+/* ── The look the owner chose per block (dashboard «الشكل») ─────────────────────────────────────────────────────────────── */
+/* a shelf as a grid: every book shown, wrapping */
+.shelf-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 42vw, 208px), 1fr));
+  gap: clamp(12px, 2vw, 20px);
+}
+.shelf-grid__item > .book-card { height: 100%; }
+@media (max-width: 460px) {
+  .shelf-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+}
+
+/* the band behind a block */
+.home-band {
+  padding: clamp(16px, 3vw, 28px);
+  border-radius: 24px;
+}
+.home-band--soft { background: color-mix(in srgb, var(--text) 5%, var(--surface)); }
+.home-band--mint { background: color-mix(in srgb, var(--brand-mint, #dae8e6) 78%, var(--surface)); }
+html.dark .home-band--soft { background: color-mix(in srgb, #ffffff 6%, var(--surface)); }
+html.dark .home-band--mint { background: color-mix(in srgb, var(--brand-teal, #2aa3ab) 14%, var(--surface)); }
