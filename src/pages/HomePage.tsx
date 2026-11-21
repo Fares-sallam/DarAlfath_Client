@@ -5,6 +5,7 @@ import SectionHeader from '@/components/SectionHeader';
 import ScrollRail from '@/components/ScrollRail';
 import VideoRail from '@/components/VideoRail';
 import HeroShowcase from '@/components/HeroShowcase';
+import HomePromoBlock from '@/components/HomePromoBlock';
 import StoreDepartments from '@/components/StoreDepartments';
 import PageCursorLight from '@/components/PageCursorLight';
 import { OrnamentDivider } from '@/components/Ornament';
@@ -13,6 +14,7 @@ import { useAppearance } from '@/hooks/useAppearance';
 import type { HomeSectionKey } from '@/lib/appearance';
 import {
   useBestSellers,
+  useCatalogVariants,
   useDiscountedProducts,
   useFeatureBoxes,
   useHomeCategorySections,
@@ -21,8 +23,13 @@ import {
   useSiteContent,
 } from '@/hooks/useStorefront';
 import { featureIcon } from '@/lib/featureIcons';
-import { useHomeLayoutRows, useHomeShelfSections } from '@/hooks/useCatalogTree';
-import { blockText, hasHomeLayout, resolveHomeBlocks } from '@/lib/homeBlocks';
+import { useHomeLayoutRows, useHomeShelfSections, useWebTree } from '@/hooks/useCatalogTree';
+import { useCountry } from '@/contexts/CountryContext';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useNow } from '@/hooks/useNow';
+import { blockStatus, blockText, hasHomeLayout, resolveHomeBlocks, type LiveContext } from '@/lib/homeBlocks';
+import { SHELF_KIND } from '@/lib/homeShelves';
+import { buildCustomBlocks } from '@/lib/webCatalog';
 import { siteOrigin, useSeo } from '@/hooks/useSeo';
 import { staticSeo } from '@/lib/seo';
 
@@ -61,6 +68,27 @@ export default function HomePage() {
   const layoutRows = useMemo(() => layout.data ?? [], [layout.data]);
   const layoutOn = hasHomeLayout(layoutRows);
   const blocks = useMemo(() => resolveHomeBlocks(layoutRows), [layoutRows]);
+  // When and for whom each block shows: its dates, the visitor's country, phone or computer.
+  const { selectedCountry } = useCountry();
+  const now = useNow();
+  const onPhone = useMediaQuery('(max-width: 760px)');
+  const live = useMemo<LiveContext>(
+    () => ({ now, country: selectedCountry?.code ?? null, device: onPhone ? 'mobile' : 'desktop' }),
+    [now, selectedCountry?.code, onPhone],
+  );
+  // The blocks the owner added (hand-picked books, a rule shelf, a promo strip), ready to draw.
+  const tree = useWebTree();
+  const { data: copiesByBook } = useCatalogVariants();
+  const digitalIds = useMemo(() => {
+    if (!copiesByBook) return null;
+    const ids = new Set<string>();
+    for (const [bookId, copies] of copiesByBook) if (copies.some((c) => c.is_digital)) ids.add(bookId);
+    return ids;
+  }, [copiesByBook]);
+  const customViews = useMemo(
+    () => buildCustomBlocks(blocks, tree.nodes, tree.links, tree.products, digitalIds),
+    [blocks, tree.nodes, tree.links, tree.products, digitalIds],
+  );
   const textOf = (key: HomeSectionKey) => blockText(layoutOn ? blocks.find((b) => b.std === key) : undefined, key);
   const { data: newArrivals = [] } = useNewArrivals(textOf('new-arrivals').limit ?? 12);
   const { data: discounted = [] } = useDiscountedProducts();
@@ -165,13 +193,33 @@ export default function HomePage() {
     ? []
     : layoutOn
       ? blocks
-          .filter((block) => block.visible)
+          .filter((block) => blockStatus(block, live).live)
           .flatMap((block): { key: string; group: string; node: ReactNode }[] => {
-            if (block.std === null) {
+            if (block.std !== null) return sections.filter((section) => section.group === block.std);
+            if (block.kind === SHELF_KIND) {
               const view = shelfByKey.get(block.key);
               return view ? [{ key: block.key, group: 'categories', node: shelfNode(view) }] : [];
             }
-            return sections.filter((section) => section.group === block.std);
+            const view = customViews.get(block.key);
+            if (!view) return [];
+            if (view.type === 'promo') {
+              return [{
+                key: block.key,
+                group: 'custom',
+                node: (
+                  <Reveal key={block.key} data-testid="custom-promo">
+                    <HomePromoBlock title={view.title} text={view.text} imageUrl={view.imageUrl} href={view.href} buttonLabel={view.buttonLabel} tone={view.tone} />
+                  </Reveal>
+                ),
+              }];
+            }
+            return [{
+              key: block.key,
+              group: 'custom',
+              node: shelf(view.key, view.title, view.subtitle, view.books, {
+                href: view.href ?? undefined, linkLabel: 'عرض الكل', testId: `custom-${view.kind}`,
+              }),
+            }];
           })
       : appearance.home_sections
           .filter((setting) => setting.visible)

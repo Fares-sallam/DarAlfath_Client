@@ -5,7 +5,13 @@
  * country can see. The tree already leaves out what is switched off or outside its dates (the database
  * hides it), and `useCatalogNodes` drops what is switched off for the website.
  */
+import { newestFirst } from '@/lib/catalogFilters';
 import type { CatalogNode, ProductLink } from '@/lib/catalogTree';
+import {
+  BOOK_SHELF_KIND, FILTER_SHELF_KIND, FILTER_SHELF_DEFAULT_LIMIT, FILTER_SOURCES, PROMO_KIND, bookShelfIds, filterSourceOf, promoOf,
+  type HomeBlock, type PromoTone,
+} from '@/lib/homeBlocks';
+import { webHrefForAppLink } from '@/lib/homeLink';
 import { shelvesToShow, type HomeShelf } from '@/lib/homeShelves';
 import { nodeHref, orderBooks, productIdsUnder } from '@/lib/nodePage';
 import type { ProductItem } from '@/types/store';
@@ -107,7 +113,7 @@ export interface HomeShelfView {
 }
 
 /** A shelf's own page: a category by its address name (or by id when it has categories inside it), a series or section by id. */
-function shelfHref(node: CatalogNode, hasChildren: boolean): string {
+export function shelfHref(node: CatalogNode, hasChildren: boolean): string {
   if ((node.type === 'category' || node.type === 'collection') && node.slug && !hasChildren) return `/books?category=${encodeURIComponent(node.slug)}`;
   return nodeHref(node).replace('/books?series=', node.type === 'series' ? '/books?series=' : '/books?node=');
 }
@@ -149,4 +155,71 @@ export function buildHomeShelves(
     });
   }
   return views;
+}
+
+/** What an owner-added block draws: a shelf of books (with where «عرض الكل» goes, if anywhere) or a promo strip. */
+export type CustomBlockView =
+  | { type: 'shelf'; key: string; kind: 'book-shelf' | 'filter-shelf'; title: string; subtitle: string; href: string | null; books: ProductItem[] }
+  | { type: 'promo'; key: string; title: string | null; text: string | null; imageUrl: string | null; href: string | null; buttonLabel: string | null; tone: PromoTone };
+
+/** Where «عرض الكل» of a rule shelf goes: the part it is taken from, else the page that lists that rule (none for e-books). */
+function ruleHref(source: ReturnType<typeof filterSourceOf>, node: CatalogNode | undefined, nodes: readonly CatalogNode[]): string | null {
+  if (node) return shelfHref(node, nodes.some((n) => n.parent_id === node.id));
+  if (source === 'newest') return '/books?sort=newest';
+  if (source === 'offers') return '/books?sale=1&sort=discount';
+  return null;
+}
+
+/**
+ * The home page's owner-added blocks, by key: hand-picked books (the ones the visitor's country can see, in the chosen order),
+ * books by a rule (newest / on offer / e-books, from the whole store or from one node and everything under it) and promo
+ * strips. (A list's books carry no copies, so which ones are e-books comes from `digitalIds`.) A shelf with nothing to show has no view (and so is not drawn).
+ */
+export function buildCustomBlocks(
+  blocks: readonly HomeBlock[],
+  nodes: readonly CatalogNode[],
+  links: readonly ProductLink[],
+  products: readonly ProductItem[],
+  /** the books that have an e-book copy for the visitor's country (null = not known, so no e-book shelf can be drawn) */
+  digitalIds: ReadonlySet<string> | null,
+): Map<string, CustomBlockView> {
+  const out = new Map<string, CustomBlockView>();
+  const byProduct = new Map<string, ProductItem>();
+  for (const product of products) if (!byProduct.has(product.product_id)) byProduct.set(product.product_id, product);
+  const byNode = new Map(nodes.map((n) => [n.id, n]));
+
+  for (const block of blocks) {
+    if (block.kind === BOOK_SHELF_KIND) {
+      const books = bookShelfIds(block.config).map((id) => byProduct.get(id)).filter((p): p is ProductItem => Boolean(p));
+      if (books.length === 0) continue;
+      out.set(block.key, {
+        type: 'shelf', key: block.key, kind: BOOK_SHELF_KIND, title: block.title ?? 'كتب مختارة', subtitle: block.subtitle ?? '', href: null,
+        books: block.limit != null ? books.slice(0, block.limit) : books,
+      });
+    } else if (block.kind === FILTER_SHELF_KIND) {
+      const source = filterSourceOf(block.config);
+      const node = block.nodeId ? byNode.get(block.nodeId) : undefined;
+      const pool = node
+        ? [...productIdsUnder(nodes, links, node.id)].map((id) => byProduct.get(id)).filter((p): p is ProductItem => Boolean(p))
+        : [...byProduct.values()];
+      const matching = source === 'offers'
+        ? pool.filter((p) => (p.discount_percent ?? 0) > 0).sort((a, b) => (b.discount_percent ?? 0) - (a.discount_percent ?? 0) || a.title.localeCompare(b.title, 'ar'))
+        : source === 'ebooks'
+          ? newestFirst(pool.filter((p) => digitalIds?.has(p.product_id) === true))
+          : newestFirst(pool);
+      if (matching.length === 0) continue;
+      out.set(block.key, {
+        type: 'shelf', key: block.key, kind: FILTER_SHELF_KIND, title: block.title ?? FILTER_SOURCES[source].title,
+        subtitle: block.subtitle ?? FILTER_SOURCES[source].subtitle, href: ruleHref(source, node, nodes),
+        books: matching.slice(0, block.limit ?? FILTER_SHELF_DEFAULT_LIMIT),
+      });
+    } else if (block.kind === PROMO_KIND) {
+      const promo = promoOf(block.config);
+      out.set(block.key, {
+        type: 'promo', key: block.key, title: block.title, text: block.subtitle, imageUrl: promo.imageUrl,
+        href: webHrefForAppLink(promo.linkUrl, nodes), buttonLabel: promo.buttonLabel, tone: promo.tone,
+      });
+    }
+  }
+  return out;
 }

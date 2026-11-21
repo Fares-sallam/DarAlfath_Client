@@ -99,7 +99,7 @@ export function useHomeLayoutRows() {
       if (!isSupabaseConfigured) return [];
       const { data, error } = await supabase
         .from('home_layout')
-        .select('section_key, kind, node_id, title_ar, subtitle_ar, item_limit, visible, sort_order')
+        .select('section_key, kind, node_id, title_ar, subtitle_ar, item_limit, visible, sort_order, starts_at, ends_at, countries, devices, config')
         .eq('channel', 'web');
       if (error || !data) return [];
       return data as HomeLayoutRow[];

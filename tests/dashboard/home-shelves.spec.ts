@@ -71,6 +71,8 @@ async function setUp(page: Page, initial: Row[] = seed(), url = '/catalog?tab=ho
   });
   await page.goto(url);
   await expect(page.getByTestId('home-blocks')).toBeVisible({ timeout: 20_000 });
+  // the list itself (not just its frame) has been read: every channel shows at least the standard blocks
+  await expect(page.locator('[data-testid^="home-block-"]').first()).toBeVisible({ timeout: 20_000 });
   return { writes, state };
 }
 
@@ -127,9 +129,14 @@ test('تعديل عنوان وعدد: «وصل حديثًا» بعنوان جد�
   await expect(page.getByTestId('home-block-new-arrivals')).toContainText('جديدنا');
 });
 
-test('كل بلوك ليه الخانات المناسبة بس: المزايا من غير تعديل، الفيديوهات عنوان وسطر، صفوف التصنيفات عدد بس', async ({ page }) => {
+test('كل بلوك ليه الخانات المناسبة بس: المزايا مواعيد بس، الفيديوهات عنوان وسطر، صفوف التصنيفات عدد بس', async ({ page }) => {
   await setUp(page);
-  await expect(page.getByRole('button', { name: /^تعديل مربعات المزايا/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /^تعديل مربعات المزايا/ }).click();
+  await expect(page.getByTestId('shelf-title')).toHaveCount(0);
+  await expect(page.getByTestId('shelf-subtitle')).toHaveCount(0);
+  await expect(page.getByTestId('shelf-limit')).toHaveCount(0);
+  await expect(page.getByTestId('block-window')).toBeVisible();
+  await page.getByRole('button', { name: 'إلغاء' }).click();
   await page.getByRole('button', { name: /^تعديل فيديوهات/ }).click();
   await expect(page.getByTestId('shelf-title')).toBeVisible();
   await expect(page.getByTestId('shelf-subtitle')).toBeVisible();
