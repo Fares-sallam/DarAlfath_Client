@@ -1,8 +1,19 @@
-// The blocks of the website's home page, top to bottom, as the dashboard's «الصفحة الرئيسية» lays them out: the seven
-// standard blocks and any category shelves, in ONE order, each with show / hide, its own title and line under it, and how
-// many books it holds. Saved in home_layout (channel 'web'). Pure helpers, shared by the dashboard and the storefront.
+// The blocks of the home page (the website's, and the app's), top to bottom, as the dashboard's «الصفحة الرئيسية» lays them
+// out: the standard blocks and any category shelves, in ONE order, each with show / hide, its own title and line under it,
+// and how many books it holds. Saved in home_layout (channel 'web' or 'app'). Pure helpers, shared by the dashboard and the
+// storefront (the app keeps its own copy of the same rules, services/homeLayout.ts).
 import { HOME_SECTION_KEYS, type HomeSectionKey } from '@/lib/appearance';
 import { SHELF_KIND } from '@/lib/homeShelves';
+
+export type HomeChannel = 'web' | 'app';
+/** A standard block: the website's seven, and the app's «المكتبة الإلكترونية» card. */
+export type HomeBlockKey = HomeSectionKey | 'ebook-library';
+
+/** The standard blocks of each channel, in the order the page had before this was adjustable. */
+export const BLOCK_KEYS: Record<HomeChannel, HomeBlockKey[]> = {
+  web: HOME_SECTION_KEYS,
+  app: ['departments', 'best-sellers', 'new-arrivals', 'offers', 'ebook-library', 'categories', 'intro-videos', 'features'],
+};
 
 export const PAGE_STRIP_KIND = 'page-strip';
 /** The «كتب قد تعجبك» strip on a book's page. */
@@ -19,15 +30,34 @@ export interface BlockDefaults {
   limitLabel?: string;
 }
 
-export const BLOCK_DEFAULTS: Record<HomeSectionKey, BlockDefaults> = {
+export const BLOCK_DEFAULTS: Record<HomeBlockKey, BlockDefaults> = {
   departments: { title: 'أقسام المتجر', subtitle: null, limit: null, editable: ['title'] },
   'best-sellers': { title: 'الأكثر مبيعًا', subtitle: 'الكتب الأكثر طلبًا من قرّاء الدار', limit: null, editable: ['title', 'subtitle', 'limit'], limitLabel: 'عدد الكتب' },
   'new-arrivals': { title: 'وصل حديثًا', subtitle: 'أحدث إصدارات الدار', limit: 12, editable: ['title', 'subtitle', 'limit'], limitLabel: 'عدد الكتب' },
   offers: { title: 'عروض وخصومات', subtitle: 'كتب بسعر أقل من سعرها المعتاد', limit: null, editable: ['title', 'subtitle', 'limit'], limitLabel: 'عدد الكتب' },
   categories: { title: 'صفوف التصنيفات', subtitle: null, limit: 3, editable: ['limit'], limitLabel: 'عدد الرفوف التلقائية' },
+  'ebook-library': { title: 'المكتبة الإلكترونية', subtitle: 'كتب إلكترونية تقرأها فورًا على جوالك', limit: null, editable: ['title', 'subtitle'] },
   'intro-videos': { title: 'فيديوهات تعريفية', subtitle: 'مقاطع مختارة من دار الفتح', limit: null, editable: ['title', 'subtitle'] },
   features: { title: 'مربعات المزايا', subtitle: null, limit: null, editable: [] },
 };
+
+/** What a standard block is called and does, for the dashboard's list. */
+export const BLOCK_META: Record<HomeBlockKey, { label: string; hint: string }> = {
+  departments: { label: 'السلاسل (الأقسام السريعة)', hint: 'بطاقات السلاسل تحت البانر مباشرة' },
+  'best-sellers': { label: 'الأكثر مبيعًا', hint: 'الكتب اللي اخترتها في «إدارة الإعلانات والأشرطة»' },
+  'new-arrivals': { label: 'وصل حديثًا', hint: 'أحدث إصدارات الدار' },
+  offers: { label: 'عروض وخصومات', hint: 'الكتب المخفّضة، وتظهر لما يبقى عندك 3 منها على الأقل' },
+  'ebook-library': { label: 'المكتبة الإلكترونية', hint: 'كارت بيفتح الكتب الإلكترونية، بيظهر لما يبقى فيه كتاب إلكتروني' },
+  categories: { label: 'صفوف التصنيفات التلقائية', hint: 'صف لكل تصنيف من أول التصنيفات (بتسكت لما تختار رفوف بنفسك)' },
+  'intro-videos': { label: 'فيديوهات «من الدار»', hint: 'المقاطع التعريفية' },
+  features: { label: 'مربعات المزايا', hint: 'الشحن والدفع والضمان' },
+};
+
+/** The standard text and count of a block in a channel (the app draws four automatic category shelves, the website three). */
+export function blockDefaults(key: HomeBlockKey, channel: HomeChannel = 'web'): BlockDefaults {
+  const base = BLOCK_DEFAULTS[key];
+  return key === 'categories' && channel === 'app' ? { ...base, limit: 4 } : base;
+}
 
 /** A saved row of home_layout. */
 export interface HomeLayoutRow {
@@ -45,7 +75,7 @@ export interface HomeBlock {
   /** the row's key: the section's name, or `shelf:<node id>` */
   key: string;
   /** the standard block it is, or null for a category shelf */
-  std: HomeSectionKey | null;
+  std: HomeBlockKey | null;
   nodeId: string | null;
   title: string | null;
   subtitle: string | null;
@@ -56,34 +86,34 @@ export interface HomeBlock {
   saved: boolean;
 }
 
-const isStd = (key: string): key is HomeSectionKey => (HOME_SECTION_KEYS as string[]).includes(key);
+const isStd = (key: string, channel: HomeChannel = 'web'): key is HomeBlockKey => (BLOCK_KEYS[channel] as string[]).includes(key);
 
 /** Whether the saved rows hold a layout the website can follow (at least one standard block). */
-export function hasHomeLayout(rows: readonly HomeLayoutRow[]): boolean {
-  return rows.some((r) => r.kind === r.section_key && isStd(r.section_key));
+export function hasHomeLayout(rows: readonly HomeLayoutRow[], channel: HomeChannel = 'web'): boolean {
+  return rows.some((r) => r.kind === r.section_key && isStd(r.section_key, channel));
 }
 
 /**
  * Every block in the order the page draws them: the saved standard blocks and shelves by their numbers; a standard block
  * with no row yet goes at the end (shown, with its defaults) — nothing is ever missing from the list.
  */
-export function resolveHomeBlocks(rows: readonly HomeLayoutRow[]): HomeBlock[] {
+export function resolveHomeBlocks(rows: readonly HomeLayoutRow[], channel: HomeChannel = 'web'): HomeBlock[] {
   const blocks: HomeBlock[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
-    const standard = row.kind === row.section_key && isStd(row.section_key);
+    const standard = row.kind === row.section_key && isStd(row.section_key, channel);
     if (!standard && row.kind !== SHELF_KIND) continue;
     if (seen.has(row.section_key)) continue;
     seen.add(row.section_key);
     blocks.push({
-      key: row.section_key, std: standard ? (row.section_key as HomeSectionKey) : null, nodeId: row.node_id,
+      key: row.section_key, std: standard ? (row.section_key as HomeBlockKey) : null, nodeId: row.node_id,
       title: row.title_ar?.trim() || null, subtitle: row.subtitle_ar?.trim() || null, limit: row.item_limit,
       visible: row.visible, sortOrder: row.sort_order, saved: true,
     });
   }
   blocks.sort((a, b) => a.sortOrder - b.sortOrder || a.key.localeCompare(b.key));
   let next = blocks.length === 0 ? 0 : Math.max(...blocks.map((b) => b.sortOrder)) + 1;
-  for (const key of HOME_SECTION_KEYS) {
+  for (const key of BLOCK_KEYS[channel]) {
     if (seen.has(key)) continue;
     blocks.push({ key, std: key, nodeId: null, title: null, subtitle: null, limit: null, visible: true, sortOrder: next++, saved: false });
   }
@@ -105,8 +135,8 @@ export function rowsFor(blocks: readonly HomeBlock[]): HomeLayoutRow[] {
 }
 
 /** What the website shows for a block's title / line / count: what was written, else the standard one. */
-export function blockText(block: Pick<HomeBlock, 'std' | 'title' | 'subtitle' | 'limit'> | undefined, key: HomeSectionKey) {
-  const base = BLOCK_DEFAULTS[key];
+export function blockText(block: Pick<HomeBlock, 'std' | 'title' | 'subtitle' | 'limit'> | undefined, key: HomeBlockKey, channel: HomeChannel = 'web') {
+  const base = blockDefaults(key, channel);
   return {
     title: block?.title ?? base.title,
     subtitle: block?.subtitle ?? base.subtitle,

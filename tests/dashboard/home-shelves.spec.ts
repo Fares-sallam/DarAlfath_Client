@@ -33,9 +33,11 @@ const shelf = (id: string, order: number, over: Partial<Row> = {}): Row => ({
   channel: 'web', section_key: `shelf:${id}`, kind: 'category-shelf', node_id: id, title_ar: null, subtitle_ar: null, item_limit: null, visible: true, sort_order: order, ...over,
 });
 const STANDARD = ['departments', 'best-sellers', 'new-arrivals', 'offers', 'categories', 'intro-videos', 'features'];
+const APP_STANDARD = ['departments', 'best-sellers', 'new-arrivals', 'offers', 'ebook-library', 'categories', 'intro-videos', 'features'];
+const seedApp = () => APP_STANDARD.map((key, i) => ({ ...std(key, i), channel: 'app', item_limit: key === 'categories' ? 4 : null }));
 const seed = () => STANDARD.map((key, i) => std(key, i, key === 'new-arrivals' ? { visible: false } : key === 'categories' ? { item_limit: 3 } : {}));
 
-async function setUp(page: Page, initial: Row[] = seed()) {
+async function setUp(page: Page, initial: Row[] = seed(), url = '/catalog?tab=home') {
   const state = [...initial];
   const writes: { method: string; url: string; body: any }[] = [];
   await signInAsFakeOwner(page);
@@ -46,24 +48,28 @@ async function setUp(page: Page, initial: Row[] = seed()) {
     if (url.includes('/rest/v1/rpc/catalog_node_counts')) return json(route, NODES.map((n) => ({ node_id: n.id, books_direct: 3, books_total: n.id === 's1' ? 9 : 3 })));
     if (url.includes('/rest/v1/catalog_nodes') && get) return json(route, NODES);
     if (url.includes('/rest/v1/home_layout')) {
-      if (get) return json(route, [...state].sort((a, b) => a.sort_order - b.sort_order));
+      if (get) {
+        const wanted = new URL(url).searchParams.get('channel')?.replace(/^eq\./, '') ?? 'web';
+        return json(route, state.filter((r) => r.channel === wanted).sort((a, b) => a.sort_order - b.sort_order));
+      }
       const body = req.method() === 'DELETE' ? null : req.postDataJSON();
       writes.push({ method: req.method(), url, body });
       if (req.method() === 'POST') {
         for (const incoming of body as Row[]) {
-          const at = state.findIndex((s) => s.section_key === incoming.section_key);
+          const at = state.findIndex((s) => s.section_key === incoming.section_key && s.channel === (incoming as Row).channel);
           if (at >= 0) state[at] = { ...state[at], ...incoming }; else state.push(incoming);
         }
       } else if (req.method() === 'DELETE') {
         const key = new URL(url).searchParams.get('section_key')?.replace(/^eq\./, '');
-        const at = state.findIndex((s) => s.section_key === key);
+        const channel = new URL(url).searchParams.get('channel')?.replace(/^eq\./, '');
+        const at = state.findIndex((s) => s.section_key === key && s.channel === channel);
         if (at >= 0) state.splice(at, 1);
       }
       return route.fulfill({ status: 204, body: '' });
     }
     return route.fallback();
   });
-  await page.goto('/catalog?tab=home');
+  await page.goto(url);
   await expect(page.getByTestId('home-blocks')).toBeVisible({ timeout: 20_000 });
   return { writes, state };
 }
@@ -187,4 +193,50 @@ test('«كتب قد تعجبك» في صفحة الكتاب: إخفاء، وعن
   await page.getByTestId('related-save').click();
   await expect.poll(() => writes.length).toBe(2);
   expect(lastPost(writes)[0]).toMatchObject({ title_ar: 'ممكن يعجبك', item_limit: 6, visible: false });
+});
+
+test('القناة: الموقع هو الأساسي، والتطبيق تبويب جنبه فيه المكتبة الإلكترونية، وملاحظة إن الترتيب للنسخة الجاية', async ({ page }) => {
+  await setUp(page, [...seed(), ...seedApp()]);
+  await expect(page.getByTestId('home-channel-web')).toHaveAttribute('aria-pressed', 'true');
+  expect(await keysShown(page)).toEqual(STANDARD);
+  await expect(page.getByTestId('page-strips')).toBeVisible();
+
+  await page.getByTestId('home-channel-app').click();
+  await expect(page.getByTestId('app-note')).toContainText('نسخة التطبيق الجاية');
+  await expect(items(page)).toHaveCount(8);
+  expect(await keysShown(page)).toEqual(APP_STANDARD);
+  // the website's own extras are not here
+  await expect(page.getByTestId('page-strips')).toHaveCount(0);
+  await expect(page.getByTestId('app-blocks-link')).toHaveCount(0);
+  // the app draws four automatic category shelves
+  await page.getByRole('button', { name: /^تعديل .*صفوف التصنيفات/ }).click();
+  await expect(page.getByTestId('shelf-limit')).toHaveAttribute('placeholder', '4');
+});
+
+test('ترتيب التطبيق: بيتحفظ بقناة app، ومبيلمسش صفوف الموقع', async ({ page }) => {
+  await page.setViewportSize({ width: 1400, height: 1500 });
+  const { writes, state } = await setUp(page, [...seed(), ...seedApp()], '/catalog?tab=home&channel=app');
+  await expect(items(page)).toHaveCount(8);
+  const handle = items(page).nth(4).getByTestId('drag-handle'); // ebook-library
+  const first = items(page).nth(0);
+  const box = (await first.boundingBox())!;
+  await handle.dispatchEvent('dragstart', { dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+  await first.dispatchEvent('dragover', { clientX: box.x + 10, clientY: box.y + 3, dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+  await first.dispatchEvent('drop', { clientX: box.x + 10, clientY: box.y + 3, dataTransfer: await page.evaluateHandle(() => new DataTransfer()) });
+  await expect.poll(() => writes.length).toBe(1);
+  const rows = lastPost(writes) as (Row & { channel: string })[];
+  expect(rows.every((r) => r.channel === 'app')).toBe(true);
+  expect(rows.map((r) => r.section_key)).toEqual(['ebook-library', 'departments', 'best-sellers', 'new-arrivals', 'offers', 'categories', 'intro-videos', 'features']);
+  // the website's rows are exactly as they were
+  expect(state.filter((r) => r.channel === 'web').map((r) => [r.section_key, r.sort_order])).toEqual(STANDARD.map((k, i) => [k, i]));
+});
+
+test('رف تصنيف للتطبيق: بيتحفظ بقناة app', async ({ page }) => {
+  const { writes } = await setUp(page, [...seed(), ...seedApp()], '/catalog?tab=home&channel=app');
+  await page.getByTestId('shelf-add').click();
+  await page.getByTestId('shelf-node').selectOption({ label: 'تصنيف: قصص' });
+  await page.getByTestId('shelf-save').click();
+  await expect.poll(() => writes.length).toBe(1);
+  const added = lastPost(writes).at(-1) as Row & { channel: string };
+  expect(added).toMatchObject({ channel: 'app', section_key: 'shelf:c3', kind: 'category-shelf', sort_order: 8 });
 });
