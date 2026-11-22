@@ -138,3 +138,73 @@ test('PDF: نفس الجدول بنفس الأعمدة في صفحة الطبا�
   expect(html).not.toContain('<b>خطر</b>');
   expect(html).toContain('size: A4 landscape');
 });
+
+const chip = (page: Page, key: string) => page.getByTestId(`col-cols-${key}`);
+
+test('الأعمدة: كل حاجة تخص الكتاب زرار، والتسعة بتوعك شغّالين، والباقي مقفول لحد ما تختاره', async ({ page }) => {
+  await setUp(page);
+  await openPanel(page);
+  for (const key of ['sku', 'title', 'author', 'description', 'weight', 'cost', 'isbn', 'series', 'category']) await expect(chip(page, key)).toHaveAttribute('data-on', 'true');
+  for (const key of ['copy', 'publisher', 'year', 'pages', 'keywords', 'sellPrice', 'basePrice', 'status', 'createdAt', 'ebookFormat', 'saleChannel', 'iap', 'cover']) {
+    await expect(chip(page, key)).toHaveAttribute('data-on', 'false');
+  }
+  await expect(page.getByTestId('column-picker')).toContainText('9 من');
+});
+
+test('Excel بالأعمدة اللي اخترتها بس: اللي قفلته مش موجود، واللي فتحته بيتعمل له عمود', async ({ page }) => {
+  await setUp(page);
+  await openPanel(page);
+  await chip(page, 'author').click();
+  await chip(page, 'description').click();
+  await chip(page, 'copy').click();
+  await chip(page, 'sellPrice').click();
+  const { wb } = await downloadSheet(page);
+  const rows: (string | number | null)[][] = [];
+  wb.worksheets[0].eachRow((row) => rows.push(Array.from({ length: 9 }, (_, i) => (row.getCell(i + 1).value as string | number | null) ?? null)));
+  const header = rows[0].filter((v) => v !== null);
+  expect(header).toEqual(['SKU', 'اسم الكتاب', 'النسخة', 'وزن الكتاب', 'سعر التكلفة', 'سعر البيع', 'الترقيم الدولي ISBN', 'السلسلة', 'التصنيف']);
+  expect(wb.worksheets[0].columnCount).toBe(9);
+  expect(header).not.toContain('اسم المؤلف');
+  expect(header).not.toContain('وصف الكتاب');
+  // «قواعد النحو» paper copy: name, copy, weight, cost, selling price
+  const paper = rows.find((r) => r[0] === 'NAHW-P')!;
+  expect(paper.slice(0, 6)).toEqual(['NAHW-P', 'قواعد النحو', 'ورق عادي', 0.35, 30, 50]);
+});
+
+test('اختيارك بيتحفظ، و«الكل» و«الافتراضي» شغّالين، ولو قفلت كل الأعمدة مفيش تنزيل', async ({ page }) => {
+  await setUp(page);
+  await openPanel(page);
+  await chip(page, 'publisher').click();
+  await chip(page, 'isbn').click();
+  await page.reload();
+  await expect(page.locator('tbody tr').filter({ has: page.getByTitle('تعديل') }).first()).toBeVisible({ timeout: 20_000 });
+  await openPanel(page);
+  await expect(chip(page, 'publisher')).toHaveAttribute('data-on', 'true');
+  await expect(chip(page, 'isbn')).toHaveAttribute('data-on', 'false');
+
+  await page.getByTestId('cols-all-cols').click();
+  await expect(chip(page, 'cover')).toHaveAttribute('data-on', 'true');
+  await expect(chip(page, 'isbn')).toHaveAttribute('data-on', 'true');
+  await page.getByTestId('cols-standard-cols').click();
+  await expect(chip(page, 'cover')).toHaveAttribute('data-on', 'false');
+  await expect(chip(page, 'publisher')).toHaveAttribute('data-on', 'false');
+  await expect(chip(page, 'isbn')).toHaveAttribute('data-on', 'true');
+
+  for (const key of ['sku', 'title', 'author', 'description', 'weight', 'cost', 'isbn', 'series', 'category']) await chip(page, key).click();
+  await expect(page.getByTestId('export-no-columns')).toBeVisible();
+  await expect(page.getByTestId('export-run')).toBeDisabled();
+});
+
+test('PDF بالأعمدة اللي اخترتها بس', async ({ page }) => {
+  await setUp(page);
+  await openPanel(page);
+  await page.getByTestId('cols-standard-cols').click();
+  for (const key of ['author', 'description', 'weight', 'isbn', 'series', 'category', 'sku']) await chip(page, key).click();
+  await chip(page, 'publisher').click();
+  await page.getByTestId('export-format-pdf').click();
+  await page.getByTestId('export-run').click();
+  const frame = page.locator('iframe[data-print-frame]');
+  await expect(frame).toHaveCount(1, { timeout: 15_000 });
+  const heads = await frame.evaluate((el) => [...(el as HTMLIFrameElement).contentDocument!.querySelectorAll('th')].map((th) => th.textContent));
+  expect(heads).toEqual(['اسم الكتاب', 'الناشر', 'سعر التكلفة']);
+});
