@@ -252,6 +252,13 @@ test('المعاينة ثابتة على الشمال وإنت بتنزل لحد
   await page.getByTestId('app-control-reset').click();
   await expect(page.getByTestId('popup-state')).toHaveText('مقفولة');
 
+  // the phone sits in the middle of its box, inside the window (never pushed out at the left)
+  const shell = (await page.getByTestId('app-control-live-preview').boundingBox())!;
+  const phoneBox = (await page.getByTestId('app-control-frame-iframe').boundingBox())!;
+  expect(phoneBox.x).toBeGreaterThanOrEqual(Math.max(0, shell.x));
+  expect(phoneBox.x + phoneBox.width).toBeLessThanOrEqual(shell.x + shell.width);
+  expect(Math.abs(phoneBox.x + phoneBox.width / 2 - (shell.x + shell.width / 2))).toBeLessThan(6);
+
   const before = (await dock.boundingBox())!;
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await page.waitForTimeout(300);

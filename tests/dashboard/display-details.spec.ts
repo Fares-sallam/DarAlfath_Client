@@ -308,6 +308,13 @@ for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }])
     expect(formBox.x).toBeGreaterThan(top.x + top.width - 5);
     expect(Math.abs(top.y - formBox.y)).toBeLessThan(8);
 
+    // the phone sits in the middle of its box, inside the window (never pushed out at the left)
+    const shell = (await page.getByTestId('display-live-preview').boundingBox())!;
+    const phoneBox = (await page.getByTestId('app-frame-iframe').boundingBox())!;
+    expect(phoneBox.x).toBeGreaterThanOrEqual(shell.x);
+    expect(phoneBox.x + phoneBox.width).toBeLessThanOrEqual(shell.x + shell.width);
+    expect(Math.abs(phoneBox.x + phoneBox.width / 2 - (shell.x + shell.width / 2))).toBeLessThan(6);
+
     // scrolled, it stays below the header at the same place: the same spot at 800, 2000 and at the very end of the page
     let stuckY: number | null = null;
     for (const y of [800, 2000, 99999]) {
@@ -347,4 +354,20 @@ test('على الشاشة الصغيرة المعاينة فوق الفورم م
   const dock = (await page.getByTestId('preview-dock').boundingBox())!;
   const form = (await page.getByTestId('display-page').boundingBox())!;
   expect(dock.y + dock.height).toBeLessThanOrEqual(form.y + 4);
+});
+
+test('المعاينة (موبايل وكمبيوتر) في نص صندوقها ومبتطلعش بره الشاشة', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setUp(page);
+  for (const device of ['preview-device-mobile', 'preview-device-desktop']) {
+    await page.getByTestId(device).click();
+    await expect(page.getByTestId('site-frame')).toHaveAttribute('data-ready', 'true');
+    await page.waitForTimeout(250);
+    const shell = (await page.getByTestId('display-live-preview').boundingBox())!;
+    const frame = (await page.getByTestId('site-frame-iframe').boundingBox())!;
+    expect(frame.x).toBeGreaterThanOrEqual(shell.x);
+    expect(frame.x + frame.width).toBeLessThanOrEqual(shell.x + shell.width + 1);
+    expect(Math.abs(frame.x + frame.width / 2 - (shell.x + shell.width / 2))).toBeLessThan(6);
+    expect(frame.x).toBeGreaterThanOrEqual(0);
+  }
 });
