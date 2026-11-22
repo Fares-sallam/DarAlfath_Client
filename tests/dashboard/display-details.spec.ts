@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '../fixtures';
 import { signInAsFakeOwner } from '../support/fakeOwner';
+import { fakeFrames, lastMessage } from '../support/fakeFrames';
 
 // «مظهر المتجر» ← «تفاصيل العرض»: what a book card, a book's page and the footer show, for the website and for the app.
 // Hermetic: the saved row is answered by the spec (and what the page writes is caught here); nothing reaches the database.
@@ -11,8 +12,16 @@ type Written = { id: number; display: Record<string, any> };
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
 /** Answers the saved appearance row with `display` and catches every save; `missing` answers like a database without the column. */
-async function setUp(page: Page, opts: { display?: unknown; missing?: boolean } = {}) {
+const BOOK_A = '0b1f6f7e-2a3b-4c5d-8e9f-1a2b3c4d5e6f';
+const BOOK_B = '1c2f7f8e-3b4c-4d6e-9fa0-2b3c4d5e6f70';
+
+async function setUp(page: Page, opts: { display?: unknown; missing?: boolean; silent?: boolean } = {}) {
   await signInAsFakeOwner(page);
+  await fakeFrames(page, { silent: opts.silent });
+  // a few real-looking books for the preview's book page
+  await page.route('**/rest/v1/products?*', (route) => (route.request().method() === 'GET'
+    ? json(route, [{ id: BOOK_A, title: 'كتاب أ' }, { id: BOOK_B, title: 'كتاب ب' }])
+    : route.fallback()));
   let display: unknown = opts.display ?? {};
   const writes: Written[] = [];
   await page.route('**/rest/v1/storefront_appearance*', async (route) => {
@@ -61,26 +70,15 @@ test('الشكل الأول: كل عنصر زي ما الموقع والتطبي
   await expect(page.getByTestId('display-reset')).toBeDisabled();
 });
 
-test('الكارت: مفتاح الموقع ومفتاح التطبيق منفصلين، والعينة بتتغير، والحفظ بيبعت القيم', async ({ page }) => {
+test('الكارت: مفتاح الموقع ومفتاح التطبيق منفصلين، والحفظ بيبعت القيم', async ({ page }) => {
   const { writes } = await setUp(page);
-  const sample = page.getByTestId('card-sample');
-  await expect(sample.locator('[data-sample="share"]')).toBeVisible();
 
   await toggle(page, 'زر المشاركة في الموقع');
-  await expect(sample.locator('[data-sample="share"]')).toHaveCount(0);
   await toggle(page, 'شارة «جديد» في الموقع');
   await toggle(page, 'شارة «آخر نسخ» في الموقع');
-  await expect(sample.locator('[data-sample="isNew"]')).toBeVisible();
-  // the app's own sample
-  await sample.getByRole('radio', { name: 'التطبيق' }).click();
-  await expect(sample.locator('[data-sample="isNew"]')).toHaveCount(0);
-  await expect(sample.locator('[data-sample="lowStock"]')).toBeVisible();
-  await expect(sample.locator('[data-sample="share"]')).toHaveCount(0);
-
   await page.getByTestId('display-new-days').fill('14');
   await page.getByTestId('display-low-stock').fill('8');
   await page.getByRole('radio', { name: 'مبلغ (وفّر 30 ج.م)' }).click();
-  await expect(sample.locator('[data-sample="discount"]')).toContainText('وفّر');
   await page.getByRole('radio', { name: '4' }).first().click();
 
   await expect(saveBar(page)).toBeVisible();
@@ -208,4 +206,85 @@ test('قاعدة بيانات من غير العمود الجديد: الصفح�
   await expect(page.getByTestId('display-missing')).toBeVisible();
   await toggle(page, 'زر المفضلة في الموقع');
   await expect(page.getByTestId('display-save')).toBeDisabled();
+});
+
+// ── the live preview ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('المعاينة الحية: بتفتح الموقع بعلامة المعاينة، وبتبعت المسودة، وبتتحدّث مع كل تغيير قبل الحفظ', async ({ page }) => {
+  await setUp(page);
+  const frame = page.getByTestId('site-frame');
+  await expect(frame).toHaveAttribute('data-ready', 'true');
+  await expect(page.getByTestId('site-frame-iframe')).toHaveAttribute('src', /\/books\?preview=display$/);
+
+  // the first draft is what is saved (the defaults here)
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.display?.card?.show?.share?.web).toBe(true);
+  const first = await lastMessage(page, 'site');
+  expect(first.type).toBe('daralfath:display-preview');
+  expect(first.navigate).toBe('/books');
+
+  // a change in the form reaches the frame before anything is saved
+  await toggle(page, 'زر المشاركة في الموقع');
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.display?.card?.show?.share?.web).toBe(false);
+  await page.getByTestId('display-copyright').fill('كل الحقوق © {year} للدار');
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.display?.footer?.copyright).toBe('كل الحقوق © {year} للدار');
+  // ...and nothing was written
+  await expect(saveBar(page)).toBeVisible();
+});
+
+test('شاشات معاينة الموقع: الكتب، كتاب حقيقي (والكتاب بيتغير)، والتذييل بيمرّر لآخر الصفحة', async ({ page }) => {
+  await setUp(page);
+  await expect(page.getByTestId('site-frame')).toHaveAttribute('data-ready', 'true');
+
+  await page.getByTestId('screen-book').click();
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.navigate).toBe(`/book/${BOOK_A}`);
+  await page.getByTestId('preview-book').selectOption(BOOK_B);
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.navigate).toBe(`/book/${BOOK_B}`);
+
+  await page.getByTestId('screen-footer').click();
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.scroll).toBe('footer');
+  expect((await lastMessage(page, 'site')).navigate).toBe('/');
+
+  // the phone and the computer widths of the website
+  await page.getByTestId('preview-device-desktop').click();
+  await expect(page.getByTestId('site-frame')).toHaveAttribute('data-ready', 'true');
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.navigate).toBe('/');
+});
+
+test('معاينة التطبيق: بتبعت المسودة مع المسار واللغة والوضع، ولما التطبيق يترد بتتحدّث', async ({ page }) => {
+  await setUp(page);
+  await page.getByTestId('preview-place-app').click();
+  await expect(page.getByTestId('app-frame')).toHaveAttribute('data-ready', 'true');
+  await expect(page.getByTestId('app-frame-iframe')).toHaveAttribute('src', /dar-alfath-app-preview\.vercel\.app\/$/);
+
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.navigate).toBe('/search');
+  const first = await lastMessage(page, 'app');
+  expect(first.type).toBe('daralfath:app-preview');
+  expect(first.platform).toBe('ios');
+  expect(first.language).toBe('ar');
+  expect(first.dark).toBe(false);
+  expect(first.display.card.show.wishlist).toEqual({ web: true, app: true });
+
+  await toggle(page, 'زر المفضلة في التطبيق');
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.display?.card?.show?.wishlist?.app).toBe(false);
+
+  await page.getByRole('radio', { name: 'English' }).click();
+  await page.getByRole('radio', { name: 'ليلي' }).click();
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.language).toBe('en');
+  expect((await lastMessage(page, 'app')).dark).toBe(true);
+
+  await page.getByTestId('screen-book').click();
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.navigate).toBe(`/book/${BOOK_A}`);
+  // back to the website: its frame is opened again and gets the same draft
+  await page.getByTestId('preview-place-site').click();
+  await expect(page.getByTestId('site-frame')).toHaveAttribute('data-ready', 'true');
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.display?.card?.show?.wishlist?.app).toBe(false);
+});
+
+test('لو الصفحة المعروضة ما ردّتش: المعاينة بتقول كده وبتدّي رابط تبويب', async ({ page }) => {
+  await page.clock.install();
+  await setUp(page, { silent: true });
+  await expect(page.getByTestId('site-frame')).toHaveAttribute('data-ready', 'false');
+  await page.clock.fastForward(16_000);
+  await expect(page.getByTestId('site-frame-failed')).toBeVisible();
+  await expect(page.getByTestId('site-frame-failed').getByRole('link')).toHaveAttribute('href', /preview=display/);
 });

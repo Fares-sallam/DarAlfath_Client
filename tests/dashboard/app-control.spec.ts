@@ -1,5 +1,6 @@
 import { test, expect, type Page, type Route } from '../fixtures';
 import { signInAsFakeOwner } from '../support/fakeOwner';
+import { fakeFrames, lastMessage } from '../support/fakeFrames';
 
 // «التحكم في التطبيق»: the maintenance screen, the forced / recommended update by build number, and the promotional pop-up.
 // Hermetic: the saved row is answered by the spec (and what the page writes is caught here); nothing reaches the database.
@@ -12,6 +13,7 @@ const json = (route: Route, body: unknown, status = 200) => route.fulfill({ stat
 
 async function setUp(page: Page, opts: { row?: Partial<Written>; missing?: boolean } = {}) {
   await signInAsFakeOwner(page);
+  await fakeFrames(page);
   let row = { maintenance: {}, update_policy: {}, popup: {}, ...(opts.row ?? {}) };
   const writes: Written[] = [];
   await page.route('**/rest/v1/app_control*', async (route) => {
@@ -44,8 +46,10 @@ test('الشكل الأول: كل حاجة مقفولة ومفيش شريط حف
   await expect(page.getByTestId('min-android')).toHaveValue('');
   await expect(saveBar(page)).toHaveCount(0);
   await expect(page.getByTestId('app-control-reset')).toBeDisabled();
-  // the sample shows the house wording while the fields are empty
-  await expect(page.getByTestId('maintenance-sample')).toContainText('التطبيق تحت الصيانة');
+  // the live preview opens on the maintenance screen, with nothing to say yet (the app uses its house wording)
+  await expect(page.getByTestId('app-control-frame')).toHaveAttribute('data-ready', 'true');
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.notice).toBe('maintenance');
+  expect((await lastMessage(page, 'app')).control.maintenance.title).toBe('');
 });
 
 test('الصيانة: بتتشغل بكلامك، والعينة بتتغير، والحفظ بيبعت القيم', async ({ page }) => {
@@ -54,8 +58,10 @@ test('الصيانة: بتتشغل بكلامك، والعينة بتتغير، 
   await expect(page.getByTestId('maintenance-state')).toHaveText('شغّالة دلوقتي');
   await page.getByTestId('maintenance-title').fill('بنحدّث الموقع');
   await page.getByTestId('maintenance-message').fill('نرجع الساعة 10 الصبح');
-  await expect(page.getByTestId('maintenance-sample').locator('[data-sample="title"]')).toHaveText('بنحدّث الموقع');
-  await expect(page.getByTestId('maintenance-sample').locator('[data-sample="message"]')).toHaveText('نرجع الساعة 10 الصبح');
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.control?.maintenance?.title).toBe('بنحدّث الموقع');
+  expect((await lastMessage(page, 'app')).control.maintenance.message).toBe('نرجع الساعة 10 الصبح');
+  // switched on in the draft, shown in the preview before anything is saved
+  expect((await lastMessage(page, 'app')).control.maintenance.enabled).toBe(true);
 
   await expect(saveBar(page)).toBeVisible();
   await save(page).click();
@@ -130,11 +136,12 @@ test('النافذة: لازم كلام أو صورة، والرابط الجا�
   await page.getByTestId('popup-title').fill('خصم 20%');
   await page.getByTestId('popup-message').fill('على كل الكتب لحد آخر الأسبوع');
   await page.getByTestId('popup-button').fill('تصفّح العروض');
-  await expect(page.getByTestId('popup-sample').locator('[data-sample="button"]')).toHaveCount(0); // no link yet: only a close button
   await page.getByRole('button', { name: 'البحث', exact: true }).click();
   await expect(page.getByTestId('popup-link')).toHaveValue('/search');
-  await expect(page.getByTestId('popup-sample').locator('[data-sample="button"]')).toHaveText('تصفّح العروض');
-  await expect(page.getByTestId('popup-sample').locator('[data-sample="title"]')).toHaveText('خصم 20%');
+  // the editing of the pop-up shows the pop-up in the preview, with the words typed so far
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.notice).toBe('popup');
+  const shown = (await lastMessage(page, 'app')).control.popup;
+  expect(shown).toMatchObject({ title: 'خصم 20%', buttonLabel: 'تصفّح العروض', linkUrl: '/search', enabled: true });
 
   await page.getByRole('radio', { name: 'مرة كل يوم' }).click();
   await page.getByRole('radio', { name: 'آيفون بس' }).click();
@@ -194,4 +201,40 @@ test('جدول مش موجود: الصفحة بتفتح وتنبّه ومبتس�
   await expect(page.getByTestId('app-control-missing')).toBeVisible();
   await toggle(page, 'تشغيل الصيانة');
   await expect(save(page)).toBeDisabled();
+});
+
+// ── the live preview ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+test('المعاينة الحية: دوس على أي قسم والشاشة بتاعته بتتعرض، وكل تغيير بيوصل التطبيق قبل الحفظ', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await expect(page.getByTestId('app-control-frame')).toHaveAttribute('data-ready', 'true');
+  await expect(page.getByTestId('app-control-frame-iframe')).toHaveAttribute('src', /dar-alfath-app-preview\.vercel\.app\/$/);
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.notice).toBe('maintenance');
+
+  // editing the update shows the forced update; the minimum typed is in the draft the preview is sent
+  await page.getByTestId('min-ios').click();
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.notice).toBe('update-required');
+  await page.getByTestId('update-message').fill('حدّث دلوقتي بسرعة');
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.control?.update?.message).toBe('حدّث دلوقتي بسرعة');
+
+  // the pop-up
+  await page.getByTestId('popup-title').click();
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.notice).toBe('popup');
+  expect((await lastMessage(page, 'app')).navigate).toBe('/');
+
+  // the buttons above the preview choose the screen too (it shows even though its switch is off), and the phone, language, theme
+  await page.getByTestId('notice-update-offer').click();
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.notice).toBe('update-offer');
+  const preview = page.getByTestId('app-control-live-preview');
+  await preview.getByRole('radio', { name: 'أندرويد' }).click();
+  await preview.getByRole('radio', { name: 'English' }).click();
+  await preview.getByRole('radio', { name: 'ليلي' }).click();
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.platform).toBe('android');
+  const last = await lastMessage(page, 'app');
+  expect(last.language).toBe('en');
+  expect(last.dark).toBe(true);
+  expect(last.control.popup.enabled).toBe(false);
+
+  // nothing was written by looking
+  expect(writes).toHaveLength(0);
 });

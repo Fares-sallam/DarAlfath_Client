@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { DEFAULT_DISPLAY, DISPLAY_COLUMN, resolveDisplay, type DisplaySettings } from '@/lib/displaySettings';
+import { useDisplayPreview } from '@/lib/displayPreview';
 
 const CACHE_KEY = 'storefront-display-v1';
 
@@ -40,5 +41,7 @@ export function useDisplaySettings(): DisplaySettings {
     staleTime: 60_000,
     placeholderData: () => remembered() ?? DEFAULT_DISPLAY,
   });
-  return data ?? DEFAULT_DISPLAY;
+  // on the dashboard's preview page, the draft being edited stands in for the saved settings (see lib/displayPreview.ts)
+  const draft = useDisplayPreview();
+  return draft ?? data ?? DEFAULT_DISPLAY;
 }

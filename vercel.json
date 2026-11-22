@@ -24,7 +24,8 @@
     {
       "source": "/(.*)",
       "missing": [
-        { "type": "query", "key": "preview", "value": "home" }
+        { "type": "query", "key": "preview", "value": "home" },
+        { "type": "query", "key": "preview", "value": "display" }
       ],
       "headers": [
         { "key": "X-Frame-Options", "value": "SAMEORIGIN" }
@@ -34,6 +35,15 @@
       "source": "/(.*)",
       "has": [
         { "type": "query", "key": "preview", "value": "home" }
+      ],
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://dar-alfath-dashboard.vercel.app" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        { "type": "query", "key": "preview", "value": "display" }
       ],
       "headers": [
         { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://dar-alfath-dashboard.vercel.app" }
