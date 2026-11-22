@@ -288,3 +288,63 @@ test('لو الصفحة المعروضة ما ردّتش: المعاينة بت�
   await expect(page.getByTestId('site-frame-failed')).toBeVisible();
   await expect(page.getByTestId('site-frame-failed').getByRole('link')).toHaveAttribute('href', /preview=display/);
 });
+
+// ── the preview stays where it is while the page scrolls ─────────────────────────────────────────────────────────────────
+
+for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }]) {
+  test(`المعاينة ثابتة على الشمال وإنت بتنزل في الصفحة، ومبتطلعش بره الشاشة (${size.width}×${size.height})`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await setUp(page);
+    await page.getByTestId('preview-place-app').click();
+    await expect(page.getByTestId('app-frame')).toHaveAttribute('data-ready', 'true');
+
+    const dock = page.getByTestId('preview-dock');
+    const form = page.getByTestId('display-page');
+    await expect(dock).toHaveAttribute('data-docked', 'true');
+
+    // at the top of the page it sits level with the form, beside it on the left (the form is on the right, as the dashboard reads right to left)
+    const top = (await dock.boundingBox())!;
+    const formBox = (await form.boundingBox())!;
+    expect(formBox.x).toBeGreaterThan(top.x + top.width - 5);
+    expect(Math.abs(top.y - formBox.y)).toBeLessThan(8);
+
+    // scrolled, it stays below the header at the same place: the same spot at 800, 2000 and at the very end of the page
+    let stuckY: number | null = null;
+    for (const y of [800, 2000, 99999]) {
+      await page.evaluate((to) => window.scrollTo(0, to), y);
+      await page.waitForTimeout(300);
+      const now = (await dock.boundingBox())!;
+      expect(Math.abs(now.x - top.x)).toBeLessThan(2);
+      stuckY ??= now.y;
+      expect(Math.abs(now.y - stuckY)).toBeLessThan(2);
+      expect(now.y).toBeGreaterThanOrEqual(90);              // below the header (80px), which stays at the top
+      expect(now.y).toBeLessThan(110);
+      // the whole phone is in view, not cut off by the bottom of the window
+      const phone = (await page.getByTestId('app-frame-iframe').boundingBox())!;
+      expect(phone.y).toBeGreaterThanOrEqual(90);
+      expect(phone.y + phone.height).toBeLessThanOrEqual(size.height);
+    }
+
+    // up at the top again it is back level with the form
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(300);
+    expect(Math.abs((await dock.boundingBox())!.y - top.y)).toBeLessThan(4);
+  });
+}
+
+test('المعاينة مبتغطّيش أزرار أعلى الصفحة وهي في مكانها الأول', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await setUp(page);
+  // the buttons at the top of the page are clickable (nothing docked sits over them)
+  await toggle(page, 'زر المفضلة في الموقع');
+  await page.getByTestId('display-reset').click();
+  await expect(checked(page, 'زر المفضلة في الموقع')).toBeChecked();
+});
+
+test('على الشاشة الصغيرة المعاينة فوق الفورم مش ثابتة (مفيش مكان جنبه)', async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 800 });
+  await setUp(page);
+  const dock = (await page.getByTestId('preview-dock').boundingBox())!;
+  const form = (await page.getByTestId('display-page').boundingBox())!;
+  expect(dock.y + dock.height).toBeLessThanOrEqual(form.y + 4);
+});

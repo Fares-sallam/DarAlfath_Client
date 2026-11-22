@@ -238,3 +238,30 @@ test('المعاينة الحية: دوس على أي قسم والشاشة بت
   // nothing was written by looking
   expect(writes).toHaveLength(0);
 });
+
+test('المعاينة ثابتة على الشمال وإنت بتنزل لحد آخر الصفحة، والتطبيق كله ظاهر، ومبتغطّيش زرار «قفل الكل»', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 800 });
+  await setUp(page);
+  await expect(page.getByTestId('app-control-frame')).toHaveAttribute('data-ready', 'true');
+  const dock = page.getByTestId('preview-dock');
+  await expect(dock).toHaveAttribute('data-docked', 'true');
+
+  // at the top it is level with the form, so the page's own buttons are free (a pop-up switched on makes «قفل الكل» clickable)
+  await toggle(page, 'تشغيل النافذة');
+  await page.getByTestId('popup-title').fill('عرض');
+  await page.getByTestId('app-control-reset').click();
+  await expect(page.getByTestId('popup-state')).toHaveText('مقفولة');
+
+  const before = (await dock.boundingBox())!;
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await page.waitForTimeout(300);
+  const now = (await dock.boundingBox())!;
+  expect(Math.abs(now.x - before.x)).toBeLessThan(2);
+  expect(now.y).toBeGreaterThanOrEqual(90);
+  expect(now.y).toBeLessThan(110);
+  const phone = (await page.getByTestId('app-control-frame-iframe').boundingBox())!;
+  expect(phone.y + phone.height).toBeLessThanOrEqual(800);
+  // and the preview follows what is being edited even from down there
+  await page.getByTestId('popup-title').click();
+  await expect.poll(async () => (await lastMessage(page, 'app'))?.notice).toBe('popup');
+});
