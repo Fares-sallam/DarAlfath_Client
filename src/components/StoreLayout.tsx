@@ -4,6 +4,7 @@ import AnnouncementBar from '@/components/AnnouncementBar';
 import CategoryBar from '@/components/CategoryBar';
 import Footer from '@/components/Footer';
 import AppearanceStyle from '@/components/AppearanceStyle';
+import DisplayStyle from '@/components/DisplayStyle';
 import { useStoreSettings } from '@/hooks/useStorefront';
 
 export default function StoreLayout() {
@@ -19,6 +20,7 @@ export default function StoreLayout() {
   return (
     <div className="app-shell">
       <AppearanceStyle />
+      <DisplayStyle />
       <Header settings={safeSettings} />
       <AnnouncementBar />
       <CategoryBar />

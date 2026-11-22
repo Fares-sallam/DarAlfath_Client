@@ -3,6 +3,9 @@ import { useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { catalogPriceParts } from '@/hooks/useStorefront';
+import { useBookStock } from '@/hooks/useBookStock';
+import { useDisplaySettings } from '@/hooks/useDisplaySettings';
+import { discountText, isLowStock, isNewBook } from '@/lib/displaySettings';
 import { editionsLabel } from '@/lib/editions';
 import { shareBook } from '@/lib/share';
 import type { ProductItem } from '@/types/store';
@@ -30,6 +33,8 @@ export default function ProductCard({
   const coverRef = useRef<HTMLDivElement | null>(null);
   const rafId = useRef(0);
 
+  const display = useDisplaySettings();
+  const show = display.card.show;
   const wished = isInWishlist(product.id);
   const variantLabel = editionsLabel(product.variant_count);
   const price = catalogPriceParts(product);
@@ -38,6 +43,12 @@ export default function ProductCard({
   const discountPct = product.discount_percent && product.discount_percent > 0
     ? Math.round(product.discount_percent)
     : 0;
+  // what the card says is saved: the price before the discount less the price it is sold at (shown as «وفّر 30 ج.م» when chosen)
+  const saved = product.compare_at_price ? product.compare_at_price - (product.min_price || product.starting_price) : null;
+  const flagNew = show.isNew.web && isNewBook(product.created_at, display.card.newDays);
+  const { data: stockOfBooks } = useBookStock(show.lowStock.web);
+  const stockLeft = stockOfBooks?.get(product.product_id) ?? null;
+  const flagLow = show.lowStock.web && isLowStock(stockLeft, display.card.lowStockAt);
 
   const openBook = () => navigate(`/book/${product.id}`);
 
@@ -48,7 +59,7 @@ export default function ProductCard({
   // grown a little on hover (see styles-home.css) and slid the other way, as a zoom you pan with the mouse.
   const onMove = useCallback((e: React.MouseEvent<HTMLElement>) => {
     const el = cardRef.current;
-    if (!el || featured || prefersReducedMotion()) return;
+    if (!el || featured || !display.card.tilt || prefersReducedMotion()) return;
     const cover = el.querySelector<HTMLElement>('.book-card__cover');
     if (!cover) return;
     const { clientX, clientY } = e;
@@ -64,7 +75,7 @@ export default function ProductCard({
       cover.style.setProperty('--mx', clamp(((clientX - frame.left) / frame.width - 0.5) * 2).toFixed(3));
       cover.style.setProperty('--my', clamp(((clientY - frame.top) / frame.height - 0.5) * 2).toFixed(3));
     });
-  }, [featured]);
+  }, [featured, display.card.tilt]);
 
   const onLeave = useCallback(() => {
     const el = cardRef.current;
@@ -99,29 +110,33 @@ export default function ProductCard({
       }}
       aria-label={`فتح صفحة ${product.title}`}
     >
-      <button
-        type="button"
-        className={`book-card__fav ${wished ? 'book-card__fav--active' : ''}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          toggleWishlist(product.id);
-        }}
-        aria-label={wished ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
-      >
-        <Heart size={15} fill={wished ? 'currentColor' : 'none'} />
-      </button>
+      {show.wishlist.web ? (
+        <button
+          type="button"
+          className={`book-card__fav ${wished ? 'book-card__fav--active' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleWishlist(product.id);
+          }}
+          aria-label={wished ? 'إزالة من المفضلة' : 'إضافة إلى المفضلة'}
+        >
+          <Heart size={15} fill={wished ? 'currentColor' : 'none'} />
+        </button>
+      ) : null}
 
-      <button
-        type="button"
-        className="book-card__share"
-        onClick={(e) => {
-          e.stopPropagation();
-          void shareBook({ id: product.id, title: product.title });
-        }}
-        aria-label={`مشاركة رابط ${product.title}`}
-      >
-        <Share2 size={15} />
-      </button>
+      {show.share.web ? (
+        <button
+          type="button"
+          className="book-card__share"
+          onClick={(e) => {
+            e.stopPropagation();
+            void shareBook({ id: product.id, title: product.title });
+          }}
+          aria-label={`مشاركة رابط ${product.title}`}
+        >
+          <Share2 size={15} />
+        </button>
+      ) : null}
 
       <div className="book-card__cover" ref={coverRef}>
         <BookCover
@@ -131,42 +146,55 @@ export default function ProductCard({
           compact={compact}
         />
 
-        {discountPct > 0 ? (
-          <span className="book-card__discount-badge" aria-label={`خصم ${discountPct}%`}>
-            {discountPct}%
+        {discountPct > 0 && show.discount.web ? (
+          <span className="book-card__discount-badge" aria-label={`خصم ${discountPct}%`} data-testid="card-discount">
+            {discountText(display.card.discountStyle, discountPct, saved, product.currency_symbol)}
           </span>
+        ) : null}
+
+        {flagNew || flagLow ? (
+          <div className="book-card__flags">
+            {flagNew ? <span className="book-card__flag" data-testid="card-flag-new">جديد</span> : null}
+            {flagLow ? <span className="book-card__flag book-card__flag--low" data-testid="card-flag-low">آخر {Number(stockLeft).toLocaleString('ar-EG')} {stockLeft === 1 ? 'نسخة' : 'نسخ'}</span> : null}
+          </div>
         ) : null}
       </div>
 
       <div className="book-card__body">
-        <div className="book-card__topline">
-          <div className="book-card__badges">
-            <span>{product.is_bundle ? 'مجموعة' : product.type || 'كتاب'}</span>
-          </div>
+        {show.type.web || show.category.web ? (
+          <div className="book-card__topline">
+            <div className="book-card__badges">
+              {show.type.web ? <span>{product.is_bundle ? 'مجموعة' : product.type || 'كتاب'}</span> : null}
+            </div>
 
-          {categoryLabel ? (
-            <small className="book-card__series">{categoryLabel}</small>
-          ) : null}
-        </div>
+            {show.category.web && categoryLabel ? (
+              <small className="book-card__series">{categoryLabel}</small>
+            ) : null}
+          </div>
+        ) : null}
 
         <h3 title={product.title}>{product.title}</h3>
         <p title={product.author}>{product.author}</p>
 
-        <div className="book-card__rating">
-          {product.rating != null ? (
-            <>
-              <span>{product.rating}</span>
-              <span className="stars">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Star key={i} size={11} fill={i <= Math.round(product.rating!) ? 'currentColor' : 'none'} />
-                ))}
-              </span>
-            </>
-          ) : (
-            <span className="book-card__no-rating">لا يوجد تقييم بعد</span>
-          )}
-          {variantLabel ? <small className="book-card__variants-count">{variantLabel}</small> : null}
-        </div>
+        {show.rating.web || (show.editions.web && variantLabel) ? (
+          <div className="book-card__rating">
+            {show.rating.web ? (
+              product.rating != null ? (
+                <>
+                  <span>{product.rating}</span>
+                  <span className="stars">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <Star key={i} size={11} fill={i <= Math.round(product.rating!) ? 'currentColor' : 'none'} />
+                    ))}
+                  </span>
+                </>
+              ) : (
+                <span className="book-card__no-rating">لا يوجد تقييم بعد</span>
+              )
+            ) : null}
+            {show.editions.web && variantLabel ? <small className="book-card__variants-count">{variantLabel}</small> : null}
+          </div>
+        ) : null}
 
         <div className="book-card__price">
           {price.prefix ? <small className="book-card__from">{price.prefix}</small> : null}

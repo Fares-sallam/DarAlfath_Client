@@ -1,0 +1,59 @@
+/* «تفاصيل العرض» (the dashboard's مظهر المتجر): the pieces of a book card and a book's page the owner can switch on, and how
+   many books fit a row. Nothing here changes anything until a choice is saved: the attributes below are only set by
+   DisplayStyle.tsx, and the badges are only drawn when they are switched on. */
+
+/* ── Books per row (the books page grid only) ── */
+@media (min-width: 901px) {
+  html[data-cols-d] .books-grid--catalog { grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); justify-content: stretch; }
+  html[data-cols-d] .books-grid--catalog .book-card { width: 100%; max-width: 100%; }
+  html[data-cols-d="3"] { --cols: 3; }
+  html[data-cols-d="4"] { --cols: 4; }
+  html[data-cols-d="5"] { --cols: 5; }
+  html[data-cols-d="6"] { --cols: 6; }
+}
+@media (max-width: 640px) {
+  html[data-cols-m="1"] .books-grid--catalog { grid-template-columns: minmax(0, 1fr) !important; }
+  html[data-cols-m="2"] .books-grid--catalog { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+
+/* ── The «جديد» and «آخر نسخ» flags on a card: the cover's lower corner opposite the discount ── */
+.book-card__flags {
+  position: absolute;
+  bottom: 10px;
+  inset-inline-start: 10px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  pointer-events: none;
+}
+.book-card__flag {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: #067e70;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(6, 126, 112, 0.35);
+}
+.book-card__flag--low { background: #fff1e2; color: #b45309; box-shadow: 0 2px 8px rgba(180, 83, 9, 0.18); }
+html.dark .book-card__flag { background: #2aa3ab; color: #00102a; }
+html.dark .book-card__flag--low { background: #3a2a14; color: #fbbf77; }
+
+/* ── The «باقي X نسخ» note under the price on a book's page ── */
+.bk3-stock-hint {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+  color: #b45309;
+}
+html.dark .bk3-stock-hint { color: #fbbf77; }
+
+/* ── The footer: when its columns were changed in the dashboard, its widths come from --footer-grid.
+   Only on a wide screen: below the breakpoint the footer already stacks into two columns, then one. ── */
+@media (min-width: 1241px) {
+  .site-footer__grid[data-custom] { grid-template-columns: var(--footer-grid); }
+}

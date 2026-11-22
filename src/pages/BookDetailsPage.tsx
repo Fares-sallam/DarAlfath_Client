@@ -1,8 +1,9 @@
-import { Heart, ShoppingBag, Sparkles, ShieldCheck, Truck, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight, Share2, QrCode } from 'lucide-react';
+import { Heart, ShoppingBag, Sparkles, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight, Share2, QrCode } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
 import ProductReviews from '@/components/ProductReviews';
+import TrustIcon from '@/components/TrustIcon';
 import QuantitySelector from '@/components/QuantitySelector';
 import {
   catalogPriceParts,
@@ -16,6 +17,9 @@ import {
   useRelatedProducts,
 } from '@/hooks/useStorefront';
 import { useHomeLayoutRows } from '@/hooks/useCatalogTree';
+import { useDisplaySettings } from '@/hooks/useDisplaySettings';
+import { isLowStock } from '@/lib/displaySettings';
+import { physicalStock } from '@/lib/bookStock';
 import { BOOK_RELATED_KEY, pageStripOf } from '@/lib/homeBlocks';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
@@ -90,6 +94,9 @@ export default function BookDetailsPage() {
   const { data: layoutRows = [] } = useHomeLayoutRows();
   const relatedStrip = pageStripOf(layoutRows, BOOK_RELATED_KEY);
   const relatedLimit = Math.min(Math.max(relatedStrip?.limit ?? 4, 1), 12);
+  // what the owner chose to show on a book's page («تفاصيل العرض»)
+  const display = useDisplaySettings();
+  const pageShow = display.page.show;
   const { data: related = [] } = useRelatedProducts(
     product?.category_slug,
     product?.product_id,
@@ -240,7 +247,13 @@ export default function BookDetailsPage() {
   const listPrice = catalogPriceParts(product);
   const mainImage = selectedImage || product.cover_url || null;
   const descriptionText = product.description ||
+    display.page.description ||
     'هذا الإصدار مصمم بعناية ليمنح القارئ تجربة قراءة مريحة، مع عرض واضح ونسخ متعددة تناسب الاستخدامات المختلفة.';
+  // «باقي X نسخ فقط»: the copy chosen, or all the paper copies together before one is chosen
+  const stockLeft = selectedVariant
+    ? (selectedVariant.is_digital || !selectedVariant.is_available ? null : selectedVariant.available_stock ?? null)
+    : physicalStock(variants);
+  const showStockHint = pageShow.stockHint.web && isLowStock(stockLeft, display.card.lowStockAt);
 
   return (
     <div className="bk3-page">
@@ -416,6 +429,12 @@ export default function BookDetailsPage() {
             )}
           </div>
 
+          {showStockHint ? (
+            <p className="bk3-stock-hint" data-testid="book-stock-hint" style={{ '--i': 6 } as React.CSSProperties}>
+              باقي {Number(stockLeft).toLocaleString('ar-EG')} {stockLeft === 1 ? 'نسخة' : stockLeft === 2 ? 'نسختان' : 'نسخ'} فقط
+            </p>
+          ) : null}
+
           {/* A bundle's struck-through price is its books bought one by one
               (kept in sync by the database), so the difference is a real saving. */}
           {isBundle &&
@@ -551,12 +570,15 @@ export default function BookDetailsPage() {
             </button>
           </div>
 
-          {/* Trust */}
-          <div className="bk3-trust" style={{ '--i': 10 } as React.CSSProperties}>
-            <div className="bk3-trust__i"><ShieldCheck size={14} /><span>منتج أصلي</span></div>
-            <div className="bk3-trust__i"><Truck size={14} /><span>شحن سريع</span></div>
-            {manyEditions ? <div className="bk3-trust__i"><BookOpenText size={14} /><span>{manyEditions}</span></div> : null}
-          </div>
+          {/* Trust: the badges are written in the dashboard (تفاصيل العرض); the editions note stays with them */}
+          {pageShow.trust.web && (display.page.trust.length > 0 || manyEditions) ? (
+            <div className="bk3-trust" style={{ '--i': 10 } as React.CSSProperties} data-testid="book-trust">
+              {display.page.trust.map((item, i) => (
+                <div key={`${item.icon}-${i}`} className="bk3-trust__i"><TrustIcon name={item.icon} /><span>{item.text}</span></div>
+              ))}
+              {manyEditions ? <div className="bk3-trust__i"><BookOpenText size={14} /><span>{manyEditions}</span></div> : null}
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -583,36 +605,38 @@ export default function BookDetailsPage() {
           {activeTab === 'specs' && (
             <dl className="bk3-specs">
               <div className="bk3-specs__r"><dt>المؤلف</dt><dd>{product.author}</dd></div>
-              <div className="bk3-specs__r"><dt>الناشر</dt><dd>{metadata?.publisher?.trim() || '—'}</dd></div>
-              <div className="bk3-specs__r"><dt>عدد الصفحات</dt><dd>{metadata?.page_count != null ? `${metadata.page_count} صفحة` : '—'}</dd></div>
-              <div className="bk3-specs__r"><dt>سنة النشر</dt><dd>{metadata?.publication_year ?? '—'}</dd></div>
-              <div className="bk3-specs__r">
-                <dt>{categories.length > 1 ? 'التصنيفات' : 'التصنيف'}</dt>
-                <dd>{categories.length > 0 ? categories.map((c) => c.name).join('، ') : categoryLabel}</dd>
-              </div>
-              <div className="bk3-specs__r"><dt>نوع المنتج</dt><dd>{isBundle ? 'مجموعة كتب' : product.type || 'كتاب'}</dd></div>
+              {pageShow.publisher.web && <div className="bk3-specs__r" data-spec="publisher"><dt>الناشر</dt><dd>{metadata?.publisher?.trim() || '—'}</dd></div>}
+              {pageShow.pages.web && <div className="bk3-specs__r" data-spec="pages"><dt>عدد الصفحات</dt><dd>{metadata?.page_count != null ? `${metadata.page_count} صفحة` : '—'}</dd></div>}
+              {pageShow.year.web && <div className="bk3-specs__r" data-spec="year"><dt>سنة النشر</dt><dd>{metadata?.publication_year ?? '—'}</dd></div>}
+              {pageShow.category.web && (
+                <div className="bk3-specs__r" data-spec="category">
+                  <dt>{categories.length > 1 ? 'التصنيفات' : 'التصنيف'}</dt>
+                  <dd>{categories.length > 0 ? categories.map((c) => c.name).join('، ') : categoryLabel}</dd>
+                </div>
+              )}
+              {pageShow.type.web && <div className="bk3-specs__r" data-spec="type"><dt>نوع المنتج</dt><dd>{isBundle ? 'مجموعة كتب' : product.type || 'كتاب'}</dd></div>}
               {isBundle ? (
                 <div className="bk3-specs__r">
                   <dt>عدد الكتب</dt>
                   <dd>{shownBundleContents.reduce((sum, item) => sum + item.quantity, 0) || '—'}</dd>
                 </div>
-              ) : manyEditions ? (
-                <div className="bk3-specs__r"><dt>الطبعات</dt><dd>{manyEditions}</dd></div>
+              ) : manyEditions && pageShow.editions.web ? (
+                <div className="bk3-specs__r" data-spec="editions"><dt>الطبعات</dt><dd>{manyEditions}</dd></div>
               ) : null}
-              {selectedVariant && (
+              {selectedVariant && pageShow.editions.web && (
                 <div className="bk3-specs__r">
                   <dt>الطبعة المختارة</dt>
                   <dd>{selectedVariant.variant_name}</dd>
                 </div>
               )}
-              {(() => {
+              {pageShow.weight.web && (() => {
                 // Weight drives the real shipping cost (governorate + weight
                 // rate table), so this needs to be visible even before the
                 // customer has clicked a specific copy — not gated behind
                 // "الطبعة المختارة" above, which only ever shows post-pick.
                 if (selectedVariant && !selectedVariant.is_digital && selectedVariant.weight_kg != null) {
                   return (
-                    <div className="bk3-specs__r">
+                    <div className="bk3-specs__r" data-spec="weight">
                       <dt>الوزن</dt>
                       <dd>{selectedVariant.weight_kg} كجم</dd>
                     </div>
@@ -626,7 +650,7 @@ export default function BookDetailsPage() {
                 const max = Math.max(...physicalWeights);
                 const label = min === max ? `${min} كجم` : `${min}–${max} كجم حسب الطبعة`;
                 return (
-                  <div className="bk3-specs__r">
+                  <div className="bk3-specs__r" data-spec="weight">
                     <dt>الوزن</dt>
                     <dd>{label}</dd>
                   </div>

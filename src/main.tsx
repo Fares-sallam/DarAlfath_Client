@@ -18,6 +18,7 @@ import './styles-shop.css';         // ✦ Shop layer — card price/share, book
 import './styles-brand.css';        // ✦ Brand layer — house fonts, swatches, lockup, pattern
 import './styles-auth.css';         // ✦ Auth layer — the customer sign-in / sign-up page, drawn with the pattern
 import './styles-appearance.css';   // ✦ What the dashboard decides: pattern strength, button colours
+import './styles-display.css';      // ✦ Display details: book card flags, books per row, footer columns (chosen in the dashboard)
 import './styles-node-page.css';    // ✦ Series / section pages: welcome text, video and strips of books
 import './styles-menu-tree.css';    // ✦ Top menu from the dashboard's display map: nested menus
 import { isStorePath, STORE_BASE_PATH } from '@/lib/storePaths';
