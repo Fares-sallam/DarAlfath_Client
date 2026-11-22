@@ -199,6 +199,7 @@ export function buildCustomBlocks(
     } else if (block.kind === FILTER_SHELF_KIND) {
       const source = filterSourceOf(block.config);
       const node = block.nodeId ? byNode.get(block.nodeId) : undefined;
+      if (block.nodeId && !node) continue;
       const pool = node
         ? [...productIdsUnder(nodes, links, node.id)].map((id) => byProduct.get(id)).filter((p): p is ProductItem => Boolean(p))
         : [...byProduct.values()];

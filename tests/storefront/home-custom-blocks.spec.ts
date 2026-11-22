@@ -87,7 +87,7 @@ test('جدولة: اللي لسه ما بدأش واللي انتهى مبيظه
     promo('open', 3),
     ...quiet(),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByRole('heading', { name: 'إعلان running' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'إعلان open' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'إعلان future' })).toHaveCount(0);
@@ -99,7 +99,7 @@ test('بلوك قياسي (العروض) ممكن يتجدول كمان، وال
     ...quiet().map((r) => (r.section_key === 'best-sellers' ? { ...r, visible: true, ends_at: '2001-01-01T00:00:00Z' } : r.section_key === 'new-arrivals' ? { ...r, visible: true } : r)),
     promo('off', 0, { visible: false }),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByTestId('new-arrivals')).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('best-sellers')).toHaveCount(0); // its dates ended
   await expect(page.getByRole('heading', { name: 'إعلان off' })).toHaveCount(0);
@@ -108,7 +108,7 @@ test('بلوك قياسي (العروض) ممكن يتجدول كمان، وال
 test('الدولة: بلوك لمصر بس بيظهر لزائر مصر ومبيظهرش لزائر السعودية، وبالعكس', async ({ page }) => {
   const layout = [promo('eg', 0, { countries: ['EG'] }), promo('sa', 1, { countries: ['SA'] }), promo('both', 2, { countries: ['EG', 'SA'] }), promo('all', 3), ...quiet()];
   await stub(page, layout, { country: 'eg' });
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByRole('heading', { name: 'إعلان all' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'إعلان eg' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'إعلان both' })).toBeVisible();
@@ -118,7 +118,7 @@ test('الدولة: بلوك لمصر بس بيظهر لزائر مصر ومبي
 test('الدولة: زائر السعودية بيشوف بلوك السعودية بس', async ({ page }) => {
   const layout = [promo('eg', 0, { countries: ['EG'] }), promo('sa', 1, { countries: ['SA'] }), promo('all', 3), ...quiet()];
   await stub(page, layout, { country: 'sa' });
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByRole('heading', { name: 'إعلان all' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'إعلان sa' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'إعلان eg' })).toHaveCount(0);
@@ -128,7 +128,7 @@ test('الجهاز: «الموبايل بس» بيظهر على شاشة موب�
   const layout = [promo('phone', 0, { devices: 'mobile' }), promo('computer', 1, { devices: 'desktop' }), promo('any', 2), ...quiet()];
   await stub(page, layout);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByRole('heading', { name: 'إعلان any' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'إعلان computer' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'إعلان phone' })).toHaveCount(0);
@@ -146,7 +146,7 @@ test('رف كتب مختارة: الكتب بالترتيب المختار، و�
     picked('nothing', 2, [bid(998)]),
     ...quiet(),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   const a = page.locator('[data-testid="custom-book-shelf"]', { has: page.getByRole('heading', { name: 'اخترناها لك' }) });
   await expect(a).toBeVisible({ timeout: 20_000 });
   await expect(a.getByText('من قلب الدار')).toBeVisible();
@@ -165,23 +165,34 @@ test('رف بقاعدة: العروض (الأعلى خصم) من المتجر ك
     rule('fresh', 1, 'newest', { title_ar: 'جديد القصص', node_id: 'qisas' }),
     ...quiet(),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   const sale = page.locator('[data-testid="custom-filter-shelf"]', { has: page.getByRole('heading', { name: 'خصومات الأسبوع' }) });
   await expect(sale).toBeVisible({ timeout: 20_000 });
   await expect(sale.locator('.shelf-rail__item')).toHaveCount(3);
-  await expect(sale.getByRole('link', { name: 'عرض الكل' })).toHaveAttribute('href', '/books?sale=1&sort=discount');
+  await expect(sale.getByRole('link', { name: 'عرض الكل' })).toHaveAttribute('href', '/store/books?sale=1&sort=discount');
 
   const fresh = page.locator('[data-testid="custom-filter-shelf"]', { has: page.getByRole('heading', { name: 'جديد القصص' }) });
   await expect(fresh.locator('.shelf-rail__item')).toHaveCount(4);
   // newest first: the books of «قصص» were added in months 09, 01, 02, 03 → 09 (book 9), 03 (12), 02 (11), 01 (10)
   const titles = await fresh.locator('.shelf-rail__item').evaluateAll((els) => els.map((el) => (el.textContent ?? '').match(/كتاب \d\d/)?.[0]));
   expect(titles).toEqual(['كتاب 09', 'كتاب 12', 'كتاب 11', 'كتاب 10']);
-  await expect(fresh.getByRole('link', { name: 'عرض الكل' })).toHaveAttribute('href', '/books?category=qisas'); // a category with an address name keeps the address it always had
+  await expect(fresh.getByRole('link', { name: 'عرض الكل' })).toHaveAttribute('href', '/store/books?category=qisas'); // a category with an address name keeps the address it always had
+});
+
+test('رف بقاعدة: التصنيف المحذوف لا يوسّع الرف إلى كل كتب المتجر', async ({ page }) => {
+  await stub(page, [
+    rule('missing', 0, 'newest', { title_ar: 'رف بنطاق محذوف', node_id: 'deleted' }),
+    rule('whole', 1, 'newest', { title_ar: 'رف المتجر كله' }),
+    ...quiet(),
+  ]);
+  await page.goto('/store');
+  await expect(page.getByRole('heading', { name: 'رف المتجر كله' })).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByRole('heading', { name: 'رف بنطاق محذوف' })).toHaveCount(0);
 });
 
 test('رف الكتب الإلكترونية: بالكتب اللي ليها نسخة رقمية بس، ومن غير رابط «عرض الكل»', async ({ page }) => {
   await stub(page, [rule('ebooks', 0, 'ebooks', { title_ar: 'مكتبتك الرقمية' }), ...quiet()], { digital: [BOOKS[1], BOOKS[3]] });
-  await page.goto('/');
+  await page.goto('/store');
   const shelf = page.getByTestId('custom-filter-shelf');
   await expect(shelf).toBeVisible({ timeout: 20_000 });
   await expect(shelf.locator('.shelf-rail__item')).toHaveCount(2);
@@ -190,7 +201,7 @@ test('رف الكتب الإلكترونية: بالكتب اللي ليها ن�
 
 test('رف الكتب الإلكترونية: لو نسخ الكتب مش مقروءة مبيترسمش (مبنخمّنش)', async ({ page }) => {
   await stub(page, [rule('ebooks', 0, 'ebooks', { title_ar: 'مكتبتك الرقمية' }), picked('p', 1, [BOOKS[0]]), ...quiet()], { digital: 'fail' });
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByRole('heading', { name: 'مختارات p' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'مكتبتك الرقمية' })).toHaveCount(0);
 });
@@ -203,14 +214,14 @@ test('شريط الإعلان: عنوان ونص وصورة وزر، واللو�
     }),
     ...quiet(),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   const block = page.getByTestId('home-promo');
   await expect(block).toBeVisible({ timeout: 20_000 });
   await expect(block).toHaveAttribute('data-tone', 'brand');
   await expect(block.getByRole('heading', { name: 'خصم الشتاء' })).toBeVisible();
   await expect(block.getByText('على كل كتب النحو')).toBeVisible();
   await expect(block.locator('img.home-promo__image')).toHaveAttribute('src', 'https://example.com/a.png');
-  await expect(block.getByRole('link', { name: 'تصفح الآن' })).toHaveAttribute('href', '/books?sort=newest');
+  await expect(block.getByRole('link', { name: 'تصفح الآن' })).toHaveAttribute('href', '/store/books?sort=newest');
 });
 
 test('شريط الإعلان: رابط ملوش مقابل في الموقع (المكتبة الإلكترونية) = من غير زر، وصورة بس + رابط = الشريط كله بيفتح', async ({ page }) => {
@@ -219,11 +230,11 @@ test('شريط الإعلان: رابط ملوش مقابل في الموقع (�
     promo('imageonly', 1, { title_ar: null, config: { tone: 'light', image_url: 'https://example.com/b.png', link_url: '/search?series=ser&title=x' } }),
     ...quiet(),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByRole('heading', { name: 'إعلان nolink' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByTestId('home-promo').first().getByRole('link')).toHaveCount(0);
   const imageOnly = page.getByTestId('home-promo').nth(1);
-  await expect(imageOnly.locator('a.home-promo__cover')).toHaveAttribute('href', '/books?series=ser');
+  await expect(imageOnly.locator('a.home-promo__cover')).toHaveAttribute('href', '/store/books?series=ser');
 });
 
 test('الترتيب المحفوظ: البلوكات المضافة بين القياسية في مكانها بالظبط', async ({ page }) => {
@@ -231,7 +242,7 @@ test('الترتيب المحفوظ: البلوكات المضافة بين ال
     std('best-sellers', 0), promo('mid', 1), picked('shelf', 2, [BOOKS[0]]), std('new-arrivals', 3),
     ...STANDARD.filter((k) => k !== 'best-sellers' && k !== 'new-arrivals').map((key, i) => std(key, 10 + i, { visible: false })),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByTestId('new-arrivals')).toBeVisible({ timeout: 20_000 });
   const order = await page.locator('.page-sections--home > [data-testid]').evaluateAll((els) => els.map((el) => el.getAttribute('data-testid')));
   expect(order).toEqual(['best-sellers', 'custom-promo', 'custom-book-shelf', 'new-arrivals']);
@@ -244,7 +255,7 @@ test('صف من نوع مش معروف أو بإعدادات بايظة مبيك
     rule('weird', 2, 'bogus'), // an unknown rule counts as «newest»
     ...quiet(),
   ]);
-  await page.goto('/');
+  await page.goto('/store');
   await expect(page.getByRole('heading', { name: 'قاعدة weird' })).toBeVisible({ timeout: 20_000 });
   await expect(page.getByRole('heading', { name: 'إعلان x' })).toHaveCount(0);
   await expect(page.getByRole('heading', { name: 'مختارات bad' })).toHaveCount(0);
