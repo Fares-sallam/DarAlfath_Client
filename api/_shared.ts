@@ -7,6 +7,15 @@ import { PRIMARY_SITE_ORIGIN } from '../src/lib/seo';
 declare const process: { env: Record<string, string | undefined> };
 
 /**
+ * The app's own HTML, the file every route that has no page of its own falls back to. On Vercel the production build renames
+ * `index.html` to `app.html` (see vite.config.ts): a file called index.html is what the domain root `/` is answered with, ahead of
+ * any rewrite, so the links page (which the root is) would never reach its function. `LEGACY_APP_SHELL` is where an older
+ * deployment, or a build made elsewhere, still keeps it.
+ */
+export const APP_SHELL = '/app.html';
+export const LEGACY_APP_SHELL = '/index.html';
+
+/**
  * The public address is pinned to the custom domain so Vercel previews and the
  * old vercel.app hostname cannot create duplicate canonical pages.
  */

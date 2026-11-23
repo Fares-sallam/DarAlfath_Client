@@ -7,7 +7,7 @@
  * Anything that goes wrong falls back to the plain app HTML, so a page never breaks because of this.
  */
 import { booksListSeo, bookSeo, injectSeo, linksPageSeo, staticSeo, titleFor, type LinksPageSeoSource, type Seo, type SeoBook } from '../src/lib/seo';
-import { UUID, rest, safeFilterValue, siteOrigin } from './_shared';
+import { APP_SHELL, LEGACY_APP_SHELL, UUID, rest, safeFilterValue, siteOrigin } from './_shared';
 
 export const config = { runtime: 'edge' };
 
@@ -118,12 +118,15 @@ async function seoFor(kind: string, params: URLSearchParams, origin: string): Pr
 }
 
 /**
- * The app's own HTML (the same file every route falls back to). The visitor's cookies go along so a
- * protected deployment (a preview behind Vercel login) lets this internal request through too.
+ * The app's own HTML (the same file every route falls back to; `app.html` on Vercel, `index.html` anywhere it was not renamed).
+ * The visitor's cookies go along so a protected deployment (a preview behind Vercel login) lets this internal request through too.
  */
-const appHtml = (request: Request) => {
+const appHtml = async (request: Request) => {
   const cookie = request.headers.get('cookie');
-  return fetch(new URL('/index.html', request.url), cookie ? { headers: { cookie } } : undefined);
+  const init = cookie ? { headers: { cookie } } : undefined;
+  const renamed = await fetch(new URL(APP_SHELL, request.url), init);
+  if (renamed.ok) return renamed;
+  return fetch(new URL(LEGACY_APP_SHELL, request.url), init);
 };
 
 const plain = (html: string) =>
@@ -134,7 +137,7 @@ export default async function handler(request: Request): Promise<Response> {
   const origin = siteOrigin(request);
   try {
     const base = await appHtml(request);
-    if (!base.ok) throw new Error(`index.html ${base.status}`);
+    if (!base.ok) throw new Error(`app shell ${base.status}`);
     const html = await base.text();
     // Something other than the app came back (e.g. a login page in front of a protected deployment):
     // send it on untouched rather than write tags into a page that isn't ours.

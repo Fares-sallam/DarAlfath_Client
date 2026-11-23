@@ -33,8 +33,11 @@ const BOOK = {
 
 type Rows = Record<string, unknown[] | 'fail'>;
 
-/** Replaces fetch: index.html from disk, the database from `rows` (keyed by table name). */
-function mockWorld(rows: Rows, env: Record<string, string | undefined> = {}) {
+/**
+ * Replaces fetch: the app's HTML from disk (as app.html, where the production build keeps it, and as index.html, where an older deployment
+ * does; `shell` switches either off), the database from `rows` (keyed by table name).
+ */
+function mockWorld(rows: Rows, env: Record<string, string | undefined> = {}, shell: { app?: boolean; legacy?: boolean } = {}) {
   const saved = { fetch: globalThis.fetch, env: { ...process.env } };
   process.env.VITE_SUPABASE_URL = SUPABASE;
   process.env.VITE_SUPABASE_ANON_KEY = 'anon-key';
@@ -45,9 +48,14 @@ function mockWorld(rows: Rows, env: Record<string, string | undefined> = {}) {
     else process.env[key] = value;
   }
   const queries: string[] = [];
+  const shellFetches: string[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-    if (url.pathname === '/index.html') return new Response(INDEX_HTML, { headers: { 'content-type': 'text/html' } });
+    if (url.pathname === '/app.html' || url.pathname === '/index.html') {
+      shellFetches.push(url.pathname);
+      const present = url.pathname === '/app.html' ? shell.app !== false : shell.legacy !== false;
+      return present ? new Response(INDEX_HTML, { headers: { 'content-type': 'text/html' } }) : new Response('not found', { status: 404 });
+    }
     if (url.origin === SUPABASE) {
       queries.push(decodeURIComponent(url.pathname + url.search));
       const table = url.pathname.replace('/rest/v1/', '');
@@ -60,6 +68,7 @@ function mockWorld(rows: Rows, env: Record<string, string | undefined> = {}) {
   }) as typeof fetch;
   return {
     queries,
+    shellFetches,
     restore() {
       globalThis.fetch = saved.fetch;
       for (const key of Object.keys(process.env)) if (!(key in saved.env)) delete process.env[key];
@@ -424,7 +433,7 @@ test('لو اللي رجع مش صفحة الموقع (صفحة دخول قدا�
   const LOGIN = '<!doctype html><html><head><title>Log in to Vercel</title></head><body>login</body></html>';
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url);
-    if (url.pathname === '/index.html') {
+    if (url.pathname === '/app.html') {
       const cookie = new Headers(init?.headers).get('cookie');
       seen.push(cookie);
       return new Response(cookie === '_vercel_jwt=abc' ? INDEX_HTML : LOGIN);
@@ -439,6 +448,38 @@ test('لو اللي رجع مش صفحة الموقع (صفحة دخول قدا�
     html = await (await pageHandler(new Request(`https://dar-alfath-client.vercel.app/api/page?kind=book&id=${ID}`, { headers: { cookie: '_vercel_jwt=abc' } }))).text();
     expect(html).toContain(`<title>${BOOK.title} — دار الفتح للنشر والتوزيع</title>`);
     expect(seen).toEqual([null, '_vercel_jwt=abc']);
+  } finally {
+    world.restore();
+  }
+});
+
+test('الدالة بتقرا صفحة التطبيق من app.html (الاسم اللي بيطلع بيه البناء على Vercel)، ومن index.html بس لو app.html مش موجود', async () => {
+  // the production build's name
+  let world = mockWorld({});
+  try {
+    const html = await (await pageHandler(request('/api/page?kind=links'))).text();
+    expect(html).toContain('<title>روابط دار الفتح — دار الفتح للنشر والتوزيع</title>');
+    expect(world.shellFetches).toEqual(['/app.html']);
+  } finally {
+    world.restore();
+  }
+
+  // an older deployment, or a build made elsewhere, still has index.html
+  world = mockWorld({}, {}, { app: false });
+  try {
+    const html = await (await pageHandler(request('/api/page?kind=home'))).text();
+    expect(html).toContain('property="og:image"');
+    expect(world.shellFetches).toEqual(['/app.html', '/index.html']);
+  } finally {
+    world.restore();
+  }
+
+  // neither there: the function lets the app answer by itself (the plain file), never an error page of its own
+  world = mockWorld({}, {}, { app: false, legacy: false });
+  try {
+    const response = await pageHandler(request('/api/page?kind=links'));
+    expect(response.status).toBe(404);
+    expect(world.shellFetches).toEqual(['/app.html', '/index.html', '/app.html', '/index.html']);
   } finally {
     world.restore();
   }
