@@ -315,7 +315,7 @@ for (const size of [{ width: 1440, height: 900 }, { width: 1280, height: 720 }])
     await page.getByTestId('preview-place-app').click();
     await expect(page.getByTestId('app-frame')).toHaveAttribute('data-ready', 'true');
 
-    const dock = page.getByTestId('preview-dock');
+    const dock = page.getByTestId('display-admin').getByTestId('preview-dock');
     const form = page.getByTestId('display-page');
     await expect(dock).toHaveAttribute('data-docked', 'true');
 
@@ -368,7 +368,7 @@ test('المعاينة مبتغطّيش أزرار أعلى الصفحة وهي 
 test('على الشاشة الصغيرة المعاينة فوق الفورم مش ثابتة (مفيش مكان جنبه)', async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 800 });
   await setUp(page);
-  const dock = (await page.getByTestId('preview-dock').boundingBox())!;
+  const dock = (await page.getByTestId('display-admin').getByTestId('preview-dock').boundingBox())!;
   const form = (await page.getByTestId('display-page').boundingBox())!;
   expect(dock.y + dock.height).toBeLessThanOrEqual(form.y + 4);
 });

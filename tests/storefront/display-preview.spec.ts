@@ -65,7 +65,7 @@ test('المعاينة: صفحة الكتاب (شارات الثقة والمو�
   await send(page, { navigate: `/book/${id}` });
   await expect(page.getByTestId('book-trust')).toContainText('استرجاع خلال 14 يوم');
   // a page that is not one of the preview's is refused
-  await send(page, { navigate: '/account' });
+  await send(page, { navigate: '/checkout' });
   await expect(page).toHaveURL(new RegExp(`/book/${id}$`));
 });
 
@@ -116,4 +116,63 @@ test('المعاينة: رسالة من نوع تاني أو رسالة بقيم
   await expect(cards(page).first()).toBeVisible();
   await expect(page.locator('.book-card__share').first()).toBeVisible();
   void MESSAGE;
+});
+
+// ── the look (pattern, strips, button colours), and the day / night theme ────────────────────────────────────────────────────
+
+const cssVar = (page: Page, name: string) => page.locator('html').evaluate((el, n) => getComputedStyle(el).getPropertyValue(n).trim(), name);
+
+test('معاينة المظهر: درجة الباترن وألوان الأزرار بتتغير بالمسودة، من غير شريط «معاينة» ومن غير ما يتحفظ حاجة', async ({ page }) => {
+  await openPreview(page, '/');
+  await expect.poll(() => cssVar(page, '--store-pattern-k')).toBe('1');
+  await expect(page.locator('html')).toHaveAttribute('data-ab', '');
+
+  await send(page, { appearance: { pattern_strength: 0, button_styles: { add_to_cart: { color: 'teal', tone: 1 }, view_all: { color: 'green', tone: 0 } } } });
+  await expect.poll(() => cssVar(page, '--store-pattern-k')).toBe('0');
+  await expect(page.locator('html')).toHaveAttribute('data-ab', /add_to_cart/);
+  await expect(page.locator('html')).toHaveAttribute('data-ab', /view_all/);
+  expect(await cssVar(page, '--ab-add-to-cart-bg')).toMatch(/^#[0-9a-f]{6}$/);
+  // the frame is itself the preview: no «معاينة التعديلات» bar over the page
+  await expect(page.locator('.look-preview-bar')).toHaveCount(0);
+
+  // a message that says nothing about the look (only moves the page) keeps it; an explicit null goes back to the saved one
+  await send(page, { navigate: '/books' });
+  await expect(cards(page).first()).toBeVisible();
+  expect(await cssVar(page, '--store-pattern-k')).toBe('0');
+  await send(page, { appearance: null });
+  await expect.poll(() => cssVar(page, '--store-pattern-k')).toBe('1');
+  await expect(page.locator('html')).toHaveAttribute('data-ab', '');
+});
+
+test('معاينة المظهر: الوضع الليلي والنهاري، ولون الزرار بالليل غير لونه بالنهار', async ({ page }) => {
+  await openPreview(page, '/');
+  const draft = { button_styles: { add_to_cart: { color: 'navy', tone: 0, night: { color: 'mint', tone: 0 } } } };
+  await send(page, { appearance: draft, theme: 'light' });
+  await expect(page.locator('html')).not.toHaveClass(/dark/);
+  await expect.poll(() => cssVar(page, '--ab-add-to-cart-bg')).toBe('#054180');
+
+  await send(page, { theme: 'dark' });
+  await expect(page.locator('html')).toHaveClass(/dark/);
+  await expect.poll(() => cssVar(page, '--ab-add-to-cart-bg')).toBe('#dae8e6');
+
+  await send(page, { theme: 'light' });
+  await expect(page.locator('html')).not.toHaveClass(/dark/);
+  await expect.poll(() => cssVar(page, '--ab-add-to-cart-bg')).toBe('#054180');
+});
+
+test('معاينة المظهر: صفحة دخول العملاء والسلة ممكن تتعرض، وصفحات تانية لأ، وقيم غلط مبتكسّرش حاجة', async ({ page }) => {
+  await openPreview(page, '/');
+  await send(page, { navigate: '/account' });
+  await expect(page).toHaveURL(/\/account$/);
+  await expect(page.locator('form.auth-card, .auth-card').first()).toBeVisible({ timeout: 15_000 });
+  await send(page, { navigate: '/checkout' });
+  await page.waitForTimeout(400);
+  await expect(page).toHaveURL(/\/account$/);
+
+  // a colour that is not a house colour, a section that does not exist: the look falls back to the designed one
+  await send(page, { appearance: { pattern_strength: 'loud', button_styles: { add_to_cart: { color: '#ff00ff', tone: 9 }, nope: { color: 'teal' } } }, theme: 'purple' });
+  await page.waitForTimeout(500);
+  await expect(page.locator('html')).toHaveAttribute('data-ab', '');
+  expect(await cssVar(page, '--store-pattern-k')).toBe('1');
+  await expect(page.locator('html')).not.toHaveClass(/dark/);
 });

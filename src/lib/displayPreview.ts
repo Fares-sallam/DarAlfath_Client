@@ -1,10 +1,12 @@
 /**
- * The dashboard's live preview of «تفاصيل العرض». The dashboard shows the real website in a frame (opened with
- * `?preview=display`) and sends it the draft it is editing, so a change is seen on the real cards, the real book page and the
- * real footer before it is saved. Read-only: nothing is written, links that leave the store do nothing, and messages are
- * accepted only from the dashboard's own addresses (the same ones as the home page's preview).
+ * The dashboard's live previews of «مظهر المتجر»: «تفاصيل العرض» and the look (pattern, strips, button colours). The dashboard shows
+ * the real website in a frame (opened with `?preview=display`) and sends it the draft it is editing, so a change is seen on the real
+ * cards, the real book page, the real footer and the real buttons before it is saved. Read-only: nothing is written, links that
+ * leave the store do nothing, and messages are accepted only from the dashboard's own addresses (the same ones as the home page's
+ * preview).
  */
 import { useSyncExternalStore } from 'react';
+import { resolveAppearance, type StorefrontAppearance } from '@/lib/appearance';
 import { resolveDisplay, type DisplaySettings } from '@/lib/displaySettings';
 import { isTrusted } from '@/lib/homePreview';
 
@@ -16,6 +18,7 @@ export const isDisplayPreview = (search: string = typeof window === 'undefined' 
   new URLSearchParams(search).get('preview') === 'display';
 
 let state: DisplaySettings | null = null;
+let lookState: StorefrontAppearance | null = null;
 const listeners = new Set<() => void>();
 
 export const getDisplayPreview = () => state;
@@ -24,20 +27,32 @@ export function setDisplayPreview(next: DisplaySettings | null) {
   state = next;
   listeners.forEach((l) => l());
 }
+export const getLookPreview = () => lookState;
+export function setLookPreview(next: StorefrontAppearance | null) {
+  if (JSON.stringify(next) === JSON.stringify(lookState)) return;
+  lookState = next;
+  listeners.forEach((l) => l());
+}
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
 };
 /** The draft display settings the dashboard sent, or null (then the saved ones are used). */
 export const useDisplayPreview = (): DisplaySettings | null => useSyncExternalStore(subscribe, getDisplayPreview, () => null);
+/** The draft look (pattern, strips, button colours) the dashboard sent, or null (then the saved one is used). */
+export const useLookPreview = (): StorefrontAppearance | null => useSyncExternalStore(subscribe, getLookPreview, () => null);
 
-/** The pages a preview may be sent to: the home page, the books page and one book. */
-const NAVIGABLE = /^\/(?:$|books$|book\/[0-9a-fA-F-]{36}$)/;
+/** The pages a preview may be sent to: the home page, the books page, one book, the customers' sign-in page and the cart. */
+const NAVIGABLE = /^\/(?:$|books$|account$|cart$|book\/[0-9a-fA-F-]{36}$)/;
 export const isPreviewRoute = (value: unknown): value is string => typeof value === 'string' && value.length <= 80 && NAVIGABLE.test(value);
 
 export interface DisplayPreviewMessage {
   /** the draft to draw; null = go back to the saved settings; undefined = the message says nothing about it (keep what is shown) */
   display: DisplaySettings | null | undefined;
+  /** the same for the look: pattern strength, the strips, the buttons' colours */
+  appearance: StorefrontAppearance | null | undefined;
+  /** the day or the night look of the store, to see the colours chosen for each */
+  theme: 'light' | 'dark' | null;
   navigate: string | null;
   /** where to scroll to once the page is there: the footer, or the top */
   scroll: 'footer' | 'top' | null;
@@ -49,6 +64,8 @@ export function parseDisplayPreviewMessage(data: unknown): DisplayPreviewMessage
   const d = data as Record<string, unknown>;
   return {
     display: !('display' in d) || d.display === undefined ? undefined : d.display === null ? null : resolveDisplay(d.display),
+    appearance: !('appearance' in d) || d.appearance === undefined ? undefined : d.appearance === null ? null : resolveAppearance(d.appearance),
+    theme: d.theme === 'dark' ? 'dark' : d.theme === 'light' ? 'light' : null,
     navigate: isPreviewRoute(d.navigate) ? d.navigate : null,
     scroll: d.scroll === 'footer' || d.scroll === 'top' ? d.scroll : null,
   };
@@ -58,7 +75,7 @@ export function parseDisplayPreviewMessage(data: unknown): DisplayPreviewMessage
  * Starts listening for the dashboard (call once, on a preview page): the draft it sends takes effect, links that leave the store
  * do nothing, and the dashboard is told the page is ready. `go` moves the page (the store's own router). Returns the cleanup.
  */
-export function startDisplayPreviewBridge(go: (path: string) => void): () => void {
+export function startDisplayPreviewBridge(go: (path: string) => void, applyTheme: (theme: 'light' | 'dark') => void = () => {}): () => void {
   const dev = import.meta.env.DEV;
   const own = window.location.origin;
   let lastNavigate = '';
@@ -69,6 +86,8 @@ export function startDisplayPreviewBridge(go: (path: string) => void): () => voi
     const message = parseDisplayPreviewMessage(event.data);
     if (!message) return;
     if (message.display !== undefined) setDisplayPreview(message.display);
+    if (message.appearance !== undefined) setLookPreview(message.appearance);
+    if (message.theme) applyTheme(message.theme);
     if (message.navigate && message.navigate !== lastNavigate) {
       lastNavigate = message.navigate;
       go(message.navigate);

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { useLookPreview } from '@/lib/displayPreview';
 import {
   APPEARANCE_COLUMNS, DEFAULT_APPEARANCE, PREVIEW_PARAM, decodePreview, resolveAppearance,
   type StorefrontAppearance,
@@ -50,5 +51,7 @@ export function useAppearance(): { appearance: StorefrontAppearance; isPreview: 
     placeholderData: DEFAULT_APPEARANCE,
   });
   const draft = previewDraft();
-  return { appearance: draft ?? data ?? DEFAULT_APPEARANCE, isPreview: draft !== null };
+  // inside the dashboard's frame the draft arrives by message (no bar: the frame is the preview)
+  const live = useLookPreview();
+  return { appearance: live ?? draft ?? data ?? DEFAULT_APPEARANCE, isPreview: live === null && draft !== null };
 }
