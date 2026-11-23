@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test, expect, type Page } from '../fixtures';
 
 // The house identity: its two fonts, the lockup (navy lettering by day, mint by night, mint on the
@@ -105,4 +108,30 @@ test('أيقونات التبويب: كلها صور حقيقية بالمقاس
   const bytes = await ico.body();
   expect([...bytes.subarray(0, 4)]).toEqual(ICO);
   expect(bytes.length).toBeLessThan(20_000);
+});
+
+/**
+ * The old logo's addresses. Search engines, link previews (WhatsApp, Facebook) and other sites may still hold these addresses from
+ * before the new identity: whatever fetches them again must get the new logo, never the old picture. The hashes are of the OLD files.
+ */
+const OLD_LOGO_FILES: Record<string, string> = {
+  '/branding/dar-alfath-logo.jpeg': 'd46a19f4c4f3a070651db2affe43862b1f059a343c995bf6dbd33a505d00cbde',
+  '/branding/dar-alfath-emblem.png': 'f8f8d708f497146097f9245f4cfe915ff82c74ac8d791097b04e2c44595eb1d2',
+  '/branding/favicon-48.png': '8ba70dd50ce0d0afaf0fe0896b0256e4c8e1b4170478a66b51e418644911701e',
+};
+
+test('عناوين اللوجو القديم لسه بتشتغل لكن بتقدّم اللوجو الجديد، مفيش صورة قديمة على أي عنوان', async ({ page }) => {
+  const newLogo = createHash('sha256').update(fs.readFileSync(path.resolve(process.cwd(), 'public/branding/dar-alfath-logo-2026.jpg'))).digest('hex');
+  for (const [url, oldHash] of Object.entries(OLD_LOGO_FILES)) {
+    const res = await page.request.get(url);
+    expect(res.status(), url).toBe(200);
+    const body = await res.body();
+    const hash = createHash('sha256').update(body).digest('hex');
+    expect(hash, `${url} still serves the old picture`).not.toBe(oldHash);
+    if (url.endsWith('.jpeg')) expect(hash, `${url} is the new logo`).toBe(newLogo);
+    if (url.endsWith('favicon-48.png')) expect({ w: body.readUInt32BE(16), h: body.readUInt32BE(20) }).toEqual({ w: 48, h: 48 });
+  }
+  // no page of the store points at an old-logo address any more
+  await open(page, 'light');
+  expect(await page.locator('img[src*="dar-alfath-logo.jpeg"], link[href*="dar-alfath-logo.jpeg"], meta[content*="dar-alfath-logo.jpeg"]').count()).toBe(0);
 });

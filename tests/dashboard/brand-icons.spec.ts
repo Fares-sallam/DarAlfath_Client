@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test, expect } from '../fixtures';
 
 // The dashboard's tab icon and the picture a shared link shows are the new identity (the same mark as the store's tab), not the old logo.
@@ -7,6 +8,8 @@ test.use({ storageState: { cookies: [], origins: [] } });
 
 /** The first bytes of a file: an icon file must be what it says (the dashboard once had a 1142-pixel JPEG named favicon.ico). */
 const ICO = [0x00, 0x00, 0x01, 0x00];
+/** The hash of the OLD favicon1.ico (an unrelated black-and-white circle left from a template). */
+const OLD_FAVICON1 = '47980e02e9a643f38b512b11463bc118d776bcd4100f3b7453035dd93bf1996c';
 const PNG = [0x89, 0x50, 0x4e, 0x47];
 const JPEG = [0xff, 0xd8, 0xff];
 
@@ -54,4 +57,15 @@ test('لينك اللوحة على واتساب: صورة المشاركة هي 
   expect([...body.subarray(0, 3)]).toEqual(JPEG);
   expect(body.length).toBeLessThan(300_000);      // WhatsApp's own advice for a preview picture
   expect(body.length).toBeGreaterThan(5_000);
+});
+
+test('عناوين الأيقونات القديمة في اللوحة بتقدّم الأيقونة الجديدة (favicon1.ico كانت أيقونة تانية من قالب قديم)', async ({ page }) => {
+  await page.route('**/auth/v1/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
+  await page.goto('/login');
+  for (const url of ['/favicon.ico', '/favicon1.ico']) {
+    const body = await (await page.request.get(url)).body();
+    expect([...body.subarray(0, 4)], url).toEqual(ICO);
+    expect(body.length, url).toBeLessThan(20_000);
+    expect(createHash('sha256').update(body).digest('hex'), url).not.toBe(OLD_FAVICON1);
+  }
 });
