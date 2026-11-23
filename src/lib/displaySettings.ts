@@ -12,6 +12,20 @@
 
 export type DisplayChannel = 'web' | 'app';
 
+export const APP_PRIMARY_PRESETS = ['default', 'navy', 'sea'] as const;
+export type AppPrimaryPreset = (typeof APP_PRIMARY_PRESETS)[number];
+export const APP_PRIMARY_COLORS: Record<Exclude<AppPrimaryPreset, 'default'>, string> = {
+  navy: '#054180',
+  sea: '#067E70',
+};
+export const APP_PRIMARY_LABELS: Record<AppPrimaryPreset, string> = {
+  default: 'اللون الأصلي',
+  navy: 'كحلي الدار',
+  sea: 'أخضر بحري',
+};
+export const appPrimaryColor = (preset: AppPrimaryPreset): string | null =>
+  preset === 'default' ? null : APP_PRIMARY_COLORS[preset];
+
 /** One element, switched on or off for each of the two places it can be drawn. */
 export interface ChannelSwitch {
   web: boolean;
@@ -201,6 +215,7 @@ export interface FooterSettings {
 // ── Everything ───────────────────────────────────────────────────────────────
 
 export interface DisplaySettings {
+  appPalette: { light: AppPrimaryPreset; dark: AppPrimaryPreset };
   card: {
     show: Record<CardElement, ChannelSwitch>;
     discountStyle: DiscountStyle;
@@ -222,6 +237,7 @@ export interface DisplaySettings {
 }
 
 export const DEFAULT_DISPLAY: DisplaySettings = {
+  appPalette: { light: 'default', dark: 'default' },
   card: {
     show: CARD_DEFAULT,
     discountStyle: 'percent',
@@ -326,6 +342,7 @@ function pickTrust(raw: unknown): TrustItem[] {
 /** What is saved, made complete and safe: anything missing or odd becomes how things were designed. */
 export function resolveDisplay(raw: unknown): DisplaySettings {
   const r = isObject(raw) ? raw : {};
+  const appPalette = isObject(r.appPalette) ? r.appPalette : {};
   const card = isObject(r.card) ? r.card : {};
   const page = isObject(r.page) ? r.page : {};
   const footer = isObject(r.footer) ? r.footer : {};
@@ -333,6 +350,10 @@ export function resolveDisplay(raw: unknown): DisplaySettings {
   const description = cleanText(page.description, DESCRIPTION_MAX);
 
   return {
+    appPalette: {
+      light: (APP_PRIMARY_PRESETS as readonly string[]).includes(appPalette.light as string) ? appPalette.light as AppPrimaryPreset : 'default',
+      dark: (APP_PRIMARY_PRESETS as readonly string[]).includes(appPalette.dark as string) ? appPalette.dark as AppPrimaryPreset : 'default',
+    },
     card: {
       show: pickSwitches(CARD_ELEMENT_KEYS, CARD_DEFAULT, card.show),
       discountStyle: (DISCOUNT_STYLES as readonly string[]).includes(card.discountStyle as string) ? (card.discountStyle as DiscountStyle) : 'percent',

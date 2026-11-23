@@ -11,25 +11,41 @@ type Written = { id: number; maintenance: Record<string, any>; update_policy: Re
 
 const json = (route: Route, body: unknown, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
 
-async function setUp(page: Page, opts: { row?: Partial<Written>; missing?: boolean } = {}) {
+async function setUp(page: Page, opts: { row?: Partial<Written>; missing?: boolean; history?: { id: number; snapshot: Partial<Written> }[] } = {}) {
   await signInAsFakeOwner(page);
   await fakeFrames(page);
-  let row = { maintenance: {}, update_policy: {}, popup: {}, ...(opts.row ?? {}) };
+  let row = { maintenance: {}, update_policy: {}, popup: {}, updated_at: '2026-11-20T00:00:00Z', ...(opts.row ?? {}) };
   const writes: Written[] = [];
+  let history = opts.history ?? [];
+  await page.route('**/rest/v1/rpc/control_save', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.p_expected !== row.updated_at) return json(route, { code: '40001', message: 'stale' }, 409);
+    writes.push(body.p_payload);
+    row = { ...row, ...body.p_payload, updated_at: new Date(Date.parse(row.updated_at) + 1000).toISOString() };
+    return json(route, null);
+  });
   await page.route('**/rest/v1/app_control*', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' || req.method() === 'HEAD') {
       if (opts.missing) return json(route, { code: 'PGRST205', message: "Could not find the table 'public.app_control' in the schema cache" }, 404);
       return json(route, row);
     }
-    const body = JSON.parse(req.postData() ?? '{}') as Written;
-    writes.push(body);
-    row = { maintenance: body.maintenance, update_policy: body.update_policy, popup: body.popup };
-    return route.fulfill({ status: 201, body: '' });
+    return route.fulfill({ status: 405, body: '' });
+  });
+  await page.route('**/rest/v1/control_publish_history*', (route) => json(route,
+    history.map(({ id }) => ({ id, actor: null, created_at: '2026-11-20T00:00:00Z' }))));
+  await page.route('**/rest/v1/rpc/control_restore', (route) => {
+    const body = route.request().postDataJSON();
+    if (body.p_expected !== row.updated_at) return json(route, { code: '40001', message: 'stale' }, 409);
+    const entry = history.find((item) => item.id === body.p_history_id);
+    if (!entry) return json(route, { code: '42501', message: 'not found' }, 403);
+    history = [{ id: 999, snapshot: row }, ...history];
+    row = { ...row, ...entry.snapshot, updated_at: new Date(Date.parse(row.updated_at) + 1000).toISOString() };
+    return json(route, null);
   });
   await page.goto('/app-control');
   await expect(page.getByTestId('app-control-maintenance')).toBeVisible({ timeout: 20_000 });
-  return { writes };
+  return { writes, externalChange: () => { row = { ...row, updated_at: '2026-11-21T00:00:00Z' }; } };
 }
 
 const toggle = (page: Page, label: string) => page.locator(`label[title="${label}"]`).click();
@@ -76,6 +92,37 @@ test('الصيانة: بتتشغل بكلامك، والعينة بتتغير، 
   await expect(saveBar(page)).toHaveCount(0);
 });
 
+test('تعديل أحدث من مدير آخر يمنع حفظ مسودة قديمة', async ({ page }) => {
+  const { writes, externalChange } = await setUp(page);
+  await page.getByTestId('maintenance-title').fill('مسودة قديمة');
+  externalChange();
+  await save(page).click();
+  await expect(page.getByText('الإعدادات اتغيرت من مكان تاني. حدّث الصفحة وراجع التغييرات قبل الحفظ.')).toBeVisible();
+  expect(writes).toHaveLength(0);
+});
+
+test('سجل النشر يسترجع النسخة السابقة بعد تأكيد المالك', async ({ page }) => {
+  await setUp(page, {
+    row: { maintenance: { enabled: true, title: 'الحالي' } },
+    history: [{ id: 7, snapshot: { maintenance: { enabled: true, title: 'السابق' } } }],
+  });
+  await expect(page.getByTestId('maintenance-title')).toHaveValue('الحالي');
+  page.once('dialog', (dialog) => void dialog.accept());
+  await page.getByRole('button', { name: 'استرجاع نسخة 7' }).click();
+  await expect(page.getByTestId('maintenance-title')).toHaveValue('السابق');
+});
+
+test('جدول أرقام البيلد لا يكسر عرض الصفحة على الهاتف', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setUp(page);
+  const table = page.getByRole('table', { name: 'أرقام البيلد' });
+  await expect(table).toBeVisible();
+  const dimensions = await table.evaluate((element) => ({ width: element.clientWidth, content: element.scrollWidth }));
+  expect(dimensions.content).toBeGreaterThan(dimensions.width);
+  const pageWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  expect(pageWidth).toBeLessThanOrEqual(390);
+});
+
 test('الصيانة المجدولة: لو الوقت لسه ماجاش بتتسمى «مجدولة»، ونهاية قبل البداية بتتمنع', async ({ page }) => {
   await setUp(page);
   await toggle(page, 'تشغيل الصيانة');
@@ -94,6 +141,8 @@ test('التحديث الإجباري: رفع الحد الأدنى بيسأل �
   await page.getByTestId('min-ios').fill('12');
   await page.getByTestId('rec-ios').fill('14');
   await page.getByTestId('min-android').fill('17');
+  await page.getByTestId('published-ios').fill('12');
+  await page.getByTestId('published-android').fill('17');
 
   const asked: string[] = [];
   page.once('dialog', (d) => { asked.push(d.message()); void d.dismiss(); });
@@ -118,6 +167,7 @@ test('التحديث: «مقترح» أقل من «إجباري» ورابط م�
   await page.getByTestId('rec-ios').fill('10');
   await expect(page.getByTestId('app-control-problems')).toContainText('مقترح');
   await page.getByTestId('rec-ios').fill('');
+  await page.getByTestId('published-ios').fill('12');
   await page.getByTestId('store-ios').fill('http://example.com');
   await expect(page.getByTestId('app-control-problems')).toContainText('https');
   await expect(save(page)).toBeDisabled();

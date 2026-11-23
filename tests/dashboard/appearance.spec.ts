@@ -15,7 +15,7 @@ const json = (route: Route, body: unknown, status = 200) =>
 const DEFAULT_ROW = { pattern_strength: 100, strip_arrangement: 'uniform', home_sections: [], button_styles: {} };
 
 async function setUp(page: Page, opts: { tableMissing?: boolean; row?: Record<string, unknown> } = {}) {
-  const state = { row: { ...DEFAULT_ROW, ...(opts.row ?? {}) } as Record<string, unknown> };
+  const state = { row: { ...DEFAULT_ROW, updated_at: '2026-11-20T00:00:00Z', ...(opts.row ?? {}) } as Record<string, unknown> };
   const writes: Write[] = [];
 
   await signInAsFakeOwner(page);
@@ -24,15 +24,19 @@ async function setUp(page: Page, opts: { tableMissing?: boolean; row?: Record<st
   await page.route('**/rest/v1/**', async (route) => {
     const req = route.request();
     const wantsObject = (req.headers()['accept'] ?? '').includes('vnd.pgrst.object');
+    if (req.url().includes('/rest/v1/rpc/control_save')) {
+      const body = req.postDataJSON();
+      if (body.p_expected !== state.row.updated_at) return json(route, { code: '40001', message: 'stale' }, 409);
+      writes.push({ method: req.method(), url: req.url(), body: body.p_payload });
+      state.row = { ...state.row, ...body.p_payload, updated_at: new Date(Date.parse(String(state.row.updated_at)) + 1000).toISOString() };
+      return json(route, null);
+    }
     if (req.url().includes('/rest/v1/storefront_appearance')) {
       if (opts.tableMissing) {
         return json(route, { code: 'PGRST205', message: "Could not find the table 'public.storefront_appearance' in the schema cache" }, 404);
       }
       if (req.method() === 'GET' || req.method() === 'HEAD') return json(route, wantsObject ? state.row : [state.row]);
-      const body = req.postDataJSON();
-      writes.push({ method: req.method(), url: req.url(), body });
-      state.row = { ...state.row, ...body };
-      return route.fulfill({ status: 201, body: '' });
+      return route.fulfill({ status: 405, body: '' });
     }
     if (req.method() === 'GET' || req.method() === 'HEAD') {
       return wantsObject ? json(route, { code: 'PGRST116', message: 'no rows' }, 406) : json(route, []);

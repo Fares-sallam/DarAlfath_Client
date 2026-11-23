@@ -23,17 +23,23 @@ async function setUp(page: Page, opts: { display?: unknown; missing?: boolean; s
     ? json(route, [{ id: BOOK_A, title: 'كتاب أ' }, { id: BOOK_B, title: 'كتاب ب' }])
     : route.fallback()));
   let display: unknown = opts.display ?? {};
+  let revision = '2026-11-20T00:00:00Z';
   const writes: Written[] = [];
+  await page.route('**/rest/v1/rpc/control_save', async (route) => {
+    const body = route.request().postDataJSON();
+    if (body.p_expected !== revision) return json(route, { code: '40001', message: 'stale' }, 409);
+    writes.push(body.p_payload);
+    display = body.p_payload.display;
+    revision = new Date(Date.parse(revision) + 1000).toISOString();
+    return json(route, null);
+  });
   await page.route('**/rest/v1/storefront_appearance*', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' || req.method() === 'HEAD') {
       if (opts.missing) return json(route, { code: '42703', message: 'column storefront_appearance.display does not exist' }, 400);
-      return json(route, { pattern_strength: 100, strip_arrangement: 'uniform', home_sections: [], button_styles: {}, display });
+      return json(route, { pattern_strength: 100, strip_arrangement: 'uniform', home_sections: [], button_styles: {}, display, updated_at: revision });
     }
-    const body = JSON.parse(req.postData() ?? '{}') as Written;
-    writes.push(body);
-    display = body.display;
-    return route.fulfill({ status: 201, body: '' });
+    return route.fulfill({ status: 405, body: '' });
   });
   await page.goto('/appearance?tab=display');
   await expect(page.getByTestId('display-page')).toBeVisible({ timeout: 20_000 });
@@ -68,6 +74,17 @@ test('الشكل الأول: كل عنصر زي ما الموقع والتطبي
   // nothing changed yet
   await expect(saveBar(page)).toHaveCount(0);
   await expect(page.getByTestId('display-reset')).toBeDisabled();
+});
+
+test('ألوان التطبيق تبدأ بالشكل الأصلي ويمكن نشر لون مختلف لكل وضع', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await expect(page.getByTestId('app-palette-light-default')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('app-palette-dark-default')).toHaveAttribute('aria-checked', 'true');
+  await page.getByTestId('app-palette-light-navy').click();
+  await page.getByTestId('app-palette-dark-sea').click();
+  await page.getByTestId('display-save').click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].display.appPalette).toEqual({ light: 'navy', dark: 'sea' });
 });
 
 test('الكارت: مفتاح الموقع ومفتاح التطبيق منفصلين، والحفظ بيبعت القيم', async ({ page }) => {

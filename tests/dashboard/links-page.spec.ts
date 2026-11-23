@@ -46,16 +46,35 @@ const SETTINGS = {
 async function setUp(page: Page, blocks: Row[] = seeded(), settings: Record<string, unknown> = SETTINGS) {
   const state = { blocks: [...blocks], settings: { ...settings } };
   const writes: Write[] = [];
+  const rpcRequests: unknown[] = [];
 
   await signInAsFakeOwner(page);
+
+  await page.route('**/rest/v1/rpc/links_page_save', (route) => {
+    const body = route.request().postDataJSON();
+    rpcRequests.push(body);
+    // Record the logical parts of the single transaction for the existing assertions.
+    if (body.p_settings) {
+      writes.push({ method: 'POST', url: '/links_page_settings', body: { id: 1, ...body.p_settings } });
+      state.settings = { ...state.settings, ...body.p_settings };
+    }
+    writes.push({ method: 'POST', url: '/links_page_blocks', body: body.p_blocks });
+    for (const row of body.p_blocks as Row[]) {
+      const at = state.blocks.findIndex((item) => item.id === row.id);
+      if (at >= 0) state.blocks[at] = { ...state.blocks[at], ...row };
+      else state.blocks.push(row);
+    }
+    if (body.p_removed_ids.length > 0) {
+      writes.push({ method: 'DELETE', url: `/links_page_blocks?id=in.(${body.p_removed_ids.join(',')})`, body: null });
+      state.blocks = state.blocks.filter((item) => !body.p_removed_ids.includes(item.id));
+    }
+    return json(route, null);
+  });
 
   await page.route('**/rest/v1/links_page_settings*', async (route) => {
     const req = route.request();
     if (req.method() === 'GET' || req.method() === 'HEAD') return json(route, state.settings);
-    const body = req.postDataJSON();
-    writes.push({ method: req.method(), url: req.url(), body });
-    state.settings = { ...state.settings, ...body };
-    return route.fulfill({ status: 201, body: '' });
+    return route.fulfill({ status: 405, body: '' });
   });
 
   await page.route('**/rest/v1/links_page_blocks*', async (route) => {
@@ -63,26 +82,13 @@ async function setUp(page: Page, blocks: Row[] = seeded(), settings: Record<stri
     if (req.method() === 'GET' || req.method() === 'HEAD') {
       return json(route, [...state.blocks].sort((a, b) => a.sort_order - b.sort_order));
     }
-    let body: any = null;
-    try { body = req.postDataJSON(); } catch { /* a DELETE has no body */ }
-    writes.push({ method: req.method(), url: req.url(), body });
-    if (req.method() === 'POST') {
-      for (const row of body as Row[]) {
-        const at = state.blocks.findIndex((b) => b.id === row.id);
-        if (at >= 0) state.blocks[at] = { ...state.blocks[at], ...row };
-        else state.blocks.push(row);
-      }
-    } else if (req.method() === 'DELETE') {
-      const ids = (/id=in\.\(([^)]*)\)/.exec(decodeURIComponent(req.url()))?.[1] ?? '').split(',');
-      state.blocks = state.blocks.filter((b) => !ids.includes(b.id));
-    }
-    return route.fulfill({ status: req.method() === 'POST' ? 201 : 204, body: '' });
+    return route.fulfill({ status: 405, body: '' });
   });
 
   // pictures: the upload is faked, and the public bucket answers with the suite's stand-in
   await page.route('**/storage/v1/object/site-assets/**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '{"Key":"site-assets/links-page/x.png"}' }));
 
-  return { state, writes };
+  return { state, writes, rpcRequests };
 }
 
 const blocksOf = (page: Page) => page.getByTestId('links-block');
@@ -114,7 +120,7 @@ test('القايمة الجانبية: «إدارة الصفحة والرواب�
 });
 
 test('التعديل بيظهر في المعاينة فورًا قبل الحفظ، والحفظ بيكتب كل العناصر بترتيبها', async ({ page }) => {
-  const { writes } = await setUp(page);
+  const { writes, rpcRequests } = await setUp(page);
   await page.goto('/links-page');
   await expect(blocksOf(page)).toHaveCount(8);
 
@@ -126,6 +132,7 @@ test('التعديل بيظهر في المعاينة فورًا قبل الحف
 
   await page.getByTestId('links-save').click();
   await expect(saveBar(page)).toHaveCount(0);
+  expect(rpcRequests).toHaveLength(1);
 
   const posts = blockWrites(writes);
   expect(posts).toHaveLength(1);
