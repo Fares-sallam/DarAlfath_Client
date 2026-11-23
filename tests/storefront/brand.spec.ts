@@ -72,3 +72,37 @@ test('أيقونة الموقع ولونه: علامة الدار الجديدة
     expect((await page.request.get(path)).status(), path).toBe(200);
   }
 });
+
+/** The first bytes of a file: an icon file must be what it says (the dashboard once had a 1142-pixel JPEG named favicon.ico). */
+const ICO = [0x00, 0x00, 0x01, 0x00];
+const PNG = [0x89, 0x50, 0x4e, 0x47];
+
+test('أيقونات التبويب: كلها صور حقيقية بالمقاس المكتوب، وملف favicon.ico أيقونة فعلًا، وكلها العلامة الجديدة', async ({ page }) => {
+  await open(page, 'light');
+  const icons = await page.locator('head link[rel~="icon"], head link[rel="apple-touch-icon"]').evaluateAll((els) =>
+    els.map((el) => ({ rel: el.getAttribute('rel'), href: el.getAttribute('href')!, sizes: el.getAttribute('sizes'), type: el.getAttribute('type') })));
+  expect(icons.length).toBeGreaterThanOrEqual(5);
+  // nothing still points at the old logo
+  for (const icon of icons) expect(icon.href, icon.href).not.toMatch(/dar-alfath-logo\.jpeg|favicon-48\.png/);
+
+  for (const icon of icons) {
+    const res = await page.request.get(icon.href);
+    expect(res.status(), icon.href).toBe(200);
+    const body = await res.body();
+    if (icon.href.endsWith('.png')) {
+      expect([...body.subarray(0, 4)], icon.href).toEqual(PNG);
+      const [w, h] = (icon.sizes ?? '').split('x').map(Number);
+      if (w) {
+        // read the real width and height from the PNG header
+        expect({ w: body.readUInt32BE(16), h: body.readUInt32BE(20) }, icon.href).toEqual({ w, h });
+      }
+    }
+    if (icon.href.endsWith('.ico')) expect([...body.subarray(0, 4)], icon.href).toEqual(ICO);
+  }
+  // the browser asks for /favicon.ico on its own, whatever the page says: that is the new mark too, and small
+  const ico = await page.request.get('/favicon.ico');
+  expect(ico.status()).toBe(200);
+  const bytes = await ico.body();
+  expect([...bytes.subarray(0, 4)]).toEqual(ICO);
+  expect(bytes.length).toBeLessThan(20_000);
+});
