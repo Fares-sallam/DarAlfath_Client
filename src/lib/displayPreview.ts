@@ -167,6 +167,18 @@ export function parseDisplayPreviewMessage(data: unknown): DisplayPreviewMessage
   };
 }
 
+/** Scrolls to a part of the page once it is drawn (the cards and the footer appear after their data arrives, so it keeps looking for a few seconds). */
+function scrollToPart(target: 'footer' | 'top' | 'departments') {
+  let tries = 0;
+  const run = () => {
+    if (target === 'top') { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+    const el = document.querySelector(target === 'footer' ? '.site-footer' : '.store-departments');
+    if (el) { el.scrollIntoView({ behavior: 'smooth', block: target === 'footer' ? 'end' : 'center' }); return; }
+    if (tries++ < 20) window.setTimeout(run, 300);
+  };
+  window.setTimeout(run, 450);
+}
+
 /**
  * Starts listening for the dashboard (call once, on a preview page): the draft it sends takes effect, links that leave the store
  * do nothing, and the dashboard is told the page is ready. `go` moves the page (the store's own router). Returns the cleanup.
@@ -192,11 +204,7 @@ export function startDisplayPreviewBridge(go: (path: string) => void, applyTheme
     }
     if (message.scroll && message.scroll !== lastScroll) {
       lastScroll = message.scroll;
-      window.setTimeout(() => {
-        if (message.scroll === 'footer') document.querySelector('.site-footer')?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-        else if (message.scroll === 'departments') document.querySelector('.store-departments')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        else window.scrollTo({ top: 0, behavior: 'smooth' });
-      }, 450);
+      scrollToPart(message.scroll);
     } else if (!message.scroll) {
       lastScroll = null;
     }

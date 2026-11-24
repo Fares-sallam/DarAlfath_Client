@@ -120,3 +120,20 @@ test('المعاينة: عنوان غير آمن للصورة أو معرّف غ
   // an address that is not https is dropped, so the card shows its icon rather than a picture
   await expect(section(page).locator('.department-card').first().locator('img')).toHaveCount(0);
 });
+
+test('المعاينة: «scroll: departments» بتوصّل للكروت حتى لو اتحمّلت بعد الرسالة', async ({ page }) => {
+  await stub(page, [ID.a]);
+  // the cards' list arrives late, after the dashboard's message
+  await page.route('**/rest/v1/store_departments*', async (route) => {
+    await new Promise((r) => setTimeout(r, 1200));
+    await route.fulfill({ json: [{ node_id: ID.a, sort_order: 0 }] });
+  });
+  await page.setViewportSize({ width: 1280, height: 700 });
+  await page.goto('/?preview=display');
+  await send(page, { scroll: 'departments' });
+  await expect(labels(page)).toHaveText(['سلسلة أ'], { timeout: 20_000 });
+  await expect.poll(() => page.evaluate(() => {
+    const r = document.querySelector('.store-departments')!.getBoundingClientRect();
+    return r.top >= 0 && r.bottom <= window.innerHeight;
+  }), { timeout: 15_000 }).toBe(true);
+});
