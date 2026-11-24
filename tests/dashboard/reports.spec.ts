@@ -11,7 +11,8 @@ const PAGES = [
   { path: '/shipping', title: 'تقرير الشحن', file: 'تقرير-الشحن' },
   { path: '/coupons', title: 'تقرير الكوبونات', file: 'تقرير-الكوبونات' },
   { path: '/customers', title: 'تقرير العملاء', file: 'تقرير-العملاء' },
-  { path: '/activity', title: 'تقرير سجل النشاط', file: 'تقرير-سجل-النشاط' },
+  { path: '/activity', title: 'تقرير سجل نشاط المشرفين', file: 'تقرير-سجل-نشاط-المشرفين' },
+  { path: '/activity?kind=customer', title: 'تقرير سجل نشاط العملاء', file: 'تقرير-سجل-نشاط-العملاء' },
 ];
 
 async function download(page: Page, path: string, period: string, format: 'Excel' | 'CSV') {
