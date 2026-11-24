@@ -169,15 +169,21 @@ html.dark .brand-lockup__img--night,
    ends fade out, the same way the horizontal rules beside the pattern do. */
 
 .site-header__nav {
+  /* shrunk by Header.tsx (fitNav.ts) when the entries don't fit: type, padding and gaps follow this one factor */
+  --nav-scale: 1;
   justify-content: center;
-  gap: 10px;
+  gap: calc(10px * var(--nav-scale));
+  /* one row, always: the entries shrink instead of dropping to a second line */
+  flex-wrap: nowrap;
 }
+
+.site-header__nav > * { flex-shrink: 0; }
 
 .site-header__nav > * + * { position: relative; }
 .site-header__nav > * + *::before {
   content: '';
   position: absolute;
-  inset-inline-start: -6px;
+  inset-inline-start: calc(-6px * var(--nav-scale));
   top: 50%;
   width: 1px;
   height: 22px;
@@ -214,10 +220,11 @@ html.dark { --home-page-wall-opacity: 0.3; }
 
 .site-header__nav > a,
 .site-header__nav > .nav-dropdown > .nav-dropdown__trigger {
-  font-size: 15.2px;
-  padding: 7px 12px;
+  font-size: calc(15.2px * var(--nav-scale));
+  padding: calc(7px * var(--nav-scale)) calc(12px * var(--nav-scale));
 }
-.site-header__nav > .nav-dropdown > .nav-dropdown__trigger svg { width: 16px; height: 16px; }
+.site-header__nav > .nav-dropdown > .nav-dropdown__trigger { gap: calc(6px * var(--nav-scale)); }
+.site-header__nav > .nav-dropdown > .nav-dropdown__trigger svg { width: calc(16px * var(--nav-scale)); height: calc(16px * var(--nav-scale)); }
 
 /* ── The footer paragraph's alignment, as chosen in the dashboard ────────────
    start: as before. center: logo, text and icons on the column's middle.

@@ -426,6 +426,73 @@ test('تعديل تنظيم الكتاب: التصنيف الأساسي لوحد
   await expect(where.getByTestId('chip-series')).toContainText('سلسلة ب');
 });
 
+test('الشجرة: كل صف عليه علامة الهيدر، والمعاينة بتوريه، و«إضافة للهيدر» بتفتح الإضافة بالعنصر جاهز من غير ما تحفظ حاجة', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await page.goto('/catalog');
+
+  const state = (id: string) => page.locator(`[data-node-id="${id}"]`).getByTestId('header-badge');
+  // the menu rows say: home, سلسلة أ (filling its sub-items from the tree), contact
+  await expect(state('s1')).toHaveAttribute('data-state', 'in');
+  await expect(state('s1')).toHaveText('في الهيدر');
+  await expect(state('s2')).toHaveAttribute('data-state', 'none');
+  await expect(state('s2')).toHaveText('مش في الهيدر');
+  await expect(state('c3')).toHaveAttribute('data-state', 'none');
+
+  // the preview is the strip as it stands now
+  await expect(page.getByTestId('header-preview-main')).toHaveText(['الرئيسية', 'سلسلة أ', 'تواصل معنا']);
+
+  // looking at a series on the strip lights it; one that is not there shows as a dashed chip at the end
+  await page.locator('[data-node-id="s1"]').hover();
+  await expect(page.getByTestId('header-preview-main').nth(1)).toHaveAttribute('data-lit', 'true');
+  await expect(page.getByTestId('header-preview-caption')).toContainText('بتظهر على الشريط نفسه');
+  await page.locator('[data-node-id="s2"]').hover();
+  await expect(page.getByTestId('header-preview-ghost')).toContainText('سلسلة ب');
+  await expect(page.getByTestId('header-preview-caption')).toContainText('مش على الشريط');
+
+  // the preview never changes height with what is looked at, so the rows below do not jump under the pointer
+  const height = () => page.getByTestId('header-preview').evaluate((el) => Math.round(el.getBoundingClientRect().height));
+  const idle = await height();
+  await page.locator('[data-node-id="s1"]').hover();
+  expect(await height()).toBe(idle);
+  await page.locator('[data-node-id="s2"]').hover();
+  expect(await height()).toBe(idle);
+  await page.mouse.move(2, 2);
+  expect(await height()).toBe(idle);
+
+  // a sub-item: its main item is lit and the open menu marks its line; an empty one says why it is not drawn
+  await page.getByRole('button', { name: 'فتح', exact: true }).first().click();
+  await page.locator('[data-node-id="c1"]').hover();
+  await expect(state('c1')).toHaveAttribute('data-state', 'in');
+  await expect(state('c1')).toContainText('في الهيدر ‹ سلسلة أ');
+  await expect(page.getByTestId('header-preview-open').locator('[data-here="true"]')).toHaveText('تصنيف 1');
+  await expect(page.getByTestId('header-preview-caption')).toContainText('بتظهر جوه: سلسلة أ');
+  expect(await height()).toBe(idle);
+  await expect(state('c2')).toHaveAttribute('data-state', 'empty');
+
+  // «إضافة للهيدر»: the add dialog opens on «من السلاسل والتصنيفات» with the series chosen; nothing is saved by getting there
+  await page.locator('[data-node-id="s2"]').getByTestId('header-add').click();
+  await expect(page.getByTestId('menu-dialog')).toBeVisible();
+  await expect(page.getByTestId('menu-node')).toHaveValue('s2');
+  await expect(page).toHaveURL(/tab=map/);
+  await expect(page).not.toHaveURL(/add=/);
+  expect(writes.filter((w) => w.url.includes('menu_items'))).toEqual([]);
+});
+
+test('علامة الهيدر: صف مقفول، وعنصر مخفي عن الموقع، كل واحد بسببه', async ({ page }) => {
+  const menuRows = [
+    menu('m1', { kind: 'home', label_ar: null, sort_order: 0 }),
+    menu('m2', { kind: 'node', node_id: 's1', label_ar: null, sort_order: 1, visible: false }),
+    menu('m4', { kind: 'node', node_id: 's2', label_ar: null, sort_order: 2 }),
+  ];
+  const nodes = NODES.map((n) => (n.id === 's2' ? { ...n, show_web: false } : n));
+  await setUp(page, menuRows, nodes);
+  await page.goto('/catalog');
+  await expect(page.locator('[data-node-id="s1"]').getByTestId('header-badge')).toHaveAttribute('data-state', 'row-hidden');
+  await expect(page.locator('[data-node-id="s1"]').getByTestId('header-open-map')).toBeVisible();
+  await expect(page.locator('[data-node-id="s2"]').getByTestId('header-badge')).toHaveAttribute('data-state', 'node-hidden');
+  await expect(page.getByTestId('header-preview-main')).toHaveText(['الرئيسية']);
+});
+
 test('فحص وتنظيف: بيعرض الملاحظات وبيفتح العنصر', async ({ page }) => {
   await setUp(page);
   await page.goto('/catalog?tab=health');

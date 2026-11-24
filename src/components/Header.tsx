@@ -5,6 +5,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import LiveSearch from '@/components/LiveSearch';
 import SiteNav from '@/components/SiteNav';
+import { pickScale } from '@/lib/fitNav';
 import { useCountry } from '@/contexts/CountryContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCart } from '@/contexts/CartContext';
@@ -144,6 +145,24 @@ export default function Header({ settings }: { settings: StoreSettings }) {
   // how many series there are and how wide the screen is.
   const navRef = useRef<HTMLDivElement>(null);
   const [flipped, setFlipped] = useState<ReadonlySet<string>>(new Set());
+
+  // The row stays on one line however many entries there are: type, padding and gaps shrink together until it fits
+  // (see fitNav.ts). Declared before the measuring below so the flyouts are placed against the final sizes.
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const fit = () => {
+      pickScale(
+        (scale) => nav.style.setProperty('--nav-scale', String(scale)),
+        () => nav.scrollWidth <= nav.clientWidth + 1,
+      );
+    };
+    fit();
+    window.addEventListener('resize', fit);
+    // Web fonts change the row's widths once they arrive.
+    void document.fonts?.ready.then(fit);
+    return () => window.removeEventListener('resize', fit);
+  }, [barItems, treeMenu, treeLoading]);
   useLayoutEffect(() => {
     const FLYOUT = 270 + 8; // .nav-dropdown__submenu width + gap
     const measure = () => {
