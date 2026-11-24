@@ -66,7 +66,7 @@ const LAYOUT = [
 interface Write { method: string; url: string; body: any }
 interface Rpc { name: string; body: any }
 
-async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU, nodeRows: Record<string, unknown>[] = NODES) {
+async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU, nodeRows: Record<string, unknown>[] = NODES, linkRows: Record<string, unknown>[] = LINKS) {
   const writes: Write[] = [];
   const rpcs: Rpc[] = [];
   await signInAsFakeOwner(page);
@@ -102,7 +102,7 @@ async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU, nod
           }
           return json(route, url.includes('node_id=eq.c1') ? [{ product_id: 'p1', is_primary: true, sort_order: 0, products: PRODUCTS[0] }] : []);
         }
-        return json(route, LINKS);
+        return json(route, linkRows);
       }
       writes.push({ method: req.method(), url, body: req.method() === 'DELETE' ? null : req.postDataJSON() });
       return route.fulfill({ status: 204, body: '' });
@@ -152,7 +152,7 @@ test('الشجرة: القناة بتغيّر الترتيب المعروض، و
   await expect(names(page)).toHaveText(['سلسلة ب', 'سلسلة أ', 'تصنيف فاضي']);
   await page.getByTestId('channel-web').click();
   await expect(names(page)).toHaveText(['سلسلة أ', 'سلسلة ب', 'تصنيف فاضي']);
-  await expect(page.locator('[data-node-id="s1"]').getByTestId('row-count')).toHaveText('1 / 2 كتاب');
+  await expect(page.locator('[data-node-id="s1"]').getByTestId('row-count')).toHaveText('2 كتاب (1 مباشرة)');
   await expect(page.locator('[data-node-id="c3"]')).toContainText('مخفي');
 });
 
@@ -340,6 +340,90 @@ test('تاب الكتب: الفلتر بيجيب الكتب بلا تصنيف، 
   await page.getByTestId('save-book').click();
   await expect.poll(() => rpcs.length).toBe(1);
   expect(rpcs[0]).toEqual({ name: 'catalog_assign_product', body: { p_product: 'p2', p_series: ['s2'], p_primary: 'c2', p_extras: [] } });
+});
+
+// قسم ← سلسلة أ ← (تصنيف 1، تصنيف 2)
+const SECTIONED = [node('sec', { type: 'section', name_ar: 'قسم الكبار', slug: 'sec' }), { ...NODES[0], parent_id: 'sec' }, ...NODES.slice(1)];
+
+test('الشجرة: العدد مش صفر مضلل: «داخل عناصره» لما الكتب كلها تحت، و«مباشرة» لما فيه بعضها', async ({ page }) => {
+  await setUp(page, MENU, SECTIONED);
+  await page.goto('/catalog');
+  // the section holds no book itself, the series under it holds two (one of them its own)
+  await expect(page.locator('[data-node-id="sec"]').getByTestId('row-count')).toHaveText('—');
+  await page.getByRole('button', { name: 'فتح', exact: true }).first().click();
+  await expect(page.locator('[data-node-id="s1"]').getByTestId('row-count')).toHaveText('2 كتاب (1 مباشرة)');
+});
+
+test('الشجرة: فلتر النوع بيعرض نوع واحد مع اللي فوقه، وبيشتغل مع البحث', async ({ page }) => {
+  await setUp(page, MENU, SECTIONED);
+  await page.goto('/catalog');
+
+  await page.getByTestId('type-series').click();
+  await expect(names(page)).toHaveText(['قسم الكبار', 'سلسلة أ', 'سلسلة ب']);
+  await page.getByTestId('type-section').click();
+  await expect(names(page)).toHaveText(['قسم الكبار']);
+  await page.getByTestId('type-category').click();
+  await expect(names(page)).toHaveText(['قسم الكبار', 'سلسلة أ', 'تصنيف 1', 'تصنيف 2', 'تصنيف فاضي']);
+
+  await page.getByTestId('type-series').click();
+  await page.getByTestId('tree-search').fill('ب');
+  await expect(names(page)).toHaveText(['سلسلة ب']);
+  await page.getByTestId('type-all').click();
+  await page.getByTestId('tree-search').fill('');
+  await expect(names(page)).toHaveText(['قسم الكبار', 'سلسلة ب', 'تصنيف فاضي']);
+});
+
+test('تاب الكتب: كل كتاب بيظهر القسم ثم التصنيف الأساسي ثم السلسلة، والفلاتر بالقسم والسلسلة والتصنيف', async ({ page }) => {
+  await setUp(page, MENU, SECTIONED);
+  await page.goto('/catalog?tab=books');
+
+  // the classified book: its section comes from where the series sits in the tree
+  const row = page.getByTestId('book-row').filter({ hasText: 'كتاب مصنّف' });
+  await expect(row.getByTestId('chip-series')).toBeVisible();
+  const kinds = await row.locator('[data-testid^="chip-"]').evaluateAll((els) => els.map((e) => e.getAttribute('data-testid')));
+  expect(kinds).toEqual(['chip-section', 'chip-primary', 'chip-series']);
+  await expect(row.getByTestId('chip-section')).toContainText('قسم الكبار');
+  await expect(row.getByTestId('chip-primary')).toContainText('تصنيف 1');
+  await expect(row.getByTestId('chip-series')).toContainText('سلسلة أ');
+  await expect(page.getByTestId('book-row').filter({ hasText: 'كتاب بلا تصنيف' }).getByTestId('chip-no-primary')).toBeVisible();
+  await expect(page.getByTestId('books-legend')).toContainText('تصنيف أساسي');
+
+  await expect(page.getByTestId('books-result-count')).toHaveText('2 كتاب');
+  await page.getByTestId('filter-section').selectOption('sec');
+  await expect(page.getByTestId('book-row')).toHaveCount(1);
+  await expect(page.getByTestId('books-result-count')).toHaveText('1 كتاب');
+  await page.getByTestId('filter-series').selectOption('s1');
+  await expect(page.getByTestId('book-row')).toHaveCount(1);
+  await page.getByTestId('filter-category').selectOption('c2');
+  await expect(page.getByTestId('book-row')).toHaveCount(0);
+  await expect(page.getByTestId('books-list')).toContainText('مفيش كتب مطابقة');
+  await page.getByTestId('filter-category').selectOption('c1');
+  await expect(page.getByTestId('book-row')).toHaveCount(1);
+  await page.getByTestId('clear-place-filters').click();
+  await expect(page.getByTestId('book-row')).toHaveCount(2);
+});
+
+test('تعديل تنظيم الكتاب: التصنيف الأساسي لوحده، والإضافية لوحدها، ومكان الكتاب بيتحدّث وانت بتختار', async ({ page }) => {
+  await setUp(page, MENU, SECTIONED);
+  await page.goto('/catalog?tab=books');
+
+  await page.getByTestId('book-row').filter({ hasText: 'كتاب بلا تصنيف' }).getByTestId('edit-book').click();
+  const where = page.getByTestId('book-dialog-where');
+  await expect(where).toContainText('بلا تصنيف أساسي');
+  await expect(page.getByTestId('primary-block')).toContainText('واحد بس');
+  await expect(page.getByTestId('extras-block')).toContainText('كذا واحد');
+
+  await page.getByTestId('book-primary').selectOption('c1');
+  await expect(where.getByTestId('chip-primary')).toContainText('تصنيف 1');
+  await expect(where.getByTestId('chip-section')).toContainText('قسم الكبار');
+  // the primary category is not offered again as an extra
+  await expect(page.getByTestId('extras-block').getByRole('checkbox', { name: 'تصنيف 1' })).toHaveCount(0);
+  await expect(page.getByTestId('extras-block').getByRole('checkbox', { name: 'تصنيف 2' })).toHaveCount(1);
+
+  await page.getByTestId('extras-block').getByRole('checkbox', { name: 'تصنيف 2' }).check();
+  await expect(where.getByTestId('chip-extra')).toContainText('تصنيف 2');
+  await page.getByTestId('series-block').getByRole('checkbox', { name: 'سلسلة ب' }).check();
+  await expect(where.getByTestId('chip-series')).toContainText('سلسلة ب');
 });
 
 test('فحص وتنظيف: بيعرض الملاحظات وبيفتح العنصر', async ({ page }) => {
