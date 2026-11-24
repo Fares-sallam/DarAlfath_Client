@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useProducts } from '@/hooks/useStorefront';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { CatalogNode, ProductLink } from '@/lib/catalogTree';
+import type { NodeAlias } from '@/lib/nodeAliases';
 import type { MenuItem } from '@/lib/menuMap';
 import type { HomeLayoutRow } from '@/lib/homeBlocks';
 import { usePreview } from '@/lib/homePreview';
@@ -40,6 +41,18 @@ export function useCatalogNodes() {
       if (!isSupabaseConfigured) return [];
       const rows = await readAll<CatalogNode>('catalog_nodes', '*');
       return (rows ?? []).filter((node) => node.show_web);
+    },
+  });
+}
+
+/** The old addresses of items that were merged into another one (see lib/nodeAliases): usually a handful of rows, often none. */
+export function useNodeAliases() {
+  return useQuery({
+    queryKey: ['catalog-node-aliases'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<NodeAlias[]> => {
+      if (!isSupabaseConfigured) return [];
+      return (await readAll<NodeAlias>('catalog_node_aliases', 'old_id, old_slug, node_id')) ?? [];
     },
   });
 }

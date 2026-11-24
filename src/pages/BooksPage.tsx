@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import BooksFilterBar from '@/components/BooksFilterBar';
 import NodeHero, { hasNodeIntro } from '@/components/NodeHero';
@@ -9,7 +9,8 @@ import SectionHeader from '@/components/SectionHeader';
 import { applyFilters, authorOptions, parseFilters, priceBounds } from '@/lib/catalogFilters';
 import { NODE_TYPE_LABELS } from '@/lib/catalogTree';
 import { buildNodePage, productIdsUnder } from '@/lib/nodePage';
-import { useCatalogNodes, useProductNodeLinks } from '@/hooks/useCatalogTree';
+import { useCatalogNodes, useNodeAliases, useProductNodeLinks } from '@/hooks/useCatalogTree';
+import { aliasRedirect } from '@/lib/nodeAliases';
 import {
   useAvailableProductIds,
   useCategories,
@@ -34,8 +35,21 @@ export default function BooksPage() {
   const { data: availableIds } = useAvailableProductIds();
   const { data: nodes = [], isLoading: loadingNodes } = useCatalogNodes();
   const { data: nodeLinks = [], isLoading: loadingLinks } = useProductNodeLinks();
+  const { data: aliases = [] } = useNodeAliases();
 
   const filters = useMemo(() => parseFilters(searchParams), [searchParams]);
+
+  // An old link to an item that was merged into another one (its category slug, or its series / node id) opens the item it became.
+  useEffect(() => {
+    const changes = aliasRedirect({ category: filters.category, series: filters.series, node: filters.node }, nodes, aliases);
+    if (Object.keys(changes).length === 0) return;
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(changes)) {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    }
+    setSearchParams(next, { replace: true });
+  }, [filters.category, filters.series, filters.node, nodes, aliases, searchParams, setSearchParams]);
 
   const selectedCategory = useMemo(
     () => categories.find((item) => item.id === filters.category) ?? null,
