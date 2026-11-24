@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import BooksFilterBar from '@/components/BooksFilterBar';
 import NodeHero, { hasNodeIntro } from '@/components/NodeHero';
+import { useNodePagePreview } from '@/lib/displayPreview';
 import NodeStrips from '@/components/NodeStrips';
 import ProductCard from '@/components/ProductCard';
 import SectionHeader from '@/components/SectionHeader';
@@ -66,7 +67,9 @@ export default function BooksPage() {
     [pageNodeId, nodes, nodeLinks, products],
   );
   const strips = nodePage?.mode === 'strips';
-  const showHero = Boolean(nodePage && (strips || hasNodeIntro(nodePage.node)));
+  // while the dashboard edits this page, its draft decides whether there is anything to show on top
+  const pageDraft = useNodePagePreview(nodePage?.node.id);
+  const showHero = Boolean(nodePage && (strips || hasNodeIntro(pageDraft ? { ...nodePage.node, ...pageDraft } : nodePage.node)));
   const waitingForNodes = Boolean((filters.node || filters.series) && (loadingNodes || loadingLinks));
 
   // Title, description and preview for this view of the catalog (a category and a series have their own);

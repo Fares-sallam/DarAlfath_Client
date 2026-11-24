@@ -1,5 +1,6 @@
 import { test, expect, type Locator, type Page, type Route } from '../fixtures';
 import { signInAsFakeOwner } from '../support/fakeOwner';
+import { fakeFrames, lastMessage } from '../support/fakeFrames';
 
 // «السلاسل والتصنيفات»: the tree, the node editor, books, health checks and the old pages' redirects.
 // Hermetic: no real sign-in, every Supabase call is answered here from memory and writes are only recorded.
@@ -15,7 +16,7 @@ function node(id: string, over: Record<string, unknown> = {}) {
     image_url: null, icon: null, color: null, is_active: true, featured: false, show_web: true, show_app: true,
     sort_web: 0, sort_app: 0, show_in_menu_web: false, show_in_bar_web: true, show_in_bar_app: true, hide_when_empty: true,
     books_sort_web: 'manual', books_sort_app: 'manual', starts_at: null, ends_at: null, seo_title: null, seo_description: null,
-    intro_ar: null, intro_en: null, video_url: null, page_layout: 'auto', strips_limit: 12, show_as_strip: true,
+    intro_ar: null, intro_en: null, video_url: null, intro_media: 'auto', intro_image_url: null, intro_align: 'right', intro_font_px: 16, intro_pad_right: 0, intro_pad_left: 0, intro_text_pos: 'side', page_layout: 'auto', strips_limit: 12, show_as_strip: true,
     legacy_table: null, legacy_id: null, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', ...over,
   };
 }
@@ -62,6 +63,9 @@ const LAYOUT = [
   { channel: 'web', section_key: 'categories', kind: 'categories', visible: true, sort_order: 2, item_limit: 3 },
   { channel: 'app', section_key: 'best-sellers', kind: 'best-sellers', visible: true, sort_order: 0, item_limit: null },
 ];
+
+// the cards of «أقسام المتجر» as saved
+const DEPARTMENT_ROWS = [{ node_id: 's1', sort_order: 0 }, { node_id: 's2', sort_order: 1 }];
 
 interface Write { method: string; url: string; body: any }
 interface Rpc { name: string; body: any }
@@ -113,6 +117,7 @@ async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU, nod
       return route.fulfill({ status: 204, body: '' });
     }
     if (url.includes('/rest/v1/home_layout') && get) return json(route, LAYOUT);
+    if (url.includes('/rest/v1/store_departments') && get) return json(route, DEPARTMENT_ROWS);
     if (url.includes('/rest/v1/products') && get) return json(route, PRODUCTS);
     return route.fallback();
   });
@@ -426,7 +431,7 @@ test('تعديل تنظيم الكتاب: التصنيف الأساسي لوحد
   await expect(where.getByTestId('chip-series')).toContainText('سلسلة ب');
 });
 
-test('الشجرة: كل صف عليه علامة الهيدر، والمعاينة بتوريه، و«إضافة للهيدر» بتفتح الإضافة بالعنصر جاهز من غير ما تحفظ حاجة', async ({ page }) => {
+test('الشجرة: كل صف عليه علامة الهيدر (من غير شريط معاينة)، و«إضافة للهيدر» بتفتح الإضافة بالعنصر جاهز من غير ما تحفظ حاجة', async ({ page }) => {
   const { writes } = await setUp(page);
   await page.goto('/catalog');
 
@@ -437,36 +442,13 @@ test('الشجرة: كل صف عليه علامة الهيدر، والمعاي�
   await expect(state('s2')).toHaveAttribute('data-state', 'none');
   await expect(state('s2')).toHaveText('مش في الهيدر');
   await expect(state('c3')).toHaveAttribute('data-state', 'none');
+  // the little preview strip that used to sit above the tree is gone
+  await expect(page.getByTestId('header-preview')).toHaveCount(0);
 
-  // the preview is the strip as it stands now
-  await expect(page.getByTestId('header-preview-main')).toHaveText(['الرئيسية', 'سلسلة أ', 'تواصل معنا']);
-
-  // looking at a series on the strip lights it; one that is not there shows as a dashed chip at the end
-  await page.locator('[data-node-id="s1"]').hover();
-  await expect(page.getByTestId('header-preview-main').nth(1)).toHaveAttribute('data-lit', 'true');
-  await expect(page.getByTestId('header-preview-caption')).toContainText('بتظهر على الشريط نفسه');
-  await page.locator('[data-node-id="s2"]').hover();
-  await expect(page.getByTestId('header-preview-ghost')).toContainText('سلسلة ب');
-  await expect(page.getByTestId('header-preview-caption')).toContainText('مش على الشريط');
-
-  // the preview never changes height with what is looked at, so the rows below do not jump under the pointer
-  const height = () => page.getByTestId('header-preview').evaluate((el) => Math.round(el.getBoundingClientRect().height));
-  const idle = await height();
-  await page.locator('[data-node-id="s1"]').hover();
-  expect(await height()).toBe(idle);
-  await page.locator('[data-node-id="s2"]').hover();
-  expect(await height()).toBe(idle);
-  await page.mouse.move(2, 2);
-  expect(await height()).toBe(idle);
-
-  // a sub-item: its main item is lit and the open menu marks its line; an empty one says why it is not drawn
+  // a sub-item says what it sits inside; an empty one says why it is not drawn
   await page.getByRole('button', { name: 'فتح', exact: true }).first().click();
-  await page.locator('[data-node-id="c1"]').hover();
   await expect(state('c1')).toHaveAttribute('data-state', 'in');
   await expect(state('c1')).toContainText('في الهيدر ‹ سلسلة أ');
-  await expect(page.getByTestId('header-preview-open').locator('[data-here="true"]')).toHaveText('تصنيف 1');
-  await expect(page.getByTestId('header-preview-caption')).toContainText('بتظهر جوه: سلسلة أ');
-  expect(await height()).toBe(idle);
   await expect(state('c2')).toHaveAttribute('data-state', 'empty');
 
   // «إضافة للهيدر»: the add dialog opens on «من السلاسل والتصنيفات» with the series chosen; nothing is saved by getting there
@@ -490,7 +472,6 @@ test('علامة الهيدر: صف مقفول، وعنصر مخفي عن الم
   await expect(page.locator('[data-node-id="s1"]').getByTestId('header-badge')).toHaveAttribute('data-state', 'row-hidden');
   await expect(page.locator('[data-node-id="s1"]').getByTestId('header-open-map')).toBeVisible();
   await expect(page.locator('[data-node-id="s2"]').getByTestId('header-badge')).toHaveAttribute('data-state', 'node-hidden');
-  await expect(page.getByTestId('header-preview-main')).toHaveText(['الرئيسية']);
 });
 
 test('فحص وتنظيف: بيعرض الملاحظات وبيفتح العنصر', async ({ page }) => {
@@ -784,13 +765,12 @@ test('خريطة العرض: التطبيق للقراءة، وأقسام الر
   await expect(page.getByTestId('map-sections').locator('li')).toHaveText([/الأكثر مبيعًا/]);
 });
 
-test('صفحة العرض للسلسلة: الكلمة التعريفية والفيديو والأشرطة', async ({ page }) => {
+test('صفحات الأقسام: الأشرطة (ترتيب وإخفاء بيتحفظوا فورًا) والكلام والفيديو والشكل بزرار حفظ واحد', async ({ page }) => {
   const { writes, rpcs } = await setUp(page);
-  await page.goto('/catalog');
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=pages&node=s1');
 
-  await page.getByRole('button', { name: 'تعديل سلسلة أ' }).click();
-  await page.getByTestId('node-editor').getByRole('tab', { name: 'صفحة العرض' }).click();
-
+  await expect(page.getByTestId('pages-editor')).toHaveAttribute('data-node-id', 's1');
   const strips = page.getByTestId('strip-row');
   await expect(strips).toHaveText([/تصنيف 1/, /تصنيف 2/]);
   await dragOnto(strips.nth(0).getByTestId('drag-handle'), strips.nth(1), 'after');
@@ -803,15 +783,214 @@ test('صفحة العرض للسلسلة: الكلمة التعريفية وال
   expect(writes[0].url).toContain('id=eq.c2');
 
   await page.getByTestId('field-intro-ar').fill('منهج متكامل لتعليم الأطفال');
+  await page.getByTestId('media-video').click();
   await page.getByTestId('field-video').fill('http://not-secure.example/video');
   await page.getByTestId('field-layout').selectOption('strips');
-  await page.getByTestId('save-node').click();
-  await expect(page.getByText('رابط الفيديو لازم يبدأ بـ https://')).toBeVisible();
+  await expect(page.getByTestId('video-problem')).toBeVisible();
+  await expect(page.getByTestId('pages-save')).toBeDisabled();
   expect(writes.length).toBe(1);
 
   await page.getByTestId('field-video').fill('https://www.youtube.com/watch?v=abc');
   await page.getByTestId('field-strips-limit').fill('8');
-  await page.getByTestId('save-node').click();
+  await page.getByTestId('pages-save').click();
   await expect.poll(() => writes.length).toBe(2);
-  expect(writes[1].body).toEqual({ intro_ar: 'منهج متكامل لتعليم الأطفال', video_url: 'https://www.youtube.com/watch?v=abc', page_layout: 'strips', strips_limit: 8 });
+  expect(writes[1].body).toEqual({ intro_ar: 'منهج متكامل لتعليم الأطفال', video_url: 'https://www.youtube.com/watch?v=abc', intro_media: 'video', page_layout: 'strips', strips_limit: 8 });
+});
+
+test('نافذة تعديل العنصر: «صفحة العرض» بقت مؤشر لتاب «صفحات الأقسام»، من غير خانات مكررة', async ({ page }) => {
+  await setUp(page);
+  await page.goto('/catalog');
+  await page.getByRole('button', { name: 'تعديل سلسلة أ' }).click();
+  await page.getByTestId('node-editor').getByRole('tab', { name: /صفحة العرض/ }).click();
+  await expect(page.getByTestId('page-moved')).toContainText('صفحات الأقسام');
+  await expect(page.getByTestId('field-intro-ar')).toHaveCount(0);
+  await expect(page.getByTestId('field-video')).toHaveCount(0);
+  await expect(page.getByTestId('field-layout')).toHaveCount(0);
+  await page.getByTestId('open-page-editor').click();
+  await expect(page).toHaveURL(/tab=pages/);
+  await expect(page.getByTestId('pages-editor')).toHaveAttribute('data-node-id', 's1');
+});
+
+test('التابات: «أقسام المتجر» بعد «شريط التصنيفات» ثم «صفحات الأقسام»', async ({ page }) => {
+  await setUp(page);
+  await page.goto('/catalog');
+  await expect(page.getByTestId('tab-departments')).toBeVisible();
+  const labels = await page.getByRole('tablist', { name: 'أقسام السلاسل والتصنيفات' }).getByRole('tab').allInnerTexts();
+  const names = labels.map((l) => l.replace(/\s+/g, ' ').trim());
+  expect(names.indexOf('أقسام المتجر')).toBe(names.indexOf('شريط التصنيفات') + 1);
+  expect(names.indexOf('صفحات الأقسام')).toBe(names.indexOf('أقسام المتجر') + 1);
+});
+
+test('أقسام المتجر: الكروت المحفوظة بترتيبها، وضغطة على «إضافة» بتعرض الموجود بس، والمعاينة بتاخد القايمة قبل الحفظ', async ({ page }) => {
+  const { writes, rpcs } = await setUp(page);
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=departments');
+
+  const rows = page.getByTestId('dept-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText('سلسلة أ');
+  await expect(rows.nth(1)).toContainText('سلسلة ب');
+  // سلسلة ب holds no books and is set to hide when empty: the card says it is not drawn
+  await expect(rows.nth(1).getByTestId('dept-issue')).toContainText('فاضي');
+  await expect(rows.nth(0).getByTestId('dept-issue')).toHaveCount(0);
+  await expect(page.getByTestId('dept-save')).toBeDisabled();
+
+  // the preview starts with the saved list
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.departments?.ids).toEqual(['s1', 's2']);
+  expect((await lastMessage(page, 'site')).scroll).toBe('departments');
+
+  // add: only what is not already a card, searchable, no new item is made
+  await page.getByTestId('dept-add').click();
+  const items = page.getByTestId('dept-add-item');
+  await expect(items).toHaveText([/سلسلة فاضي|تصنيف 1/, /تصنيف 2/, /تصنيف فاضي|سلسلة فاضي/].map((r) => r));
+  await page.getByTestId('dept-add-search').fill('تصنيف 1');
+  await expect(items).toHaveCount(1);
+  await items.first().click();
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(2)).toContainText('تصنيف 1');
+  await expect(page.getByTestId('dept-dirty')).toBeVisible();
+  // nothing is written until «حفظ»
+  expect(writes).toEqual([]);
+  expect(rpcs).toEqual([]);
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.departments?.ids).toEqual(['s1', 's2', 'c1']);
+});
+
+test('أقسام المتجر: حذف كارت وترتيب بالسحب وحفظ بخطوة واحدة (من غير حذف العنصر نفسه)', async ({ page }) => {
+  const { writes, rpcs } = await setUp(page);
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=departments');
+  const rows = page.getByTestId('dept-row');
+  await expect(rows).toHaveCount(2);
+
+  await dragOnto(rows.nth(0).getByTestId('drag-handle'), rows.nth(1), 'after');
+  await expect(rows.nth(0)).toContainText('سلسلة ب');
+  await rows.nth(1).getByTestId('dept-remove').click();
+  await expect(rows).toHaveCount(1);
+  await page.getByTestId('dept-add').click();
+  await page.getByTestId('dept-add-item').filter({ hasText: 'تصنيف 2' }).click();
+  await expect(rows).toHaveCount(2);
+
+  await page.getByTestId('dept-save').click();
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'store_departments_save', body: { p_node_ids: ['s2', 'c2'] } });
+  // the items themselves are untouched: no picture changed, nothing deleted
+  expect(writes).toEqual([]);
+});
+
+test('أقسام المتجر: تراجع بيرجّع الكل، ومفيش حفظ لو مفيش تغيير', async ({ page }) => {
+  const { rpcs } = await setUp(page);
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=departments');
+  const rows = page.getByTestId('dept-row');
+  await rows.nth(1).getByTestId('dept-remove').click();
+  await expect(rows).toHaveCount(1);
+  await page.getByTestId('dept-reset').click();
+  await expect(rows).toHaveCount(2);
+  await expect(page.getByTestId('dept-save')).toBeDisabled();
+  expect(rpcs).toEqual([]);
+});
+
+test('أقسام المتجر: رفع صورة كارت بيظهر في المعاينة وبيتحفظ على العنصر نفسه مع الحفظ', async ({ page }) => {
+  const { writes, rpcs } = await setUp(page);
+  await fakeFrames(page);
+  await page.route('**/storage/v1/object/series-images/**', (route) => route.fulfill({ status: 200, json: { Key: 'series-images/x.png' } }));
+  await page.goto('/catalog?tab=departments');
+  const rows = page.getByTestId('dept-row');
+  await expect(rows).toHaveCount(2);
+
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==', 'base64');
+  await rows.nth(0).getByTestId('dept-picture-file').setInputFiles({ name: 'card.png', mimeType: 'image/png', buffer: png });
+  await expect(rows.nth(0).getByTestId('dept-picture-remove')).toBeVisible();
+  await expect.poll(async () => Object.keys((await lastMessage(page, 'site'))?.departments?.images ?? {})).toEqual(['s1']);
+  expect((await lastMessage(page, 'site')).departments.ids).toEqual(['s1', 's2']);
+  expect(writes).toEqual([]);
+
+  await page.getByTestId('dept-save').click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].url).toContain('id=eq.s1');
+  expect(writes[0].body.image_url).toMatch(/\/series-images\/.+\.png$/);
+  expect(rpcs[0]).toEqual({ name: 'store_departments_save', body: { p_node_ids: ['s1', 's2'] } });
+});
+
+test('أقسام المتجر: إزالة صورة كارت بتتحفظ، وصورة رجعت زي ما كانت مش تغيير', async ({ page }) => {
+  const nodes = NODES.map((n) => (n.id === 's1' ? { ...n, image_url: 'https://img.test/s1.png' } : n));
+  const { writes } = await setUp(page, MENU, nodes);
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=departments');
+  const rows = page.getByTestId('dept-row');
+  await rows.nth(0).getByTestId('dept-picture-remove').click();
+  await expect(page.getByTestId('dept-dirty')).toBeVisible();
+  await page.getByTestId('dept-save').click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].body).toEqual({ image_url: null });
+});
+
+test('صفحات الأقسام: الاختيار من القايمة، والمعاينة بتاخد المسودة (الكلام والتنسيق) قبل الحفظ', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=pages');
+  await expect(page.getByTestId('pages-empty')).toBeVisible();
+
+  await page.getByTestId('pages-node-search').fill('سلسلة أ');
+  await page.getByTestId('pages-node-row').filter({ hasText: 'سلسلة أ' }).first().click();
+  await expect(page.getByTestId('pages-editor')).toHaveAttribute('data-node-id', 's1');
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.nodePage?.id).toBe('s1');
+  expect((await lastMessage(page, 'site')).navigate).toBe('/books?series=s1');
+
+  await page.getByTestId('field-intro-ar').fill('أهلًا بك');
+  await page.getByTestId('media-video').click();
+  await page.getByTestId('field-video').fill('https://youtu.be/abc12345678');
+  await page.getByTestId('align-center').click();
+  await page.getByTestId('pos-below').click();
+  await page.getByTestId('field-font').fill('26');
+  await page.getByTestId('field-pad-right').fill('40');
+  await page.getByTestId('field-pad-left').fill('15');
+  await expect(page.getByTestId('pages-dirty')).toBeVisible();
+
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.nodePage?.fields?.intro_align).toBe('center');
+  const fields = (await lastMessage(page, 'site')).nodePage.fields;
+  expect(fields).toMatchObject({
+    intro_ar: 'أهلًا بك', intro_media: 'video', video_url: 'https://youtu.be/abc12345678', intro_align: 'center',
+    intro_text_pos: 'below', intro_font_px: 26, intro_pad_right: 40, intro_pad_left: 15,
+  });
+  // nothing is written until «حفظ»
+  expect(writes).toEqual([]);
+
+  await page.getByTestId('pages-save').click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].url).toContain('id=eq.s1');
+  expect(writes[0].body).toEqual({
+    intro_ar: 'أهلًا بك', video_url: 'https://youtu.be/abc12345678', intro_media: 'video', intro_align: 'center', intro_font_px: 26,
+    intro_pad_right: 40, intro_pad_left: 15, intro_text_pos: 'below',
+  });
+});
+
+test('صفحات الأقسام: صورة بدل الفيديو، و«تراجع» بيرجّع المحفوظ، ومكان الكلام بيتنبّه لو مفيش ميديا', async ({ page }) => {
+  const { writes } = await setUp(page);
+  await fakeFrames(page);
+  await page.route('**/storage/v1/object/series-images/**', (route) => route.fulfill({ status: 200, json: { Key: 'series-images/x.png' } }));
+  await page.goto('/catalog?tab=pages&node=s1');
+  await expect(page.getByTestId('pages-editor')).toBeVisible();
+  await expect(page.getByTestId('pos-note')).toBeVisible();
+
+  await page.getByTestId('media-image').click();
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==', 'base64');
+  await page.getByTestId('pages-picture-file').setInputFiles({ name: 'hero.png', mimeType: 'image/png', buffer: png });
+  await expect(page.getByTestId('pages-picture-remove')).toBeVisible();
+  await expect(page.getByTestId('pos-note')).toHaveCount(0);
+  await expect.poll(async () => (await lastMessage(page, 'site'))?.nodePage?.fields?.intro_media).toBe('image');
+  expect((await lastMessage(page, 'site')).nodePage.fields.intro_image_url).toMatch(/series-images/);
+
+  await page.getByTestId('pages-reset').click();
+  await expect(page.getByTestId('pages-dirty')).toHaveCount(0);
+  await expect(page.getByTestId('pages-save')).toBeDisabled();
+  expect(writes).toEqual([]);
+});
+
+test('صفحات الأقسام: عنصر مخفي عن الموقع بيتنبّه، والتابات القديمة بتفتح من الرابط', async ({ page }) => {
+  await setUp(page);
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=pages&node=c3');
+  await expect(page.getByTestId('pages-hidden-note')).toBeVisible();
+  await expect(page).not.toHaveURL(/node=/);
 });

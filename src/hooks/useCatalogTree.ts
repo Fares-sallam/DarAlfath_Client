@@ -56,6 +56,23 @@ export function useProductNodeLinks() {
   });
 }
 
+/**
+ * The cards of «أقسام المتجر», as the dashboard's tab of that name chose them: the ids of existing nodes, in order. `null` = the
+ * list can't be read (then the home page draws every series, as it did before the list existed).
+ */
+export function useDepartmentCards() {
+  return useQuery({
+    queryKey: ['store-departments-web'],
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<string[] | null> => {
+      if (!isSupabaseConfigured) return null;
+      const { data, error } = await supabase.from('store_departments').select('node_id, sort_order').order('sort_order', { ascending: true });
+      if (error || !data) return null;
+      return (data as { node_id: string }[]).map((row) => row.node_id);
+    },
+  });
+}
+
 /** The website's top menu rows (the dashboard's «خريطة العرض»). Empty = draw the older menu. */
 export function useWebMenuItems() {
   return useQuery({

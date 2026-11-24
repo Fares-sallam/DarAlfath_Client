@@ -67,6 +67,15 @@ export interface CatalogNode {
   intro_ar: string | null;
   intro_en: string | null;
   video_url: string | null;
+  /** 'auto' = a video when there is one; or say it: 'video' / 'image' / 'none' */
+  intro_media: 'auto' | 'video' | 'image' | 'none';
+  intro_image_url: string | null;
+  /** how the welcome text is set: alignment, size in px, side spacing in px, and where it sits next to the picture or video */
+  intro_align: 'right' | 'center' | 'left';
+  intro_font_px: number;
+  intro_pad_right: number;
+  intro_pad_left: number;
+  intro_text_pos: 'side' | 'above' | 'below';
   page_layout: PageLayout;
   strips_limit: number;
   /** shown as a strip on its parent's page */
