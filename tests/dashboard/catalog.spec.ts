@@ -877,6 +877,24 @@ test('أقسام المتجر: حذف كارت وترتيب بالسحب وحف�
   expect(writes).toEqual([]);
 });
 
+test('أقسام المتجر: الكارت اللي مخفي عن التطبيق بس بيتنبّه عليه، من غير ما يتقال إنه مش ظاهر في الموقع', async ({ page }) => {
+  const nodes = NODES.map((n) => (n.id === 's1' ? { ...n, show_app: false } : n));
+  await setUp(page, MENU, nodes);
+  await fakeFrames(page);
+  await page.goto('/catalog?tab=departments');
+
+  const rows = page.getByTestId('dept-row');
+  await expect(rows).toHaveCount(2);
+  const chips = rows.nth(0).getByTestId('dept-issue');
+  await expect(chips).toHaveCount(1);
+  await expect(chips).toHaveAttribute('data-channel', 'app');
+  await expect(chips).toContainText('مخفي عن التطبيق');
+  await expect(chips).toHaveAttribute('title', /التطبيق/);
+  // the website still draws it, and the card that is empty on both channels has one shared warning
+  await expect(rows.nth(1).getByTestId('dept-issue')).toHaveCount(1);
+  await expect(rows.nth(1).getByTestId('dept-issue')).toHaveAttribute('data-channel', 'both');
+});
+
 test('أقسام المتجر: تراجع بيرجّع الكل، ومفيش حفظ لو مفيش تغيير', async ({ page }) => {
   const { rpcs } = await setUp(page);
   await fakeFrames(page);
