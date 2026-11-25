@@ -234,6 +234,69 @@ test('تفاصيل الطلب: النافذة بتفتح من غير شاشة ب
   expect(errors).toEqual([]);
 });
 
+/** The order window of ORD-GUEST, with the invoice number it already has (if any); every save of the order is recorded, or refused as a repeated number. */
+async function openOrderWindow(page: Page, opts: { saved?: string | null; repeated?: boolean } = {}) {
+  const patches: Record<string, unknown>[] = [];
+  await setUp(page);
+  await page.route('**/rest/v1/orders**', (route) => {
+    const req = route.request();
+    if (req.method() === 'PATCH') {
+      patches.push(req.postDataJSON());
+      if (opts.repeated) return json(route, { code: '23505', message: 'duplicate key value violates unique constraint "orders_invoice_number_uniq"' }, 409);
+      return route.fulfill({ status: 204, body: '' });
+    }
+    const url = decodeURIComponent(req.url());
+    if (/[?&]id=eq\.[^&]+/.test(url) && url.includes('order_items')) return json(route, detail('ORD-GUEST', { invoice_number: opts.saved ?? null }));
+    return route.fallback();
+  });
+  await page.goto('/orders');
+  await page.getByTitle('عرض التفاصيل').first().click({ timeout: 20_000 });
+  const modal = page.locator('.fixed.inset-0').last();
+  await expect(modal.getByTestId('order-invoice-number')).toBeVisible({ timeout: 10_000 });
+  return { modal, patches };
+}
+
+test('رقم الفاتورة: خانة لوحدها في نافذة الطلب، والرقم اللي بتكتبه بيتثبّت ويطلع في الفاتورة وجنبه رقم الطلب في خانة منفصلة', async ({ page }) => {
+  const { modal, patches } = await openOrderWindow(page, { saved: 'INV-OLD' });
+  const input = modal.getByTestId('order-invoice-number');
+  await expect(input).toHaveValue('INV-OLD');
+  await input.fill('  INV-2026-014 ');
+
+  const text = await invoiceText(page, () => modal.getByTestId('order-print').click());
+  expect(patches).toEqual([{ invoice_number: 'INV-2026-014' }]);
+  expect(text).toMatch(/رقم الفاتورة\s*INV-2026-014/);
+  expect(text).toMatch(/رقم الطلب\s*ORD-GUEST/);
+  expect(text).not.toContain('INV-OLD');
+});
+
+test('رقم الفاتورة: فاضي يعني الفاتورة بتطلع برقم الطلب، ومحو رقم محفوظ بيرجّعها لرقم الطلب', async ({ page }) => {
+  const first = await openOrderWindow(page);
+  await expect(first.modal.getByTestId('order-invoice-number')).toHaveValue('');
+  await expect(first.modal.getByTestId('order-invoice-number')).toHaveAttribute('placeholder', 'ORD-GUEST');
+  const text = await invoiceText(page, () => first.modal.getByTestId('order-print').click());
+  expect(first.patches).toEqual([]); // nothing typed, nothing saved
+  expect(text).toMatch(/رقم الفاتورة\s*ORD-GUEST/);
+  expect(text).toMatch(/رقم الطلب\s*ORD-GUEST/);
+
+  const other = await page.context().newPage();
+  const second = await openOrderWindow(other, { saved: 'INV-OLD' });
+  await second.modal.getByTestId('order-invoice-number').fill('');
+  const cleared = await invoiceText(other, () => second.modal.getByTestId('order-print').click());
+  expect(second.patches).toEqual([{ invoice_number: null }]);
+  expect(cleared).toMatch(/رقم الفاتورة\s*ORD-GUEST/);
+  expect(cleared).not.toContain('INV-OLD');
+});
+
+test('رقم الفاتورة: رقم مستخدم في فاتورة تانية بيترفض برسالة واضحة ومفيش حاجة بتتطبع', async ({ page }) => {
+  const { modal, patches } = await openOrderWindow(page, { repeated: true });
+  await modal.getByTestId('order-invoice-number').fill('INV-2026-014');
+  await modal.getByTestId('order-print').click();
+  await expect(page.getByText('رقم الفاتورة ده مستخدم في فاتورة تانية')).toBeVisible();
+  expect(patches).toEqual([{ invoice_number: 'INV-2026-014' }]);
+  await page.waitForTimeout(1_200);
+  await expect(page.locator('iframe[data-print-frame]')).toHaveCount(0);
+});
+
 test('صفحة الطلبات: الضغط في أي مكان على شريط الطلب بيفتح تفاصيله، وأزرار الصف بتعمل شغلها هي بس', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
