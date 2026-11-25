@@ -40,7 +40,7 @@ const MENU = [{
   created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z',
 }];
 
-async function setUp(page: Page) {
+async function setUp(page: Page, history: Record<string, unknown>[] = []) {
   const rpcs: { name: string; body: any }[] = [];
   await signInAsFakeOwner(page);
   await page.route('**/rest/v1/**', async (route) => {
@@ -50,9 +50,13 @@ async function setUp(page: Page) {
     const rpc = /\/rest\/v1\/rpc\/([a-z_]+)/.exec(url);
     if (rpc) {
       if (rpc[1] === 'catalog_node_counts') return json(route, []);
+      if (rpc[1] === 'catalog_merge_history') return json(route, history);
       rpcs.push({ name: rpc[1], body: req.postDataJSON() });
       if (rpc[1] === 'catalog_merge_nodes') {
         return json(route, { source_name: 'الإملاء', target_name: 'الكتابة', books_moved: 2, books_already_in_target: 1, children_moved: 1, menu_items: 1, home_blocks: 0, departments: 0 });
+      }
+      if (rpc[1] === 'catalog_unmerge_node') {
+        return json(route, { restored_name: 'الإملاء', target_name: 'الكتابة', books_restored: 2, children_restored: 1, menu_items: 1 });
       }
       return route.fulfill({ status: 204, body: '' });
     }
@@ -141,4 +145,50 @@ test('دمج: من غير تغيير الاسم مفيش اسم جديد بيت�
   await page.getByTestId('merge-cancel').click();
   await expect(page.getByTestId('merge-dialog')).toHaveCount(0);
   expect(rpcs.filter((r) => r.name === 'catalog_merge_nodes')).toHaveLength(0);
+});
+
+const HISTORY = [
+  { old_id: 'old-1', source_name: 'الإملاء القديم', target_id: 'c1', target_name: 'الكتابة', merged_at: '2026-11-24T10:00:00Z', summary: { books_moved: 2, books_already_in_target: 1, children_moved: 1, menu_items: 1 }, can_undo: true },
+  { old_id: 'old-2', source_name: 'قصص قديمة', target_id: 'c3', target_name: 'قصص', merged_at: '2026-11-23T10:00:00Z', summary: { books_moved: 0 }, can_undo: false },
+];
+
+test('التراجع: القايمة مش بتظهر من غير دمج', async ({ page }) => {
+  await setUp(page);
+  await page.goto('/catalog');
+  await expect(page.getByTestId('catalog-tree')).toBeVisible();
+  await expect(page.getByTestId('merge-history')).toHaveCount(0);
+});
+
+test('التراجع من القايمة: تأكيد الأول، وبعدها نداء واحد بـ id العنصر اللي اندمج', async ({ page }) => {
+  const { rpcs } = await setUp(page, HISTORY);
+  await page.goto('/catalog');
+  await page.getByTestId('merge-history').locator('summary').click();
+  const rows = page.getByTestId('merge-history-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText('«الإملاء القديم» اندمج في «الكتابة»');
+  await expect(rows.nth(0)).toContainText('3 كتاب، 1 عنصر تحته، 1 رابط هيدر');
+  // the second one cannot be undone any more (what it was merged into was merged again)
+  await expect(rows.nth(1).getByTestId('undo-merge')).toBeDisabled();
+
+  await rows.nth(0).getByTestId('undo-merge').click();
+  await expect(page.getByTestId('undo-confirm-box')).toContainText('يرجّع «الإملاء القديم»');
+  expect(rpcs.filter((r) => r.name === 'catalog_unmerge_node')).toHaveLength(0);
+  await page.getByTestId('undo-confirm').click();
+  await expect.poll(() => rpcs.filter((r) => r.name === 'catalog_unmerge_node').length).toBe(1);
+  expect(rpcs.find((r) => r.name === 'catalog_unmerge_node')!.body).toEqual({ p_old_id: 'old-1' });
+  await expect(page.getByText('تم التراجع: «الإملاء» رجع لوحده')).toBeVisible();
+});
+
+test('التراجع من الرسالة: بعد الدمج بتظهر رسالة فيها «تراجع» بتبعت نداء التراجع للعنصر اللي اتدمج', async ({ page }) => {
+  const { rpcs } = await setUp(page);
+  await open(page, 'الإملاء');
+  await page.getByTestId('merge-candidate').filter({ hasText: 'الكتابة' }).click();
+  await page.getByTestId('merge-go').click();
+  await page.getByTestId('merge-confirm').click();
+  await expect(page.getByText('تم دمج «الإملاء» في «الكتابة»')).toBeVisible();
+
+  await page.locator('[data-sonner-toast]').getByRole('button', { name: 'تراجع' }).click();
+  await expect.poll(() => rpcs.filter((r) => r.name === 'catalog_unmerge_node').length).toBe(1);
+  expect(rpcs.find((r) => r.name === 'catalog_unmerge_node')!.body).toEqual({ p_old_id: 'c2' });
+  await expect(page.getByText('تم التراجع: «الإملاء» رجع لوحده')).toBeVisible();
 });

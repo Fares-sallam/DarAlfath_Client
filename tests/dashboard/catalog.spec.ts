@@ -83,6 +83,7 @@ async function setUp(page: Page, menuRows: Record<string, unknown>[] = MENU, nod
     const rpc = /\/rest\/v1\/rpc\/([a-z_]+)/.exec(url);
     if (rpc) {
       if (rpc[1] === 'catalog_node_counts') return json(route, COUNTS);
+      if (rpc[1] === 'catalog_merge_history') return json(route, []);
       rpcs.push({ name: rpc[1], body: req.postDataJSON() });
       return route.fulfill({ status: 204, body: '' });
     }
