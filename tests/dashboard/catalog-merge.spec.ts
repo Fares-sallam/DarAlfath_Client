@@ -26,6 +26,8 @@ const NODES = [
   node('col', 'إصدارات متنوعة', { type: 'collection', sort_web: 4 }),
   node('s2', 'سلسلة ب', { type: 'series', sort_web: 5 }),
   node('c2-kid', 'إملاء متقدم', { parent_id: 'c2', sort_web: 6 }),
+  node('sec1', 'قسم أ', { type: 'section', sort_web: 7 }),
+  node('sec2', 'قسم ب', { type: 'section', sort_web: 8 }),
 ];
 // الإملاء: p1 (primary), p2 (primary, also an extra in الكتابة), p3 (extra). الكتابة: p4 (primary), p2 (extra)
 const LINKS = [
@@ -54,6 +56,13 @@ async function setUp(page: Page, history: Record<string, unknown>[] = []) {
       rpcs.push({ name: rpc[1], body: req.postDataJSON() });
       if (rpc[1] === 'catalog_merge_nodes') {
         return json(route, { source_name: 'الإملاء', target_name: 'الكتابة', books_moved: 2, books_already_in_target: 1, children_moved: 1, menu_items: 1, home_blocks: 0, departments: 0 });
+      }
+      if (rpc[1] === 'catalog_union_nodes') {
+        const b = req.postDataJSON() as { p_name: string };
+        return json(route, { id: 'new-id', name: b.p_name, slug: 'new', type: 'category', books: 4, source_a_name: 'الإملاء', source_b_name: 'الكتابة' });
+      }
+      if (rpc[1] === 'catalog_remove_union') {
+        return json(route, { name: 'الإملاء والكتابة', books_removed: 4 });
       }
       if (rpc[1] === 'catalog_unmerge_node') {
         return json(route, { restored_name: 'الإملاء', target_name: 'الكتابة', books_restored: 2, children_restored: 1, menu_items: 1 });
@@ -147,9 +156,14 @@ test('دمج: من غير تغيير الاسم مفيش اسم جديد بيت�
   expect(rpcs.filter((r) => r.name === 'catalog_merge_nodes')).toHaveLength(0);
 });
 
+const HISTORY_WITH_UNION = [
+  { kind: 'union', old_id: 'u-1', source_name: 'التربوي + الحساب', target_id: 'u-1', target_name: 'التربوي والحساب', merged_at: '2026-11-25T10:00:00Z', summary: { books: 7 }, can_undo: true },
+  { kind: 'union', old_id: 'u-2', source_name: 'أ + ب', target_id: 'u-2', target_name: 'أ وب', merged_at: '2026-11-24T10:00:00Z', summary: { books: 2 }, can_undo: false },
+];
+
 const HISTORY = [
-  { old_id: 'old-1', source_name: 'الإملاء القديم', target_id: 'c1', target_name: 'الكتابة', merged_at: '2026-11-24T10:00:00Z', summary: { books_moved: 2, books_already_in_target: 1, children_moved: 1, menu_items: 1 }, can_undo: true },
-  { old_id: 'old-2', source_name: 'قصص قديمة', target_id: 'c3', target_name: 'قصص', merged_at: '2026-11-23T10:00:00Z', summary: { books_moved: 0 }, can_undo: false },
+  { kind: 'merge', old_id: 'old-1', source_name: 'الإملاء القديم', target_id: 'c1', target_name: 'الكتابة', merged_at: '2026-11-24T10:00:00Z', summary: { books_moved: 2, books_already_in_target: 1, children_moved: 1, menu_items: 1 }, can_undo: true },
+  { kind: 'merge', old_id: 'old-2', source_name: 'قصص قديمة', target_id: 'c3', target_name: 'قصص', merged_at: '2026-11-23T10:00:00Z', summary: { books_moved: 0 }, can_undo: false },
 ];
 
 test('قسم الدمج ظاهر دايمًا فوق الشجرة، حتى قبل أول دمج: زرار «دمج عنصرين» ومكان التراجع', async ({ page }) => {
@@ -202,4 +216,86 @@ test('التراجع من الرسالة: بعد الدمج بتظهر رسال�
   await expect.poll(() => rpcs.filter((r) => r.name === 'catalog_unmerge_node').length).toBe(1);
   expect(rpcs.find((r) => r.name === 'catalog_unmerge_node')!.body).toEqual({ p_old_id: 'c2' });
   await expect(page.getByText('تم التراجع: «الإملاء» رجع لوحده')).toBeVisible();
+});
+
+test('دمج بدون حذف: اختيار النوع، ومعاينة العنصر الجديد (الأصليين مش بيتحذفوا)، والاسم المقترح', async ({ page }) => {
+  await setUp(page);
+  await open(page, 'الإملاء');
+  await expect(page.getByTestId('merge-modes')).toHaveCount(0);
+  await page.getByTestId('merge-candidate').filter({ hasText: 'الكتابة' }).click();
+
+  // the default is still the one that deletes
+  await expect(page.getByTestId('merge-mode-merge')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('merge-preview')).toBeVisible();
+  await expect(page.getByTestId('union-preview')).toHaveCount(0);
+
+  await page.getByTestId('merge-mode-union').click();
+  await expect(page.getByTestId('merge-mode-union')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.getByTestId('merge-preview')).toHaveCount(0);
+  await expect(page.getByTestId('merge-swap')).toHaveCount(0);
+  await expect(page.getByTestId('union-new')).toContainText('تصنيف جديد');
+  const effects = page.getByTestId('union-effects');
+  // الإملاء: p1 p2 p3, الكتابة: p4 p2 → four books, one of them in both
+  await expect(effects).toContainText('فيه 4 كتاب');
+  await expect(effects).toContainText('1 كتاب موجود في الاتنين');
+  await expect(effects).toContainText('مش هيتحذفوا ولا يتغيروا');
+  await expect(page.getByTestId('union-name')).toHaveValue('الإملاء والكتابة');
+  await expect(page.getByTestId('merge-go')).toContainText('اعمل العنصر الجديد');
+
+  // back to the deleting mode: its preview and the swap come back
+  await page.getByTestId('merge-mode-merge').click();
+  await expect(page.getByTestId('merge-preview')).toBeVisible();
+  await expect(page.getByTestId('merge-swap')).toBeVisible();
+});
+
+test('دمج بدون حذف: بيبعت نداء العنصر الجديد بالاسم المكتوب (من غير ما يحذف حاجة)، وتراجع من الرسالة بيشيله', async ({ page }) => {
+  const { rpcs } = await setUp(page);
+  await open(page, 'الإملاء');
+  await page.getByTestId('merge-candidate').filter({ hasText: 'الكتابة' }).click();
+  await page.getByTestId('merge-mode-union').click();
+  await page.getByTestId('union-name').fill('التربوي والحساب');
+  await page.getByTestId('merge-go').click();
+  await expect(page.getByTestId('union-confirm-box')).toContainText('ومفيش حاجة هتتحذف');
+  expect(rpcs.filter((r) => r.name === 'catalog_union_nodes')).toHaveLength(0);
+
+  await page.getByTestId('merge-confirm').click();
+  await expect.poll(() => rpcs.filter((r) => r.name === 'catalog_union_nodes').length).toBe(1);
+  expect(rpcs.find((r) => r.name === 'catalog_union_nodes')!.body).toEqual({ p_a: 'c2', p_b: 'c1', p_name: 'التربوي والحساب', p_slug: null });
+  // nothing was merged away
+  expect(rpcs.filter((r) => r.name === 'catalog_merge_nodes')).toHaveLength(0);
+  await expect(page.getByTestId('merge-dialog')).toHaveCount(0);
+  await expect(page.getByText('تم عمل «التربوي والحساب»')).toBeVisible();
+
+  await page.locator('[data-sonner-toast]').getByRole('button', { name: 'تراجع' }).click();
+  await expect.poll(() => rpcs.filter((r) => r.name === 'catalog_remove_union').length).toBe(1);
+  expect(rpcs.find((r) => r.name === 'catalog_remove_union')!.body).toEqual({ p_node: 'new-id' });
+  await expect(page.getByText('تم التراجع: «الإملاء والكتابة» اتشال')).toBeVisible();
+});
+
+test('دمج بدون حذف: الأقسام ما ينفعش (الاختيار مقفول ومكتوب السبب)، والدمج بحذف شغال', async ({ page }) => {
+  await setUp(page);
+  await open(page, 'قسم أ');
+  await page.getByTestId('merge-candidate').filter({ hasText: 'قسم ب' }).click();
+  await expect(page.getByTestId('merge-mode-union')).toBeDisabled();
+  await expect(page.getByTestId('merge-mode-union')).toContainText('الأقسام ما ينفعش تتجمع من غير حذف');
+  await expect(page.getByTestId('merge-preview')).toBeVisible();
+});
+
+test('القايمة بتعرض العنصر اللي اتعمل بدون حذف، وتراجعه بيشيله بس (الأصليين مش بيتأثروا)', async ({ page }) => {
+  const { rpcs } = await setUp(page, HISTORY_WITH_UNION);
+  await page.goto('/catalog');
+  const rows = page.getByTestId('merge-history-row');
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0)).toContainText('«التربوي والحساب» اتعمل من التربوي و الحساب');
+  await expect(rows.nth(0)).toContainText('بدون حذف');
+  await expect(rows.nth(0)).toContainText('7 كتاب');
+  // one of them is the primary category of some book: it cannot be removed until that is changed
+  await expect(rows.nth(1).getByTestId('undo-merge')).toBeDisabled();
+
+  await rows.nth(0).getByTestId('undo-merge').click();
+  await expect(page.getByTestId('undo-confirm-box')).toContainText('يشيل «التربوي والحساب» بس');
+  await page.getByTestId('undo-confirm').click();
+  await expect.poll(() => rpcs.filter((r) => r.name === 'catalog_remove_union').length).toBe(1);
+  expect(rpcs.find((r) => r.name === 'catalog_remove_union')!.body).toEqual({ p_node: 'u-1' });
+  expect(rpcs.filter((r) => r.name === 'catalog_unmerge_node')).toHaveLength(0);
 });
