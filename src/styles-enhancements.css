@@ -2220,6 +2220,76 @@ html[dir="rtl"] .mobile-nav-drawer {
   color: var(--blue-900, #003166);
 }
 
+/* The phone menu built from the dashboard's menu map: branches open right below their row */
+.mobile-menu .mobile-menu__head {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid rgba(96, 147, 138, 0.15);
+}
+.mobile-menu .mobile-menu__label {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  padding-block: 13px;
+  padding-inline-end: 12px;
+  border: 0;
+  border-bottom: none !important;
+  background: transparent;
+  font-family: var(--font-text);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text, #0e2542);
+  text-align: start;
+  cursor: pointer;
+  text-decoration: none;
+}
+.mobile-menu .mobile-menu__label:hover,
+.mobile-menu .mobile-menu__label.active {
+  background: var(--gold-soft, #bbe6e9);
+  color: var(--blue-900, #003166);
+}
+.mobile-menu .mobile-menu__toggle {
+  flex: 0 0 48px;
+  border: 0;
+  border-inline-start: 1px solid rgba(96, 147, 138, 0.15);
+  background: transparent;
+  color: var(--text, #0e2542);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.mobile-menu .mobile-menu__chev { transition: transform 0.18s; }
+.mobile-menu .mobile-menu__chev--open { transform: rotate(180deg); }
+.mobile-menu .mobile-menu__children {
+  background: rgba(96, 147, 138, 0.07);
+  border-bottom: 1px solid rgba(96, 147, 138, 0.15);
+}
+.mobile-menu .mobile-menu__children a,
+.mobile-menu .mobile-menu__children .mobile-menu__label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.mobile-menu .mobile-menu__children .mobile-menu__head { border-bottom-color: rgba(96, 147, 138, 0.12); }
+.mobile-menu .mobile-menu__all {
+  color: var(--blue-700, #0a4f9e);
+  font-weight: 700;
+}
+.mobile-nav-drawer__links--quick { margin-top: 12px; }
+.mobile-nav-drawer__links--quick a { font-size: 14px; font-weight: 600; }
+html.dark .mobile-menu .mobile-menu__label,
+html.dark .mobile-menu .mobile-menu__toggle { color: #c0d7d4; }
+html.dark .mobile-menu .mobile-menu__head,
+html.dark .mobile-menu .mobile-menu__toggle,
+html.dark .mobile-menu .mobile-menu__children { border-color: #054180; }
+html.dark .mobile-menu .mobile-menu__children { background: rgba(42, 163, 171, 0.06); }
+html.dark .mobile-menu .mobile-menu__label:hover,
+html.dark .mobile-menu .mobile-menu__label.active {
+  background: rgba(42, 163, 171, 0.10);
+  color: #2aa3ab;
+}
+html.dark .mobile-menu .mobile-menu__all { color: #2aa3ab; }
+
 /* Action chips inside drawer */
 .mobile-nav-drawer__actions {
   display: flex;

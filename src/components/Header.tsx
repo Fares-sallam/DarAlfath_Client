@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronLeft, Globe2, Heart, Menu, Moon, ShoppingBag, Sun, UserRound, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import Logo from '@/components/Logo';
 import LiveSearch from '@/components/LiveSearch';
+import MobileMenu from '@/components/MobileMenu';
 import SiteNav from '@/components/SiteNav';
 import { pickScale } from '@/lib/fitNav';
 import { useCountry } from '@/contexts/CountryContext';
@@ -22,6 +24,14 @@ const navItems = [
   { label: 'الكتب', to: '/books' },
   { label: 'سياستنا', to: '/policies' },
   { label: 'تواصل معنا', to: '/contact' },
+];
+
+// Pages the phone menu keeps reaching when the dashboard's menu map is what it shows (the map has its own home and contact
+// entries, and the computer's top menu has no «الكتب»/«سياستنا»/«التصنيفات» row: these stay as a short list under it).
+const quickLinks = [
+  { label: 'الكتب', to: '/books' },
+  { label: 'التصنيفات', to: '/categories' },
+  { label: 'سياستنا', to: '/policies' },
 ];
 
 export default function Header({ settings }: { settings: StoreSettings }) {
@@ -52,6 +62,16 @@ export default function Header({ settings }: { settings: StoreSettings }) {
 
   // Close mobile menu on route change
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Opening the phone menu reads the dashboard's menu map again, so what was changed there is what shows (the computer's menu
+  // re-reads it on its own schedule; a phone is often opened after a long time in the background).
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (mobileOpen) void queryClient.invalidateQueries({ queryKey: ['menu-items-web'] });
+  }, [mobileOpen, queryClient]);
+
+  // The paths the map already links to at its top level, so the short list below it doesn't repeat them
+  const mapPaths = useMemo(() => new Set(treeMenu.filter((e) => e.to && !e.external).map((e) => e.to as string)), [treeMenu]);
 
   // Lock body scroll while drawer is open
   useEffect(() => {
@@ -361,17 +381,35 @@ export default function Header({ settings }: { settings: StoreSettings }) {
             </select>
           </div>
 
-          {/* Nav links */}
-          <div className="mobile-nav-drawer__links">
-            {navItems.map((item) => (
-              <NavLink key={item.label} to={item.to} className={({ isActive }) => isActive ? 'active' : ''}>
-                {item.label}
+          {/* Nav links: the dashboard's «خريطة العرض» (the same entries as the computer's top menu) once it has loaded;
+              the fixed links before that, or when there is no map */}
+          {!treeLoading && treeMenu.length > 0 ? (
+            <>
+              <div className="mobile-nav-drawer__links mobile-menu" data-testid="mobile-menu">
+                <MobileMenu entries={treeMenu} onNavigate={() => setMobileOpen(false)} />
+              </div>
+              {quickLinks.some((item) => !mapPaths.has(item.to)) ? (
+                <div className="mobile-nav-drawer__links mobile-nav-drawer__links--quick" data-testid="mobile-menu-quick">
+                  {quickLinks.filter((item) => !mapPaths.has(item.to)).map((item) => (
+                    <NavLink key={item.to} to={item.to} className={({ isActive }) => isActive ? 'active' : ''} onClick={() => setMobileOpen(false)}>
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="mobile-nav-drawer__links" data-testid="mobile-menu-fixed">
+              {navItems.map((item) => (
+                <NavLink key={item.label} to={item.to} className={({ isActive }) => isActive ? 'active' : ''}>
+                  {item.label}
+                </NavLink>
+              ))}
+              <NavLink to="/categories" className={({ isActive }) => isActive ? 'active' : ''}>
+                التصنيفات
               </NavLink>
-            ))}
-            <NavLink to="/categories" className={({ isActive }) => isActive ? 'active' : ''}>
-              التصنيفات
-            </NavLink>
-          </div>
+            </div>
+          )}
 
           {/* Action chips */}
           <div className="mobile-nav-drawer__actions">
