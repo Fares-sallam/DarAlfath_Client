@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Route } from '../fixtures';
 
-// The header's section row (centred, a fading rule between items, الفتح الرباني first), "كل التصنيفات" in the
+// The header's section row (centred, a fading rule between items, the entries of the dashboard's «خريطة العرض» in its order), "كل التصنيفات" in the
 // strip below, the pattern divider (three units, tight spacing, between the home shelves), the white house
 // cover for a book with no picture, the bigger footer lockup, the footer paragraph's alignment and the
 // pattern wall on the dark theme. Read-only: the few rows that are changed are answered in flight.
@@ -16,7 +16,57 @@ const open = async (page: Page, theme: 'light' | 'dark' = 'light', path = '/') =
   await page.evaluate(() => document.fonts.ready);
 };
 
-test('الشريط العلوي: في النص، وبين كل اثنين فاصل بيتخفي طرفاه، وسلسلة الفتح الرباني أول حاجة بعد «الكتب»', async ({ page }) => {
+// The top row is the dashboard's menu map (it used to be the series plus fixed «الكتب»): the test serves a small map so what it
+// checks (centring, the fading rule, the order) does not depend on what the shop has saved today.
+const NOW = '2026-01-01T00:00:00Z';
+const node = (over: Record<string, unknown>) => ({
+  id: 'x', parent_id: null, type: 'series', name_ar: 'عنصر', name_en: null, slug: 'x',
+  description_ar: null, description_en: null, image_url: null, icon: null, color: null,
+  is_active: true, featured: false, show_web: true, show_app: true, sort_web: 0, sort_app: 0,
+  show_in_menu_web: true, show_in_bar_web: true, show_in_bar_app: true, hide_when_empty: true,
+  books_sort_web: 'title', books_sort_app: 'manual', starts_at: null, ends_at: null, seo_title: null, seo_description: null,
+  intro_ar: null, intro_en: null, video_url: null, page_layout: 'auto', strips_limit: 12, show_as_strip: true,
+  legacy_table: null, legacy_id: null, created_at: NOW, updated_at: NOW, ...over,
+});
+const menuRow = (over: Record<string, unknown>) => ({
+  id: 'm', channel: 'web', parent_id: null, kind: 'node', node_id: null, label_ar: null, label_en: null, url: null,
+  sort_order: 0, visible: true, auto_children: false, created_at: NOW, updated_at: NOW, ...over,
+});
+const MAP_NODES = [
+  node({ id: 'flag', name_ar: 'سلسلة الفتح الرباني', slug: 'flag' }),
+  node({ id: 'flag-c', type: 'category', parent_id: 'flag', name_ar: 'تصنيف الفتح', slug: 'flag-c' }),
+  node({ id: 'other', name_ar: 'سلسلة الرياحين', slug: 'other' }),
+  node({ id: 'other-c', type: 'category', parent_id: 'other', name_ar: 'تصنيف الرياحين', slug: 'other-c' }),
+  node({ id: 'tools', name_ar: 'سلسلة وسائل', slug: 'tools' }),
+];
+const MAP_LINKS = [
+  { product_id: 'b1', node_id: 'flag-c', is_primary: false, sort_order: 0 },
+  { product_id: 'b2', node_id: 'other-c', is_primary: false, sort_order: 0 },
+  { product_id: 'b3', node_id: 'tools', is_primary: false, sort_order: 0 },
+];
+/** The map's rows, deliberately served out of order: the dashboard's sort_order decides the order drawn. */
+const MAP_ROWS = [
+  menuRow({ id: 'r-contact', kind: 'contact', sort_order: 4 }),
+  menuRow({ id: 'r-tools', node_id: 'tools', sort_order: 3 }),
+  menuRow({ id: 'r-other', node_id: 'other', auto_children: true, sort_order: 2 }),
+  menuRow({ id: 'r-flag', node_id: 'flag', auto_children: true, sort_order: 1 }),
+  menuRow({ id: 'r-home', kind: 'home', sort_order: 0 }),
+];
+const MAP_LABELS = ['الرئيسية', 'سلسلة الفتح الرباني', 'سلسلة الرياحين', 'سلسلة وسائل', 'تواصل معنا'];
+
+async function stubMap(page: Page) {
+  await page.route('**/rest/v1/menu_items*', (route) => json(route, MAP_ROWS));
+  await page.route('**/rest/v1/catalog_nodes*', (route) => json(route, MAP_NODES));
+  await page.route('**/rest/v1/product_nodes*', (route) => json(route, MAP_LINKS));
+  await page.route('**/rest/v1/products_public_catalog*', (route) =>
+    json(route, ['b1', 'b2', 'b3'].map((product_id, i) => ({
+      product_id, title: `كتاب ${i + 1}`, author: 'مؤلف', category_slug: 'c', category_name: 'ج', country_code: 'EG',
+      min_price: 50, max_price: 50, starting_price: 50, images: [],
+    }))));
+}
+
+test('الشريط العلوي: في النص، وبين كل اثنين فاصل بيتخفي طرفاه، وعناصره هي عناصر خريطة العرض', async ({ page }) => {
+  await stubMap(page);
   await open(page);
   const items = page.locator('.site-header__nav > *');
   await expect.poll(() => items.count(), { timeout: 20_000 }).toBeGreaterThan(4);
@@ -42,33 +92,25 @@ test('الشريط العلوي: في النص، وبين كل اثنين فاص
   expect(second.image).toContain('linear-gradient');
   expect(second.image).toContain('rgba(0, 0, 0, 0)');
 
-  // Bigger than the 12.5px it was, and the order: الرئيسية، الكتب، then الفتح الرباني.
+  // Bigger than the 12.5px it was, and the entries are the map's (there is no fixed «الكتب» in this row any more).
   expect(await items.nth(0).evaluate((el) => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(15);
   const labels = await page.locator('.site-header__nav > a, .site-header__nav > .nav-dropdown > .nav-dropdown__trigger')
-    .evaluateAll((els) => els.map((el) => (el.textContent ?? '').trim()));
-  expect(labels.slice(0, 2)).toEqual(['الرئيسية', 'الكتب']);
+    .evaluateAll((els) => els.map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim()));
+  expect(labels).toEqual(MAP_LABELS);
+  expect(labels).not.toContain('الكتب');
   expect(labels).not.toContain('كل التصنيفات');
 });
 
-test('ترتيب الأقسام في الشريط العلوي: بترتيب السلاسل من لوحة التحكم، وأول واحدة بعد «الكتب»', async ({ page }) => {
-  // Whatever the dashboard saved as the order (sort_order) is the order the server returns; the row follows it.
-  await page.route('**/rest/v1/book_series*', async (route) => {
-    try {
-      const response = await route.fetch();
-      const rows = (await response.json()) as { name: string }[];
-      const flagship = 'سلسلة الفتح الرباني';
-      await route.fulfill({ response, json: [...rows.filter((r) => r.name === flagship), ...rows.filter((r) => r.name !== flagship)] });
-    } catch {
-      await route.continue().catch(() => undefined);
-    }
-  });
+test('ترتيب الشريط العلوي: بترتيب خريطة العرض من لوحة التحكم (sort_order) مهما كان ترتيب الرد', async ({ page }) => {
+  // The rows come back in any order; the dashboard's sort_order is what the row follows.
+  await stubMap(page);
   await open(page);
-  const triggers = page.locator('.site-header__nav > .nav-dropdown > .nav-dropdown__trigger');
-  await expect.poll(() => triggers.count(), { timeout: 20_000 }).toBeGreaterThan(2);
-  await expect(triggers.first()).toHaveText('سلسلة الفتح الرباني');
-  const labels = await page.locator('.site-header__nav > a, .site-header__nav > .nav-dropdown > .nav-dropdown__trigger')
-    .evaluateAll((els) => els.map((el) => (el.textContent ?? '').trim()));
-  expect(labels.slice(0, 3)).toEqual(['الرئيسية', 'الكتب', 'سلسلة الفتح الرباني']);
+  const labels = page.locator('.site-header__nav > a, .site-header__nav > .nav-dropdown > .nav-dropdown__trigger');
+  await expect.poll(() => labels.count(), { timeout: 20_000 }).toBe(MAP_LABELS.length);
+  expect((await labels.evaluateAll((els) => els.map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim())))).toEqual(MAP_LABELS);
+  // the two series with categories are menus, the rest plain links
+  await expect(page.locator('.site-header__nav > .nav-dropdown')).toHaveCount(2);
+  await expect(page.locator('.site-header__nav > .nav-dropdown > .nav-dropdown__trigger').first()).toHaveText('سلسلة الفتح الرباني');
 });
 
 test('«كل التصنيفات»: في الشريط اللي تحت بعد «كل الكتب» ومش في الشريط العلوي', async ({ page }) => {
