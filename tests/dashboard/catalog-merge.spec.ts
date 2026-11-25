@@ -152,17 +152,28 @@ const HISTORY = [
   { old_id: 'old-2', source_name: 'قصص قديمة', target_id: 'c3', target_name: 'قصص', merged_at: '2026-11-23T10:00:00Z', summary: { books_moved: 0 }, can_undo: false },
 ];
 
-test('التراجع: القايمة مش بتظهر من غير دمج', async ({ page }) => {
+test('قسم الدمج ظاهر دايمًا فوق الشجرة، حتى قبل أول دمج: زرار «دمج عنصرين» ومكان التراجع', async ({ page }) => {
   await setUp(page);
   await page.goto('/catalog');
   await expect(page.getByTestId('catalog-tree')).toBeVisible();
-  await expect(page.getByTestId('merge-history')).toHaveCount(0);
+  await expect(page.getByTestId('merge-history')).toBeVisible();
+  await expect(page.getByTestId('merge-history-empty')).toContainText('بعد أول دمج هتظهر هنا');
+  await expect(page.getByTestId('merge-history-row')).toHaveCount(0);
+
+  // the button asks which item first, then the same dialog as the icon on a row
+  await page.getByTestId('merge-pick').click();
+  await expect(page.getByTestId('merge-pick-dialog')).toBeVisible();
+  await page.getByTestId('merge-pick-search').fill('إملاء');
+  await expect(page.getByTestId('merge-pick-item')).toHaveCount(2);
+  await page.getByTestId('merge-pick-item').filter({ hasText: /^الإملاء/ }).click();
+  await expect(page.getByTestId('merge-pick-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('merge-dialog')).toContainText('دمج «الإملاء»');
+  await expect(page.getByTestId('merge-candidate')).toHaveText([/إصدارات متنوعة/, /الكتابة/, /قصص/]);
 });
 
 test('التراجع من القايمة: تأكيد الأول، وبعدها نداء واحد بـ id العنصر اللي اندمج', async ({ page }) => {
   const { rpcs } = await setUp(page, HISTORY);
   await page.goto('/catalog');
-  await page.getByTestId('merge-history').locator('summary').click();
   const rows = page.getByTestId('merge-history-row');
   await expect(rows).toHaveCount(2);
   await expect(rows.nth(0)).toContainText('«الإملاء القديم» اندمج في «الكتابة»');
