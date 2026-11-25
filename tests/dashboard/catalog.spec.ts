@@ -563,19 +563,20 @@ test('خريطة العرض: سحب فرعي جوه رئيسي تاني، أو �
   const sub = page.getByTestId('menu-main').nth(1).getByTestId('menu-sub').first();
   const mains = page.getByTestId('menu-main-row');
   await expect(sub).toContainText('رابط يدوي');
+  // the series' own categories arrive a moment later and redraw the list: a drag started before that loses its row
+  await expect(page.getByTestId('menu-main').nth(1).getByTestId('menu-sub')).toHaveCount(3);
 
   // into «تواصل معنا» (its middle)
+  // a move to another parent is ONE call that moves and orders together (so a half-done move cannot be left behind)
   await dragOnto(sub.getByTestId('drag-handle'), mains.nth(2), 'inside');
-  await expect.poll(() => rpcs.length).toBe(2);
-  expect(rpcs[0]).toEqual({ name: 'menu_move_item', body: { p_id: 'm4', p_parent: 'm3' } });
-  expect(rpcs[1]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m4'] } });
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'menu_move_and_reorder', body: { p_id: 'm4', p_parent: 'm3', p_ids: ['m4'] } });
 
   // beside «سلسلة أ» (below it): becomes a main item between it and «تواصل معنا»
   await page.waitForTimeout(400); // the list redraws after the first move; a second drag must start from the redrawn row
   await dragOnto(sub.getByTestId('drag-handle'), mains.nth(1), 'after');
-  await expect.poll(() => rpcs.length).toBe(4);
-  expect(rpcs[2]).toEqual({ name: 'menu_move_item', body: { p_id: 'm4', p_parent: null } });
-  expect(rpcs[3]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m1', 'm2', 'm4', 'm3'] } });
+  await expect.poll(() => rpcs.length).toBe(2);
+  expect(rpcs[1]).toEqual({ name: 'menu_move_and_reorder', body: { p_id: 'm4', p_parent: null, p_ids: ['m1', 'm2', 'm4', 'm3'] } });
 });
 
 test('خريطة العرض: عنصر جواه فروع ينفع يتحط جوه عنصر تاني (الفروع بتروح معاه)', async ({ page }) => {
@@ -585,9 +586,8 @@ test('خريطة العرض: عنصر جواه فروع ينفع يتحط جوه
 
   const mains = page.getByTestId('menu-main-row');
   await dragOnto(mains.nth(1).getByTestId('drag-handle'), mains.nth(2), 'inside');
-  await expect.poll(() => rpcs.length).toBe(2);
-  expect(rpcs[0]).toEqual({ name: 'menu_move_item', body: { p_id: 'm2', p_parent: 'm3' } });
-  expect(rpcs[1]).toEqual({ name: 'menu_reorder', body: { p_ids: ['m2'] } });
+  await expect.poll(() => rpcs.length).toBe(1);
+  expect(rpcs[0]).toEqual({ name: 'menu_move_and_reorder', body: { p_id: 'm2', p_parent: 'm3', p_ids: ['m2'] } });
 });
 
 test('خريطة العرض: حد 4 مستويات: مفيش زر فرع تحت المستوى الرابع، والسحب جواه بيترفض', async ({ page }) => {
