@@ -158,6 +158,39 @@ test('عميل من غير طلبات: رسالة واضحة بدل فاتورة
   await expect(page.getByText('لسه ما عملش طلبات، فمفيش فاتورة')).toBeVisible();
 });
 
+test('إدارة العملاء: الضغط في أي مكان على شريط العميل بيفتح ملفه، وأزرار الصف بتعمل شغلها هي بس', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await setUp(page);
+  await page.goto('/customers');
+  const salem = row(page, 'عميل تجريبي');
+  await expect(salem).toBeVisible({ timeout: 20_000 });
+  const profileWindow = () => page.locator('.fixed.inset-0').last().getByText('الملف الشرائي للعميل');
+
+  // a click on a plain cell opens the profile
+  await salem.locator('td').first().click();
+  await expect(profileWindow()).toBeVisible();
+  await page.locator('.fixed.inset-0').last().locator('button').first().click();
+  await expect(profileWindow()).toHaveCount(0);
+
+  // from the keyboard
+  await salem.focus();
+  await page.keyboard.press('Enter');
+  await expect(profileWindow()).toBeVisible();
+  await page.locator('.fixed.inset-0').last().locator('button').first().click();
+  await expect(profileWindow()).toHaveCount(0);
+
+  // the buttons in the row do their own job and leave the profile closed: copy the number, the invoice picker
+  await salem.getByTestId('phone-copy').click();
+  await expect(page.getByText('تم نسخ رقم الهاتف')).toBeVisible();
+  await expect(profileWindow()).toHaveCount(0);
+  await salem.getByTestId('invoice-button').click();
+  await expect(page.getByTestId('invoice-picker')).toBeVisible();
+  await expect(profileWindow()).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('ملف العميل: واتساب وطباعة الفاتورة شغالين، والرقم ومعاه النسخ والاتصال', async ({ page }) => {
   await setUp(page);
   await page.goto('/customers');
@@ -169,6 +202,78 @@ test('ملف العميل: واتساب وطباعة الفاتورة شغالي
   await expect(modal.getByTestId('whatsapp-link')).toHaveAttribute('href', /^https:\/\/wa\.me\/201012345678\?text=/);
   const text = await invoiceText(page, () => modal.getByTestId('invoice-button').click());
   expect(text).toContain('ORD-GUEST');
+});
+
+test('تفاصيل الطلب: النافذة بتفتح من غير شاشة بيضاء والتفاصيل لسه بتتحمّل، وبعد التحميل الطباعة والواتساب شغالين', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await setUp(page);
+  // the details come late: the window is drawn first with nothing loaded (registered after setUp, so it answers first)
+  await page.route('**/rest/v1/orders**', async (route) => {
+    const url = decodeURIComponent(route.request().url());
+    if (/[?&]id=eq\.[^&]+/.test(url) && url.includes('order_items')) {
+      await new Promise((r) => setTimeout(r, 1_500));
+      return json(route, detail('ORD-GUEST'));
+    }
+    return route.fallback();
+  });
+  await page.goto('/orders');
+  await page.getByTitle('عرض التفاصيل').first().click({ timeout: 20_000 });
+
+  const modal = page.locator('.fixed.inset-0').last();
+  await expect(modal.getByText('تفاصيل الطلب')).toBeVisible();
+  await expect(modal.getByText('جارٍ تحميل التفاصيل')).toBeVisible();
+  await expect(modal.getByTestId('order-print')).toBeDisabled();
+  expect(errors).toEqual([]);
+
+  await expect(modal.getByText('قواعد النحو')).toBeVisible({ timeout: 10_000 });
+  await expect(modal.getByTestId('order-print')).toBeEnabled();
+  await expect(modal.getByTestId('whatsapp-link').last()).toHaveAttribute('href', /^https:\/\/wa\.me\/201012345678\?text=/);
+  const text = await invoiceText(page, () => modal.getByTestId('order-print').click());
+  expect(text).toContain('ORD-GUEST');
+  expect(errors).toEqual([]);
+});
+
+test('صفحة الطلبات: الضغط في أي مكان على شريط الطلب بيفتح تفاصيله، وأزرار الصف بتعمل شغلها هي بس', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await setUp(page);
+  await page.goto('/orders');
+  const rows = page.getByTestId('order-row');
+  await expect(rows.first()).toBeVisible({ timeout: 20_000 });
+  const detailsWindow = () => page.locator('.fixed.inset-0').last().getByText('تفاصيل الطلب', { exact: true });
+
+  // a click on a plain cell (the date, nothing clickable in it)
+  await rows.first().locator('td').nth(-2).click();
+  await expect(detailsWindow()).toBeVisible();
+  await page.locator('.fixed.inset-0').last().locator('button').first().click();
+  await expect(detailsWindow()).toHaveCount(0);
+
+  // on the order number, and from the keyboard
+  await rows.first().locator('td').first().click();
+  await expect(detailsWindow()).toBeVisible();
+  await page.locator('.fixed.inset-0').last().locator('button').first().click();
+  await expect(detailsWindow()).toHaveCount(0);
+  await rows.first().focus();
+  await page.keyboard.press('Enter');
+  await expect(detailsWindow()).toBeVisible();
+  await page.locator('.fixed.inset-0').last().locator('button').first().click();
+  await expect(detailsWindow()).toHaveCount(0);
+
+  // the print button in the row prints; it does not also open the details
+  const text = await invoiceText(page, () => rows.first().getByTestId('order-row-print').click());
+  expect(text).toContain('فاتورة');
+  await expect(detailsWindow()).toHaveCount(0);
+
+  // dragging over the order number to select it (to copy it) does not open the details
+  const number = await rows.first().locator('td').first().locator('span').boundingBox();
+  await page.mouse.move(number!.x + 1, number!.y + number!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(number!.x + number!.width - 1, number!.y + number!.height / 2, { steps: 6 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.getSelection()?.toString().length ?? 0)).toBeGreaterThan(0);
+  await expect(detailsWindow()).toHaveCount(0);
+  expect(errors).toEqual([]);
 });
 
 test('صفحة الطلبات: واتساب وطباعة الفاتورة في الصف مش مجرد رسالة، بيفتحوا الحقيقي', async ({ page }) => {
