@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { DEFAULT_STOCK_VISIBILITY, STOCK_VISIBILITY_COLUMN, resolveStockVisibility, type StockVisibility } from '@/lib/stockVisibility';
-import { useStockPreview } from '@/lib/displayPreview';
 
 const CACHE_KEY = 'storefront-stock-visibility-v1';
 
@@ -41,7 +40,5 @@ export function useStockVisibility(): StockVisibility {
     staleTime: 60_000,
     placeholderData: () => remembered() ?? DEFAULT_STOCK_VISIBILITY,
   });
-  // on the dashboard's preview page, the switch being edited stands in for the saved one (see lib/displayPreview.ts)
-  const draft = useStockPreview();
-  return draft ?? data ?? DEFAULT_STOCK_VISIBILITY;
+  return data ?? DEFAULT_STOCK_VISIBILITY;
 }

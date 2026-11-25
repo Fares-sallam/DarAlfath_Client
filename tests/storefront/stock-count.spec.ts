@@ -86,18 +86,3 @@ test('العمود مش موجود أو قيمة غريبة: العدد يفضل
   await openBook(odd);
   await expect(avail(odd).first()).toHaveText('متوفر 12 نسخة');
 });
-
-test('معاينة اللوحة: الزرار اللي بتجرّبه بيطبّق على صفحة الكتاب قبل الحفظ، والرجوع للمحفوظ', async ({ page }) => {
-  await serve(page, ROW());
-  await openBook(page, '?preview=display');
-  await expect(avail(page).first()).toHaveText('متوفر 12 نسخة');
-
-  const send = (message: Record<string, unknown>) =>
-    page.evaluate((m) => window.postMessage({ type: 'daralfath:display-preview', ...m }, window.location.origin), message);
-  await send({ stockCount: { web: false, app: true } });
-  await expect(avail(page).first()).toHaveText('متوفر');
-  await expect(page.getByTestId('book-stock-hint')).toHaveText('آخر النسخ');
-
-  await send({ stockCount: null });
-  await expect(avail(page).first()).toHaveText('متوفر 12 نسخة');
-});

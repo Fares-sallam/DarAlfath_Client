@@ -1,9 +1,7 @@
 import { test, expect, type Page, type Route } from '../fixtures';
 import { signInAsFakeOwner } from '../support/fakeOwner';
-import { fakeFrames, lastMessage } from '../support/fakeFrames';
 
-// «إدارة المخزون» ← «إظهار عدد النسخ للعملاء»: one switch for the website and one for the app (storefront_appearance.show_stock_count),
-// tried on the real book page before saving. Hermetic: no real sign-in; the database is a variable here and writes are recorded.
+// «إدارة المخزون» ← «إظهار عدد النسخ للعملاء»: one switch for the website and one for the app (storefront_appearance.show_stock_count). Hermetic: no real sign-in; the database is a variable here and writes are recorded.
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -16,7 +14,6 @@ async function setUp(page: Page, initial: Switches | 'missing' = { web: true, ap
   const db = { value: initial === 'missing' ? ({ web: true, app: true } as Switches) : initial };
   const writes: { body: any; url: string }[] = [];
   await signInAsFakeOwner(page);
-  await fakeFrames(page);
   await page.route('**/rest/v1/**', (route) => {
     const req = route.request();
     const url = req.url();
@@ -31,7 +28,6 @@ async function setUp(page: Page, initial: Switches | 'missing' = { web: true, ap
       db.value = body.show_stock_count;
       return json(route, [{ id: 1 }]);
     }
-    if (url.includes('/rest/v1/products?') && get) return json(route, [{ id: 'b1', title: 'كتاب للمعاينة' }]);
     if (get) return json(route, []);
     return route.fallback();
   });
@@ -52,11 +48,12 @@ test('الزرارين بيعرضوا الحالة المحفوظة: واحد ل
   await expect(page.getByTestId('stock-state-app')).toContainText('الرقم مخفي');
   await expect(card(page)).toContainText('مع أول نسخة جديدة منه');
   await expect(page.getByTestId('stock-save')).toBeDisabled();
-  // no change yet: no frame is opened by itself
-  await expect(page.getByTestId('stock-live-preview')).toHaveCount(0);
+  // two switches and no preview: nothing here is a frame
+  await expect(page.locator('[data-testid^="stock-"] iframe')).toHaveCount(0);
+  await expect(page.getByTestId('stock-preview-toggle')).toHaveCount(0);
 });
 
-test('قفل زرار الموقع: المعاينة بتفتح لوحدها على صفحة كتاب وبتاخد الإعداد، والحفظ بيبعت الزرارين', async ({ page }) => {
+test('قفل زرار الموقع: بيظهر إن فيه تعديل، والحفظ بيبعت الزرارين', async ({ page }) => {
   const { writes } = await setUp(page);
   await page.goto('/inventory');
   await expect(web(page)).toBeEnabled({ timeout: 20_000 });
@@ -64,9 +61,7 @@ test('قفل زرار الموقع: المعاينة بتفتح لوحدها ع�
   await web(page).click();
   await expect(web(page)).toHaveAttribute('aria-checked', 'false');
   await expect(page.getByTestId('stock-dirty')).toBeVisible();
-  await expect(page.getByTestId('stock-live-preview')).toBeVisible();
-  await expect.poll(async () => (await lastMessage(page, 'site'))?.stockCount).toEqual({ web: false, app: true });
-  expect((await lastMessage(page, 'site')).navigate).toBe('/book/b1');
+  await expect(page.getByTestId('stock-save')).toBeEnabled();
   expect(writes).toHaveLength(0);
 
   await page.getByTestId('stock-save').click();
@@ -99,7 +94,7 @@ test('لو حد غيّر زرار التاني في الوقت ده (من الت
   expect(writes[0].body).toEqual({ show_stock_count: { web: false, app: false } });
 });
 
-test('زرار «تراجع» بيرجّع المحفوظ، وزرار «معاينة» بيفتح ويقفل المعاينة من غير تعديل', async ({ page }) => {
+test('زرار «تراجع» بيرجّع المحفوظ ومفيش حاجة بتتكتب', async ({ page }) => {
   const { writes } = await setUp(page);
   await page.goto('/inventory');
   await expect(web(page)).toBeEnabled({ timeout: 20_000 });
@@ -110,14 +105,8 @@ test('زرار «تراجع» بيرجّع المحفوظ، وزرار «معا�
   await expect(web(page)).toHaveAttribute('aria-checked', 'true');
   await expect(app(page)).toHaveAttribute('aria-checked', 'true');
   await expect(page.getByTestId('stock-dirty')).toHaveCount(0);
+  await expect(page.getByTestId('stock-save')).toBeDisabled();
   expect(writes).toHaveLength(0);
-
-  await expect(page.getByTestId('stock-live-preview')).toHaveCount(0);
-  await page.getByTestId('stock-preview-toggle').click();
-  await expect(page.getByTestId('stock-live-preview')).toBeVisible();
-  await expect.poll(async () => (await lastMessage(page, 'site'))?.stockCount).toEqual({ web: true, app: true });
-  await page.getByTestId('stock-preview-toggle').click();
-  await expect(page.getByTestId('stock-live-preview')).toHaveCount(0);
 });
 
 test('الإعداد مش متفعّل على القاعدة: رسالة واضحة، والزرارين مقفولين ومش بيتحفظ حاجة', async ({ page }) => {
@@ -127,6 +116,5 @@ test('الإعداد مش متفعّل على القاعدة: رسالة واض�
   await expect(web(page)).toBeDisabled();
   await expect(app(page)).toBeDisabled();
   await expect(page.getByTestId('stock-save')).toBeDisabled();
-  await expect(page.getByTestId('stock-preview-toggle')).toBeDisabled();
   expect(writes).toHaveLength(0);
 });
