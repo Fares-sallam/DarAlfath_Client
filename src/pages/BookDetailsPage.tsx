@@ -18,6 +18,8 @@ import {
 } from '@/hooks/useStorefront';
 import { useHomeLayoutRows } from '@/hooks/useCatalogTree';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
+import { useStockVisibility } from '@/hooks/useStockVisibility';
+import { editionAvailability, lastCopiesNote } from '@/lib/stockVisibility';
 import { isLowStock } from '@/lib/displaySettings';
 import { physicalStock } from '@/lib/bookStock';
 import { BOOK_RELATED_KEY, pageStripOf } from '@/lib/homeBlocks';
@@ -96,6 +98,7 @@ export default function BookDetailsPage() {
   const relatedLimit = Math.min(Math.max(relatedStrip?.limit ?? 4, 1), 12);
   // what the owner chose to show on a book's page («تفاصيل العرض»)
   const display = useDisplaySettings();
+  const showStockCount = useStockVisibility().web;
   const pageShow = display.page.show;
   const { data: related = [] } = useRelatedProducts(
     product?.category_slug,
@@ -431,7 +434,7 @@ export default function BookDetailsPage() {
 
           {showStockHint ? (
             <p className="bk3-stock-hint" data-testid="book-stock-hint" style={{ '--i': 6 } as React.CSSProperties}>
-              باقي {Number(stockLeft).toLocaleString('ar-EG')} {stockLeft === 1 ? 'نسخة' : stockLeft === 2 ? 'نسختان' : 'نسخ'} فقط
+              {lastCopiesNote(Number(stockLeft), showStockCount)}
             </p>
           ) : null}
 
@@ -470,7 +473,7 @@ export default function BookDetailsPage() {
                   <span className="bk3-var__name">{v.variant_name}</span>
                   <b className="bk3-var__price">{formatMoney(v.display_price, v.currency_symbol)}</b>
                   <small className="bk3-var__avail">
-                    {v.is_digital ? '⚡ رقمي فوري' : v.availability_text || 'غير متوفر'}
+                    {editionAvailability(v, showStockCount)}
                   </small>
                 </button>
               ))}

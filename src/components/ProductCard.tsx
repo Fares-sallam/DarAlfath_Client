@@ -5,8 +5,10 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { catalogPriceParts } from '@/hooks/useStorefront';
 import { useBookStock } from '@/hooks/useBookStock';
 import { useDisplaySettings } from '@/hooks/useDisplaySettings';
+import { useStockVisibility } from '@/hooks/useStockVisibility';
 import { discountText, isLowStock, isNewBook } from '@/lib/displaySettings';
 import { editionsLabel } from '@/lib/editions';
+import { lastCopiesBadge } from '@/lib/stockVisibility';
 import { shareBook } from '@/lib/share';
 import type { ProductItem } from '@/types/store';
 import BookCover from '@/components/BookCover';
@@ -46,6 +48,7 @@ export default function ProductCard({
   // what the card says is saved: the price before the discount less the price it is sold at (shown as «وفّر 30 ج.م» when chosen)
   const saved = product.compare_at_price ? product.compare_at_price - (product.min_price || product.starting_price) : null;
   const flagNew = show.isNew.web && isNewBook(product.created_at, display.card.newDays);
+  const showStockCount = useStockVisibility().web;
   const { data: stockOfBooks } = useBookStock(show.lowStock.web);
   const stockLeft = stockOfBooks?.get(product.product_id) ?? null;
   const flagLow = show.lowStock.web && isLowStock(stockLeft, display.card.lowStockAt);
@@ -155,7 +158,7 @@ export default function ProductCard({
         {flagNew || flagLow ? (
           <div className="book-card__flags">
             {flagNew ? <span className="book-card__flag" data-testid="card-flag-new">جديد</span> : null}
-            {flagLow ? <span className="book-card__flag book-card__flag--low" data-testid="card-flag-low">آخر {Number(stockLeft).toLocaleString('ar-EG')} {stockLeft === 1 ? 'نسخة' : 'نسخ'}</span> : null}
+            {flagLow ? <span className="book-card__flag book-card__flag--low" data-testid="card-flag-low">{lastCopiesBadge(Number(stockLeft), showStockCount)}</span> : null}
           </div>
         ) : null}
       </div>

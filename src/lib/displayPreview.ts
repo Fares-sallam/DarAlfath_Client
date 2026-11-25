@@ -8,6 +8,7 @@
 import { useSyncExternalStore } from 'react';
 import { resolveAppearance, type StorefrontAppearance } from '@/lib/appearance';
 import { resolveDisplay, type DisplaySettings } from '@/lib/displaySettings';
+import { resolveStockVisibility, type StockVisibility } from '@/lib/stockVisibility';
 import { isTrusted } from '@/lib/homePreview';
 import type { CatalogNode, PageLayout } from '@/lib/catalogTree';
 
@@ -37,6 +38,7 @@ let state: DisplaySettings | null = null;
 let lookState: StorefrontAppearance | null = null;
 let departmentsState: DepartmentsDraft | null = null;
 let nodePageState: NodePageDraft | null = null;
+let stockState: StockVisibility | null = null;
 const listeners = new Set<() => void>();
 
 export const getDisplayPreview = () => state;
@@ -63,6 +65,12 @@ export function setNodePagePreview(next: NodePageDraft | null) {
   nodePageState = next;
   listeners.forEach((l) => l());
 }
+export const getStockPreview = () => stockState;
+export function setStockPreview(next: StockVisibility | null) {
+  if (JSON.stringify(next) === JSON.stringify(stockState)) return;
+  stockState = next;
+  listeners.forEach((l) => l());
+}
 const subscribe = (listener: () => void) => {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
@@ -71,6 +79,9 @@ const subscribe = (listener: () => void) => {
 export const useDisplayPreview = (): DisplaySettings | null => useSyncExternalStore(subscribe, getDisplayPreview, () => null);
 /** The draft look (pattern, strips, button colours) the dashboard sent, or null (then the saved one is used). */
 export const useLookPreview = (): StorefrontAppearance | null => useSyncExternalStore(subscribe, getLookPreview, () => null);
+
+/** The «show the number of copies» switches the dashboard sent (from «إدارة المخزون»), or null (then the saved ones are used). */
+export const useStockPreview = (): StockVisibility | null => useSyncExternalStore(subscribe, getStockPreview, () => null);
 
 /** The «أقسام المتجر» draft the dashboard sent, or null (then the saved cards are used). */
 export const useDepartmentsPreview = (): DepartmentsDraft | null => useSyncExternalStore(subscribe, getDepartmentsPreview, () => null);
@@ -147,6 +158,8 @@ export interface DisplayPreviewMessage {
   departments: DepartmentsDraft | null | undefined;
   /** one node page being edited (null = back to the saved one; undefined = keep what is shown) */
   nodePage: NodePageDraft | null | undefined;
+  /** whether the number of copies is shown (null = back to the saved switch; undefined = keep what is shown) */
+  stockCount: StockVisibility | null | undefined;
   navigate: string | null;
   /** where to scroll to once the page is there: the footer, the «أقسام المتجر» cards, or the top */
   scroll: 'footer' | 'top' | 'departments' | null;
@@ -162,6 +175,7 @@ export function parseDisplayPreviewMessage(data: unknown): DisplayPreviewMessage
     theme: d.theme === 'dark' ? 'dark' : d.theme === 'light' ? 'light' : null,
     departments: !('departments' in d) || d.departments === undefined ? undefined : d.departments === null ? null : parseDepartmentsDraft(d.departments),
     nodePage: !('nodePage' in d) || d.nodePage === undefined ? undefined : d.nodePage === null ? null : parseNodePageDraft(d.nodePage),
+    stockCount: !('stockCount' in d) || d.stockCount === undefined ? undefined : d.stockCount === null ? null : resolveStockVisibility(d.stockCount),
     navigate: isPreviewRoute(d.navigate) ? d.navigate : null,
     scroll: d.scroll === 'footer' || d.scroll === 'top' || d.scroll === 'departments' ? d.scroll : null,
   };
@@ -197,6 +211,7 @@ export function startDisplayPreviewBridge(go: (path: string) => void, applyTheme
     if (message.appearance !== undefined) setLookPreview(message.appearance);
     if (message.departments !== undefined) setDepartmentsPreview(message.departments);
     if (message.nodePage !== undefined) setNodePagePreview(message.nodePage);
+    if (message.stockCount !== undefined) setStockPreview(message.stockCount);
     if (message.theme) applyTheme(message.theme);
     if (message.navigate && message.navigate !== lastNavigate) {
       lastNavigate = message.navigate;
