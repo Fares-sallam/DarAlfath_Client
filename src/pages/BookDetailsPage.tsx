@@ -1,4 +1,4 @@
-import { Heart, ShoppingBag, Sparkles, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight, Share2, QrCode } from 'lucide-react';
+import { Heart, ShoppingBag, Sparkles, BookOpenText, X, Star, Tag, Layers, ChevronLeft, ChevronRight, Share2, QrCode, Smartphone } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ProductCard from '@/components/ProductCard';
@@ -539,6 +539,13 @@ export default function BookDetailsPage() {
               <span className="bk3-chip bk3-chip--digital">
                 <Sparkles size={13} /> نسخة رقمية
               </span>
+            )}
+            {/* A digital book is never downloaded from the website: it is read inside the app, signed in with the buying account */}
+            {selectedVariant?.is_digital && (
+              <p className="bk3-digital-note" data-testid="book-digital-note">
+                <Smartphone size={15} aria-hidden="true" />
+                <span>النسخة الرقمية تُقرأ داخل تطبيق دار الفتح فقط، وبنفس حسابك الذي اشتريت به. لا يوجد تحميل من الموقع.</span>
+              </p>
             )}
             {!selectedVariant && (
               <span className="bk3-chip bk3-chip--muted">اختر طبعة لتحديد الكمية</span>

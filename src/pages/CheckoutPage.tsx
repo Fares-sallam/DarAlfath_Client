@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { Check, CheckCircle2, CreditCard, ExternalLink, Loader2, LogIn, PackageCheck, Phone, Tag, Truck, UserRound, X, Zap } from 'lucide-react';
+import { Check, CheckCircle2, CreditCard, ExternalLink, Loader2, LogIn, PackageCheck, Phone, Smartphone, Tag, Truck, UserRound, X, Zap } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { OrnamentDivider } from '@/components/Ornament';
 import TurnstileWidget, { TURNSTILE_SITE_KEY, type TurnstileHandle } from '@/components/TurnstileWidget';
@@ -855,12 +855,19 @@ export default function CheckoutPage() {
 
               {digitalNeedsAccount && (
                 <div className="auth-alert auth-alert--warning checkout-digital-note" role="status">
-                  <p>سلتك فيها كتاب رقمي، والكتب الرقمية تحتاج تسجيل الدخول لأنها تُحمَّل من حسابك بعد الشراء. سجّل الدخول، أو احذف الكتاب الرقمي من السلة لتكمل بدون حساب.</p>
+                  <p>سلتك فيها كتاب رقمي، والكتب الرقمية تحتاج تسجيل الدخول لأنها تُقرأ من حسابك داخل تطبيق دار الفتح بعد الشراء. سجّل الدخول، أو احذف الكتاب الرقمي من السلة لتكمل بدون حساب.</p>
                   <div className="checkout-digital-note__actions">
                     <Link to="/account?next=/checkout" className="primary-button"><LogIn size={15} /> تسجيل الدخول</Link>
                     <Link to="/cart" className="ghost-button">تعديل السلة</Link>
                   </div>
                 </div>
+              )}
+
+              {hasDigitalItem && !digitalNeedsAccount && (
+                <p className="checkout-digital-read" data-testid="checkout-digital-read" role="note">
+                  <Smartphone size={15} aria-hidden="true" />
+                  <span>الكتب الرقمية في سلتك تُقرأ داخل تطبيق دار الفتح فقط، بنفس هذا الحساب بعد الدفع. لا يوجد تحميل من الموقع.</span>
+                </p>
               )}
 
               {step === 1 && (

@@ -57,3 +57,22 @@ html.dark .bk3-stock-hint { color: #fbbf77; }
 @media (min-width: 1241px) {
   .site-footer__grid[data-custom] { grid-template-columns: var(--footer-grid); }
 }
+
+/* Where a digital book is read: said next to the buy button and in checkout (it is never downloaded from the website) */
+.bk3-digital-note,
+.checkout-digital-read {
+  display: flex; align-items: flex-start; gap: 8px; margin: 0;
+  padding: 10px 12px; border-radius: 12px;
+  font-size: 13px; line-height: 1.75; font-weight: 600;
+  color: var(--blue-800);
+  background: rgba(6, 81, 158, 0.06);
+  border: 1px solid rgba(6, 81, 158, 0.12);
+}
+.bk3-digital-note svg,
+.checkout-digital-read svg { flex: none; margin-top: 4px; }
+html.dark .bk3-digital-note,
+html.dark .checkout-digital-read {
+  color: #93dbe0;
+  background: rgba(42, 163, 171, 0.10);
+  border-color: rgba(42, 163, 171, 0.20);
+}
